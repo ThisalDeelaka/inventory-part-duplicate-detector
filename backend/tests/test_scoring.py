@@ -96,6 +96,19 @@ def test_allowed_likely_duplicates_remain_supported():
         assert result["final_score"] >= 60
 
 
+def test_desiccated_coconut_domain_synonyms_are_likely_duplicate():
+    result = score_candidate(
+        rec("DEC CO1", "Decicated Coconut type 1"),
+        rec("DEC C01", "Dec Coco 1"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["business_status"] == "LIKELY_DUPLICATE"
+    assert result["confidence_level"] in {"HIGH", "MEDIUM"}
+    assert result["final_score"] >= 90
+    assert "business synonym normalization" in result["explanation"]
+
+
 def test_same_part_number_is_not_duplicate_candidate():
     result = score_candidate(
         rec("T-100", "T-100", site="HWHSP"),

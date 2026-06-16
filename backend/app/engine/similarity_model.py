@@ -4,7 +4,7 @@ from rapidfuzz import fuzz
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from app.engine.normalizer import extract_technical_tokens, normalize_description
+from app.engine.normalizer import extract_technical_tokens, normalize_description, normalize_part_no_with_dictionary
 
 
 @lru_cache(maxsize=100_000)
@@ -29,7 +29,8 @@ def calculate_fuzzy_similarity(text_a, text_b) -> float:
 
 @lru_cache(maxsize=100_000)
 def calculate_part_no_similarity(part_no_a, part_no_b) -> float:
-    a, b = normalize_description(part_no_a).replace(" ", ""), normalize_description(part_no_b).replace(" ", "")
+    a = normalize_part_no_with_dictionary(part_no_a).replace(" ", "")
+    b = normalize_part_no_with_dictionary(part_no_b).replace(" ", "")
     if not a or not b:
         return 0.0
     return round(float(fuzz.ratio(a, b)), 2)

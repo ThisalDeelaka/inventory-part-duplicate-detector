@@ -50,3 +50,16 @@ def test_same_part_number_across_sites_is_not_candidate_pair():
     keys = {(p["record_a"]["PART_NO"], p["record_b"]["PART_NO"]) for p in pairs}
 
     assert ("T-100", "T-100") not in keys
+
+
+def test_domain_synonym_pair_is_generated_when_selected_fields_match():
+    df = pd.DataFrame([
+        {"PART_NO": "DEC CO1", "DESCRIPTION": "Decicated Coconut type 1", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "DEC C01", "DESCRIPTION": "Dec Coco 1", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+    ])
+
+    pairs = generate_candidate_pairs(df, ["CONTRACT", "UNIT_MEAS"])
+
+    assert len(pairs) == 1
+    assert pairs[0]["record_a"]["PART_NO"] == "DEC CO1"
+    assert pairs[0]["record_b"]["PART_NO"] == "DEC C01"

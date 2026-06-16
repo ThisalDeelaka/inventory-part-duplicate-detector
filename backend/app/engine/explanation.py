@@ -1,5 +1,6 @@
 from app.core.constants import CRITICAL_MODIFIERS, STRICT_MISMATCH_FIELDS
-from app.engine.normalizer import normalize_description
+from app.engine.normalizer import normalize_description, normalize_part_no_with_dictionary
+from app.engine.similarity_model import calculate_part_no_similarity
 
 
 def _clean(value):
@@ -36,6 +37,10 @@ def build_explanation(record_a, record_b, matched, mismatched, description_simil
         return "Selected business fields are similar, but product classification differs."
     if not (classification & set(matched)) and all(not record_a.get(f) or not record_b.get(f) for f in classification):
         return "Classification fields are missing, so the result is based mainly on description similarity."
+    normalized_part_a = normalize_part_no_with_dictionary(record_a.get("PART_NO"))
+    normalized_part_b = normalize_part_no_with_dictionary(record_b.get("PART_NO"))
+    if description_similarity >= 80 and calculate_part_no_similarity(record_a.get("PART_NO"), record_b.get("PART_NO")) >= 90 and normalized_part_a and normalized_part_b:
+        return "Descriptions and part numbers match after business synonym normalization."
     if description_similarity >= 85 and matched:
         return "Descriptions are highly similar and selected business fields match."
     if matched:

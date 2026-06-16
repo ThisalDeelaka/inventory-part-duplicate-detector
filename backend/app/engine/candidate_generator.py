@@ -2,7 +2,7 @@ from itertools import combinations
 
 import pandas as pd
 
-from app.engine.normalizer import normalize_description
+from app.engine.normalizer import normalize_description, normalize_part_no_with_dictionary
 
 MAX_CANDIDATE_PAIRS = 20_000
 
@@ -46,7 +46,10 @@ def generate_candidate_pairs(df: pd.DataFrame, selected_fields: list[str]):
     else:
         blocks = {}
         for idx, row in df.iterrows():
-            tokens = normalize_description(row.get("DESCRIPTION", "")).split()
+            tokens = (
+                normalize_description(row.get("DESCRIPTION", "")).split()
+                + normalize_part_no_with_dictionary(row.get("PART_NO", "")).split()
+            )
             key = tokens[0] if tokens else f"empty-{idx}"
             blocks.setdefault(key, []).append(idx)
         groups = (df.loc[indexes] for indexes in blocks.values())

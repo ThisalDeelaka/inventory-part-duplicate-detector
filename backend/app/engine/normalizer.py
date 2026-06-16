@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.core.constants import CRITICAL_MODIFIERS
+from app.engine.domain_dictionary import expand_domain_tokens, normalize_description_with_dictionary, normalize_part_no_with_dictionary
 
 SPELLING = {"decicated": "desiccated", "decicatted": "desiccated"}
 ABBREVIATIONS = {
@@ -30,7 +31,7 @@ def normalize_description(text: Any) -> str:
         word = SPELLING.get(word, word)
         replacement = ABBREVIATIONS.get(word, word)
         words.extend(replacement.split())
-    return " ".join(words)
+    return expand_domain_tokens(" ".join(words))
 
 
 @lru_cache(maxsize=100_000)
