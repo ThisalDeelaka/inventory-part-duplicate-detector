@@ -2,7 +2,17 @@ from app.core.constants import CRITICAL_MODIFIERS
 from app.engine.normalizer import normalize_description
 
 
+def _clean(value):
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in {"", "nan", "none"} else text
+
+
 def build_explanation(record_a, record_b, matched, mismatched, description_similarity):
+    unit_a, unit_b = _clean(record_a.get("UNIT_MEAS")), _clean(record_b.get("UNIT_MEAS"))
+    if unit_a and unit_b and unit_a.lower() != unit_b.lower():
+        return f"Inventory UOM differs ({unit_a} vs {unit_b}), so this should not be treated as the same duplicate part without master-data review."
     a_words = set(normalize_description(record_a.get("DESCRIPTION")).split())
     b_words = set(normalize_description(record_b.get("DESCRIPTION")).split())
     critical_a, critical_b = a_words & CRITICAL_MODIFIERS, b_words & CRITICAL_MODIFIERS

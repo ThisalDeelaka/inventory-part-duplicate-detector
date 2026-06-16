@@ -38,4 +38,6 @@ CONFIDENCE_ACTIONS = {
 CRITICAL_MODIFIERS = {
     "oil", "air", "hydraulic", "stainless", "carbon", "rubber", "copper",
     "pvc", "left", "right",
+    "red", "blue", "green", "yellow", "black", "white", "orange", "purple",
+    "grey", "gray", "brown", "silver", "gold",
 }

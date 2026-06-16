@@ -9,6 +9,13 @@ from app.engine.similarity_model import (
 )
 
 
+def _clean(value):
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    return "" if text in {"", "nan", "none"} else text
+
+
 def confidence_for(score):
     if score >= 90: return "HIGH"
     if score >= 75: return "MEDIUM"
@@ -43,6 +50,9 @@ def score_candidate(record_a, record_b, selected_fields):
     numbers_b = set(tokens_b["numbers"])
     if numbers_a and numbers_b and numbers_a != numbers_b:
         final -= 15
+    uom_a, uom_b = _clean(record_a.get("UNIT_MEAS")), _clean(record_b.get("UNIT_MEAS"))
+    if uom_a and uom_b and uom_a != uom_b:
+        final -= 30
     final = round(max(0.0, min(100.0, final)), 2)
     confidence = confidence_for(final)
     return {
