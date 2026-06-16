@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: sqlite:////data/inventory_detector.db
+      MODEL_VERSION: hybrid-nlp-v1
+      DEFAULT_THRESHOLD: "75"
+      MAX_UPLOAD_BYTES: "52428800"
+      MAX_CSV_RECORDS: "100000"
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
+      CORS_ORIGIN_REGEX: http://(localhost|127\.0\.0\.1):\d+
+    volumes: ["detector-data:/data"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  frontend:
+    build:
+      context: ./frontend
+      args: {VITE_API_URL: "http://127.0.0.1:8000"}
+    ports: ["5173:80"]
+    depends_on:
+      backend: {condition: service_healthy}
+volumes:
+  detector-data:

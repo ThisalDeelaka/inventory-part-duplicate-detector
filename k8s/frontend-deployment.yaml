@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: inventory-duplicate-frontend}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: inventory-duplicate-frontend}}
+  template:
+    metadata: {labels: {app: inventory-duplicate-frontend}}
+    spec:
+      containers:
+        - name: frontend
+          image: inventory-part-duplicate-detector-frontend:latest
+          ports: [{containerPort: 80}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 250m, memory: 256Mi}

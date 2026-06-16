@@ -1,0 +1,34 @@
+# Python
+backend/.venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/.pytest_cache/
+
+# Runtime databases and generated local state
+*.db
+*.sqlite
+*.sqlite3
+inventory_detector.db
+
+# Node / frontend build output
+frontend/node_modules/
+frontend/dist/
+node_modules/
+dist/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor/Office temp files
+.DS_Store
+Thumbs.db
+~$*
+*.tmp
+
+# Logs
+*.log

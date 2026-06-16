@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inventory-duplicate-config
+data:
+  MODEL_VERSION: hybrid-nlp-v1
+  DEFAULT_THRESHOLD: "75"
+  ENVIRONMENT: kubernetes
+  CORS_ORIGINS: https://inventory-duplicate.example.com
+  MAX_UPLOAD_BYTES: "52428800"
+  MAX_CSV_RECORDS: "100000"

@@ -1,0 +1,13 @@
+description_a,description_b,expected_label,reason
+MCB30A,MCB 30 Amp,1,Abbreviation and spacing variation
+M.C.B 30 AMP,Miniature Circuit Breaker 30A,1,Expanded abbreviation
+Decicated Coconut type 1,Desiccated Coconut type 1,1,Known spelling variation
+Stainless Steel Pipe,SS Pipe,1,Known technical abbreviation
+Bolt 10MM,Hex Bolt 10 mm,1,Technical value match
+Generator Oil Filter,Generator Air Filter,0,Critical modifier mismatch
+Bolt 10MM,Bolt 12MM,0,Numeric dimension mismatch
+MCB 20A,MCB 30A,0,Amperage mismatch
+Rubber Glove Left,Rubber Glove Right,0,Directional modifier mismatch
+Carbon Steel Pipe,Stainless Steel Pipe,0,Material mismatch
+Copper Cable 4MM,Cu cable 4 mm,1,Common abbreviation variation
+Hydraulic Oil Filter,Hydraulic oil filtration element,1,Description variation

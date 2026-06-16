@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-duplicate-backend
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: inventory-duplicate-backend}}
+  template:
+    metadata: {labels: {app: inventory-duplicate-backend}}
+    spec:
+      containers:
+        - name: backend
+          image: inventory-part-duplicate-detector-backend:latest
+          ports: [{containerPort: 8000}]
+          envFrom: [{configMapRef: {name: inventory-duplicate-config}}]
+          env:
+            - {name: DATABASE_URL, value: "sqlite:////data/inventory_detector.db"}
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: {path: /ready, port: 8000}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          volumeMounts: [{name: data, mountPath: /data}]
+      volumes:
+        - name: data
+          emptyDir: {}

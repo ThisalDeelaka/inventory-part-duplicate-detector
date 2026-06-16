@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-06-16T00:01:21Z",
+  "health": {
+    "status": "healthy",
+    "service": "inventory-part-duplicate-detector",
+    "model_version": "hybrid-nlp-v1"
+  },
+  "ready": {
+    "status": "ready",
+    "database": "connected",
+    "model": "loaded"
+  },
+  "exact_erp_export": {
+    "status_code": 200,
+    "elapsed_seconds": 2.845,
+    "records": 99,
+    "candidates": 25,
+    "warnings": 9,
+    "top_score": 82.57,
+    "passed": true
+  },
+  "failure_handling": {
+    "empty_file_status": 400,
+    "missing_description_status": 200,
+    "missing_description_valid": false,
+    "high_null_warnings": [
+      {
+        "warning_type": "HIGH_NULL_FIELD",
+        "message": "Selected field PRIME_COMMODITY is 100.0% empty."
+      }
+    ],
+    "passed": true
+  },
+  "model_failure_cases": {
+    "cases": [
+      {
+        "case": "critical_modifier",
+        "score": 49.21,
+        "confidence": "IGNORE",
+        "explanation": "Descriptions are similar, but critical modifier differs: oil vs air."
+      },
+      {
+        "case": "numeric_mismatch",
+        "score": 52.03,
+        "confidence": "IGNORE",
+        "explanation": "Classification fields are missing, so the result is based mainly on description similarity."
+      },
+      {
+        "case": "direction_mismatch",
+        "score": 43.96,
+        "confidence": "IGNORE",
+        "explanation": "Descriptions are similar, but critical modifier differs: left, rubber vs right, rubber."
+      },
+      {
+        "case": "positive_control",
+        "score": 90.0,
+        "confidence": "HIGH",
+        "explanation": "Classification fields are missing, so the result is based mainly on description similarity."
+      }
+    ],
+    "passed": true
+  },
+  "load_tests": {
+    "results": [
+      {
+        "status_code": 200,
+        "client_elapsed_seconds": 6.511,
+        "scan_id": 8,
+        "record_count": 500,
+        "candidate_pair_count": 14680,
+        "processing_time_seconds": 6.488,
+        "candidates_found": 8915,
+        "warnings_count": 0
+      },
+      {
+        "status_code": 200,
+        "client_elapsed_seconds": 8.537,
+        "scan_id": 9,
+        "record_count": 2000,
+        "candidate_pair_count": 20000,
+        "processing_time_seconds": 8.52,
+        "candidates_found": 14972,
+        "warnings_count": 1
+      },
+      {
+        "status_code": 200,
+        "client_elapsed_seconds": 10.591,
+        "scan_id": 10,
+        "record_count": 5000,
+        "candidate_pair_count": 20000,
+        "processing_time_seconds": 10.553,
+        "candidates_found": 20000,
+        "warnings_count": 1
+      }
+    ],
+    "max_processing_seconds": 10.553,
+    "median_processing_seconds": 8.52,
+    "passed": true
+  },
+  "overall_passed": true
+}
