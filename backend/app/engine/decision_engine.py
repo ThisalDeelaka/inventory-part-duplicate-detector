@@ -1,7 +1,9 @@
 from app.core.constants import CONFIDENCE_ACTIONS
+from app.engine.application_context import find_application_context_mismatch
 from app.engine.business_rules import evaluate_hard_business_rules
 from app.engine.column_semantics import clean_field_value, normalize_scan_mode
 from app.engine.explanation import build_explanation
+from app.engine.generic_description_guard import has_generic_specific_pair
 from app.engine.item_family_classifier import shared_family
 from app.engine.normalizer import extract_technical_tokens
 from app.engine.similarity_model import (
@@ -132,6 +134,29 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
 
     final = description * 0.6 + business * 0.2 + part_no * 0.1 + token_score * 0.1
     final = round(max(0.0, min(100.0, final)), 2)
+    explanation = build_explanation(record_a, record_b, matched, mismatched, description)
+    rule_decision = "ALLOW"
+    rejection_reason = ""
+    business_status = business_status_for(final)
+
+    if has_generic_specific_pair(desc_a, desc_b):
+        final = min(final, 65.0)
+        explanation = f"{explanation} One description is too generic to confirm duplicate identity."
+        rule_decision = "DOWNGRADE"
+        rejection_reason = "GENERIC_DESCRIPTION"
+        business_status = "INSUFFICIENT_DATA"
+
+    context_mismatch = find_application_context_mismatch(record_a, record_b)
+    if context_mismatch:
+        left = ", ".join(context_mismatch["values_a"])
+        right = ", ".join(context_mismatch["values_b"])
+        final = min(final, 78.0)
+        explanation = f"{explanation} Application context appears different: {left} vs {right}."
+        rule_decision = "DOWNGRADE"
+        rejection_reason = "APPLICATION_CONTEXT_MISMATCH"
+        business_status = "POSSIBLE_DUPLICATE_REVIEW"
+
+    final = round(final, 2)
     confidence = confidence_for(final)
     return {
         "final_score": final,
@@ -143,11 +168,11 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
         "technical_token_score": token_score,
         "matched_fields": matched,
         "mismatched_fields": mismatched,
-        "explanation": build_explanation(record_a, record_b, matched, mismatched, description),
+        "explanation": explanation,
         "recommended_action": CONFIDENCE_ACTIONS[confidence],
-        "business_status": business_status_for(final),
-        "rule_decision": "ALLOW",
-        "rejection_reason": "",
+        "business_status": business_status,
+        "rule_decision": rule_decision,
+        "rejection_reason": rejection_reason,
         "scan_mode": scan_mode,
         "critical_mismatches": [],
         "variant_attributes_a": attributes_a,

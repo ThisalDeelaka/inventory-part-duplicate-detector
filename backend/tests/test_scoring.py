@@ -121,6 +121,42 @@ def test_same_part_number_is_not_duplicate_candidate():
     assert "Same PART_NO" in result["explanation"]
 
 
+def test_generic_label_description_is_low_confidence_review():
+    result = score_candidate(
+        rec("TR LABELS", "Labels"),
+        rec("TR WARNING LABELS", "Warning labels"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["business_status"] == "INSUFFICIENT_DATA"
+    assert result["confidence_level"] not in {"HIGH", "MEDIUM"}
+    assert result["final_score"] <= 65
+    assert "One description is too generic to confirm duplicate identity." in result["explanation"]
+
+
+def test_application_context_mismatch_warns_without_rejecting():
+    result = score_candidate(
+        rec("SP-GEN-AIR-FLT", "Generator Air Filter"),
+        rec("HVAC-FILTER-01", "Air Filter"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["business_status"] == "POSSIBLE_DUPLICATE_REVIEW"
+    assert result["final_score"] <= 78
+    assert result["rule_decision"] == "DOWNGRADE"
+    assert "Application context appears different: generator vs hvac." in result["explanation"]
+
+
+def test_same_application_context_does_not_warn():
+    result = score_candidate(
+        rec("SP-GEN-OIL-FLT-1", "GEN Oil Filter"),
+        rec("SP-GEN-OIL-FLT-2", "Generator Oil Filter"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert "Application context appears different" not in result["explanation"]
+
+
 def test_hsn_sac_mismatch_blocks_otherwise_similar_candidate():
     result = score_candidate(
         rec("A", "Stainless Steel Pipe", hsn="7306"),
