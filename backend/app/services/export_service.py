@@ -16,7 +16,10 @@ def candidates_to_csv(candidates):
     fields = [
         "part_no_a", "description_a", "contract_a", "part_no_b", "description_b", "contract_b",
         "similarity_score", "confidence_level", "business_status", "rule_decision", "rejection_reason",
-        "scan_mode", "critical_mismatches", "variant_attributes_a", "variant_attributes_b",
+        "scan_mode", "critical_mismatches", "generic_description_warning",
+        "application_context_a", "application_context_b", "application_context_warning",
+        "normalized_description_a", "normalized_description_b", "normalized_part_no_a", "normalized_part_no_b",
+        "variant_attributes_a", "variant_attributes_b",
         "description_similarity", "tfidf_score", "fuzzy_score", "part_no_similarity",
         "technical_token_score", "matched_fields", "mismatched_fields", "explanation",
         "recommended_action", "review_status",

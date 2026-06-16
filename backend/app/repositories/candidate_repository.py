@@ -36,6 +36,14 @@ class CandidateRepository:
             critical_mismatches=json.dumps(result["critical_mismatches"]),
             variant_attributes_a=json.dumps(result["variant_attributes_a"]),
             variant_attributes_b=json.dumps(result["variant_attributes_b"]),
+            generic_description_warning=str(result.get("generic_description_warning", False)).lower(),
+            application_context_a=json.dumps(result.get("application_context_a", [])),
+            application_context_b=json.dumps(result.get("application_context_b", [])),
+            application_context_warning=str(result.get("application_context_warning", False)).lower(),
+            normalized_description_a=result.get("normalized_description_a", ""),
+            normalized_description_b=result.get("normalized_description_b", ""),
+            normalized_part_no_a=result.get("normalized_part_no_a", ""),
+            normalized_part_no_b=result.get("normalized_part_no_b", ""),
         )
         self.db.add(candidate)
         return candidate

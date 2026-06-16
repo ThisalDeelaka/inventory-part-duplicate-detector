@@ -35,3 +35,4 @@ Thumbs.db
 
 # Local scan/export outputs
 docs/latest_real_scan_*
+docs/latest_visibility_scan_*

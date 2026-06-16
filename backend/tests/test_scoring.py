@@ -107,6 +107,10 @@ def test_desiccated_coconut_domain_synonyms_are_likely_duplicate():
     assert result["confidence_level"] in {"HIGH", "MEDIUM"}
     assert result["final_score"] >= 90
     assert "business synonym normalization" in result["explanation"]
+    assert result["normalized_description_a"] == "desiccated coconut type 1"
+    assert result["normalized_description_b"] == "desiccated coconut type 1"
+    assert result["normalized_part_no_a"] == "desiccated type 1"
+    assert result["normalized_part_no_b"] == "desiccated type 1"
 
 
 def test_same_part_number_is_not_duplicate_candidate():
@@ -129,6 +133,7 @@ def test_generic_label_description_is_low_confidence_review():
     )
 
     assert result["business_status"] == "INSUFFICIENT_DATA"
+    assert result["generic_description_warning"] is True
     assert result["confidence_level"] not in {"HIGH", "MEDIUM"}
     assert result["final_score"] <= 65
     assert "One description is too generic to confirm duplicate identity." in result["explanation"]
@@ -142,6 +147,9 @@ def test_application_context_mismatch_warns_without_rejecting():
     )
 
     assert result["business_status"] == "POSSIBLE_DUPLICATE_REVIEW"
+    assert result["application_context_a"] == ["generator"]
+    assert result["application_context_b"] == ["hvac"]
+    assert result["application_context_warning"] is True
     assert result["final_score"] <= 78
     assert result["rule_decision"] == "DOWNGRADE"
     assert "Application context appears different: generator vs hvac." in result["explanation"]

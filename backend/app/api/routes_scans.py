@@ -15,6 +15,17 @@ from app.services.validation_service import parse_selected_fields, read_csv_uplo
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
 
+def _json_attr(obj, name, default):
+    try:
+        return json.loads(getattr(obj, name, None) or default)
+    except (TypeError, json.JSONDecodeError):
+        return json.loads(default)
+
+
+def _bool_attr(obj, name):
+    return str(getattr(obj, name, "false") or "false").lower() == "true"
+
+
 def scan_json(scan, privacy=None):
     payload = {
         "id": scan.id, "scan_id": scan.id, "scan_name": scan.scan_name, "source_type": scan.source_type,
@@ -40,9 +51,17 @@ def candidate_json(c):
         "rule_decision": getattr(c, "rule_decision", "ALLOW"),
         "rejection_reason": getattr(c, "rejection_reason", ""),
         "scan_mode": getattr(c, "scan_mode", "SAME_SITE_DUPLICATE"),
-        "critical_mismatches": json.loads(getattr(c, "critical_mismatches", "[]") or "[]"),
-        "variant_attributes_a": json.loads(getattr(c, "variant_attributes_a", "{}") or "{}"),
-        "variant_attributes_b": json.loads(getattr(c, "variant_attributes_b", "{}") or "{}"),
+        "critical_mismatches": _json_attr(c, "critical_mismatches", "[]"),
+        "variant_attributes_a": _json_attr(c, "variant_attributes_a", "{}"),
+        "variant_attributes_b": _json_attr(c, "variant_attributes_b", "{}"),
+        "generic_description_warning": _bool_attr(c, "generic_description_warning"),
+        "application_context_a": _json_attr(c, "application_context_a", "[]"),
+        "application_context_b": _json_attr(c, "application_context_b", "[]"),
+        "application_context_warning": _bool_attr(c, "application_context_warning"),
+        "normalized_description_a": getattr(c, "normalized_description_a", "") or "",
+        "normalized_description_b": getattr(c, "normalized_description_b", "") or "",
+        "normalized_part_no_a": getattr(c, "normalized_part_no_a", "") or "",
+        "normalized_part_no_b": getattr(c, "normalized_part_no_b", "") or "",
     }
 
 

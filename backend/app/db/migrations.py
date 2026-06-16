@@ -23,6 +23,14 @@ def ensure_sqlite_demo_columns(engine):
             ("critical_mismatches", "TEXT DEFAULT '[]'"),
             ("variant_attributes_a", "TEXT DEFAULT '{}'"),
             ("variant_attributes_b", "TEXT DEFAULT '{}'"),
+            ("generic_description_warning", "VARCHAR(10) DEFAULT 'false'"),
+            ("application_context_a", "TEXT DEFAULT '[]'"),
+            ("application_context_b", "TEXT DEFAULT '[]'"),
+            ("application_context_warning", "VARCHAR(10) DEFAULT 'false'"),
+            ("normalized_description_a", "TEXT DEFAULT ''"),
+            ("normalized_description_b", "TEXT DEFAULT ''"),
+            ("normalized_part_no_a", "TEXT DEFAULT ''"),
+            ("normalized_part_no_b", "TEXT DEFAULT ''"),
         ],
     }
 

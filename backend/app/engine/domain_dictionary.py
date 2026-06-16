@@ -48,6 +48,20 @@ def expand_domain_tokens(text: Any) -> str:
     for token in _tokenize(text):
         replacement = DOMAIN_TOKEN_MAP.get(token, token)
         words.extend(replacement.split())
+    if "coconut" in words:
+        expanded = []
+        index = 0
+        while index < len(words):
+            if (
+                words[index].isdigit()
+                and index > 0
+                and words[index - 1] == "coconut"
+            ):
+                expanded.extend(["type", words[index]])
+            else:
+                expanded.append(words[index])
+            index += 1
+        words = expanded
     return " ".join(words)
 
 

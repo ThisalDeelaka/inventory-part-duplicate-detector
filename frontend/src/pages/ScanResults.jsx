@@ -46,6 +46,16 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   ))}
                 </div>
               )}
+              {(candidate.generic_description_warning || candidate.application_context_warning) && (
+                <div className="mismatch-list">
+                  {candidate.generic_description_warning && <span>One description is too generic to confirm duplicate identity.</span>}
+                  {candidate.application_context_warning && (
+                    <span>
+                      Application context appears different: {(candidate.application_context_a || []).join(', ') || 'none'} vs {(candidate.application_context_b || []).join(', ') || 'none'}.
+                    </span>
+                  )}
+                </div>
+              )}
               <button className="link" onClick={() => setOpen(open === candidate.id ? null : candidate.id)}>
                 {open === candidate.id ? 'Hide details' : 'Show details'}
               </button>
@@ -58,6 +68,10 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   <b>Matched: {candidate.matched_fields.join(', ') || 'None'}</b>
                   <b>Mismatched: {candidate.mismatched_fields.join(', ') || 'None'}</b>
                   <b>Scan mode: {candidate.scan_mode}</b>
+                  <b>Normalized description A: {candidate.normalized_description_a || 'None'}</b>
+                  <b>Normalized description B: {candidate.normalized_description_b || 'None'}</b>
+                  <b>Normalized part no A: {candidate.normalized_part_no_a || 'None'}</b>
+                  <b>Normalized part no B: {candidate.normalized_part_no_b || 'None'}</b>
                   <p>{candidate.recommended_action}</p>
                 </div>
               )}
