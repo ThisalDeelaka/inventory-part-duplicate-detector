@@ -19,6 +19,12 @@ def _pair(a, b, selected_fields, warnings):
     return {"record_a": a, "record_b": b, "matched_fields": matched, "mismatched_fields": mismatched, "warnings": warnings}
 
 
+def _same_part_number(a, b):
+    part_a = str(a.get("PART_NO", "")).strip().lower()
+    part_b = str(b.get("PART_NO", "")).strip().lower()
+    return bool(part_a and part_b and part_a == part_b)
+
+
 def generate_candidate_pairs(df: pd.DataFrame, selected_fields: list[str]):
     warnings = []
     available = []
@@ -50,6 +56,8 @@ def generate_candidate_pairs(df: pd.DataFrame, selected_fields: list[str]):
         for idx_a, idx_b in combinations(group.index.tolist(), 2):
             key = tuple(sorted((int(idx_a), int(idx_b))))
             if key in seen:
+                continue
+            if _same_part_number(df.loc[idx_a], df.loc[idx_b]):
                 continue
             seen.add(key)
             pairs.append(_pair(df.loc[idx_a].to_dict(), df.loc[idx_b].to_dict(), selected_fields, warnings))

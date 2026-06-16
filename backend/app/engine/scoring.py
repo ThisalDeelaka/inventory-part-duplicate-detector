@@ -1,4 +1,4 @@
-from app.core.constants import CONFIDENCE_ACTIONS
+from app.core.constants import CONFIDENCE_ACTIONS, STRICT_MISMATCH_FIELDS
 from app.engine.explanation import build_explanation
 from app.engine.normalizer import extract_technical_tokens
 from app.engine.similarity_model import (
@@ -23,7 +23,31 @@ def confidence_for(score):
     return "IGNORE"
 
 
+def _same_part_number(record_a, record_b):
+    part_a, part_b = _clean(record_a.get("PART_NO")), _clean(record_b.get("PART_NO"))
+    return bool(part_a and part_b and part_a == part_b)
+
+
+def _strict_mismatches(record_a, record_b):
+    mismatches = []
+    for field in STRICT_MISMATCH_FIELDS:
+        value_a, value_b = _clean(record_a.get(field)), _clean(record_b.get(field))
+        if value_a and value_b and value_a != value_b:
+            mismatches.append(field)
+    return sorted(mismatches)
+
+
 def score_candidate(record_a, record_b, selected_fields):
+    if _same_part_number(record_a, record_b):
+        return {
+            "final_score": 0.0, "confidence_level": "IGNORE",
+            "description_similarity": 0.0, "tfidf_score": 0.0,
+            "fuzzy_score": 0.0, "part_no_similarity": 100.0,
+            "technical_token_score": 0.0, "matched_fields": [],
+            "mismatched_fields": [], "explanation": "Same PART_NO detected, so this is treated as the same part across records/sites rather than a duplicate master candidate.",
+            "recommended_action": CONFIDENCE_ACTIONS["IGNORE"],
+        }
+
     desc_a, desc_b = record_a.get("DESCRIPTION"), record_b.get("DESCRIPTION")
     tfidf = calculate_tfidf_similarity(desc_a, desc_b)
     fuzzy = calculate_fuzzy_similarity(desc_a, desc_b)
@@ -53,6 +77,9 @@ def score_candidate(record_a, record_b, selected_fields):
     uom_a, uom_b = _clean(record_a.get("UNIT_MEAS")), _clean(record_b.get("UNIT_MEAS"))
     if uom_a and uom_b and uom_a != uom_b:
         final -= 30
+    strict_mismatches = _strict_mismatches(record_a, record_b)
+    if strict_mismatches:
+        final = min(final - 35, 55.0)
     final = round(max(0.0, min(100.0, final)), 2)
     confidence = confidence_for(final)
     return {

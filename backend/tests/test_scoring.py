@@ -1,8 +1,15 @@
 from app.engine.scoring import score_candidate
 
 
-def rec(part, description, site="S1", unit="PCS", commodity="X"):
-    return {"PART_NO":part,"DESCRIPTION":description,"CONTRACT":site,"UNIT_MEAS":unit,"PRIME_COMMODITY":commodity}
+def rec(part, description, site="S1", unit="PCS", commodity="X", hsn="1000"):
+    return {
+        "PART_NO": part,
+        "DESCRIPTION": description,
+        "CONTRACT": site,
+        "UNIT_MEAS": unit,
+        "PRIME_COMMODITY": commodity,
+        "HSN_SAC_CODE": hsn,
+    }
 
 
 def test_high_confidence_duplicate():
@@ -13,12 +20,15 @@ def test_high_confidence_duplicate():
 
 def test_critical_modifier_and_number_mismatches_stay_low():
     oil_air = score_candidate(rec("F1","Generator Oil Filter"), rec("F2","Generator Air Filter"), ["CONTRACT","UNIT_MEAS"])
+    fuel_air = score_candidate(rec("SP-GEN-FUEL-FLT", "Generator Fuel Filter"), rec("SP-GEN-AIR-FLT", "Generator Air Filter"), ["CONTRACT", "UNIT_MEAS"])
     numeric = score_candidate(rec("B1","Bolt 10MM"), rec("B2","Bolt 12MM"), ["CONTRACT","UNIT_MEAS"])
     color = score_candidate(rec("P1", "RED PAINT 1L CAN"), rec("P2", "BLUE PAINT 1L CAN"), ["CONTRACT", "UNIT_MEAS"])
     assert oil_air["final_score"] < 75
+    assert fuel_air["final_score"] < 75
     assert numeric["final_score"] < 75
     assert color["final_score"] < 60
     assert "critical modifier differs" in oil_air["explanation"]
+    assert "critical modifier differs" in fuel_air["explanation"]
     assert "critical modifier differs" in color["explanation"]
 
 
@@ -39,3 +49,27 @@ def test_inventory_uom_mismatch_blocks_apparent_description_duplicate():
     assert result["final_score"] < 60
     assert result["confidence_level"] == "IGNORE"
     assert "Inventory UOM differs" in result["explanation"]
+
+
+def test_same_part_number_is_not_duplicate_candidate():
+    result = score_candidate(
+        rec("T-100", "T-100", site="HWHSP"),
+        rec("T-100", "T-100", site="B"),
+        ["UNIT_MEAS"],
+    )
+
+    assert result["final_score"] == 0
+    assert result["confidence_level"] == "IGNORE"
+    assert "Same PART_NO" in result["explanation"]
+
+
+def test_hsn_sac_mismatch_blocks_otherwise_similar_candidate():
+    result = score_candidate(
+        rec("A", "Stainless Steel Pipe", hsn="7306"),
+        rec("B", "SS Pipe", hsn="3917"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["final_score"] < 60
+    assert result["confidence_level"] == "IGNORE"
+    assert "HSN_SAC_CODE differs" in result["explanation"]

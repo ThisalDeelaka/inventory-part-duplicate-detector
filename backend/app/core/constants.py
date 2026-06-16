@@ -36,8 +36,14 @@ CONFIDENCE_ACTIONS = {
 }
 
 CRITICAL_MODIFIERS = {
-    "oil", "air", "hydraulic", "stainless", "carbon", "rubber", "copper",
-    "pvc", "left", "right",
+    "oil", "fuel", "air", "water", "hydraulic", "cabin", "lube", "coolant",
+    "stainless", "carbon", "rubber", "copper", "pvc", "left", "right",
     "red", "blue", "green", "yellow", "black", "white", "orange", "purple",
     "grey", "gray", "brown", "silver", "gold",
+}
+
+STRICT_MISMATCH_FIELDS = {
+    "UNIT_MEAS",
+    "HSN_SAC_CODE",
+    "HAZARD_CODE",
 }

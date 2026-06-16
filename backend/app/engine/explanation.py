@@ -1,4 +1,4 @@
-from app.core.constants import CRITICAL_MODIFIERS
+from app.core.constants import CRITICAL_MODIFIERS, STRICT_MISMATCH_FIELDS
 from app.engine.normalizer import normalize_description
 
 
@@ -10,9 +10,19 @@ def _clean(value):
 
 
 def build_explanation(record_a, record_b, matched, mismatched, description_similarity):
+    part_a, part_b = _clean(record_a.get("PART_NO")), _clean(record_b.get("PART_NO"))
+    if part_a and part_b and part_a.lower() == part_b.lower():
+        return "Same PART_NO detected, so this is treated as the same part across records/sites rather than a duplicate master candidate."
     unit_a, unit_b = _clean(record_a.get("UNIT_MEAS")), _clean(record_b.get("UNIT_MEAS"))
     if unit_a and unit_b and unit_a.lower() != unit_b.lower():
         return f"Inventory UOM differs ({unit_a} vs {unit_b}), so this should not be treated as the same duplicate part without master-data review."
+    strict_mismatches = []
+    for field in STRICT_MISMATCH_FIELDS - {"UNIT_MEAS"}:
+        value_a, value_b = _clean(record_a.get(field)), _clean(record_b.get(field))
+        if value_a and value_b and value_a.lower() != value_b.lower():
+            strict_mismatches.append(f"{field} differs ({value_a} vs {value_b})")
+    if strict_mismatches:
+        return f"{'; '.join(sorted(strict_mismatches))}, so the candidate is blocked by strict ERP field semantics."
     a_words = set(normalize_description(record_a.get("DESCRIPTION")).split())
     b_words = set(normalize_description(record_b.get("DESCRIPTION")).split())
     critical_a, critical_b = a_words & CRITICAL_MODIFIERS, b_words & CRITICAL_MODIFIERS

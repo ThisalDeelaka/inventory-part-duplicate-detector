@@ -37,3 +37,16 @@ def test_no_self_or_reverse_pairs():
     assert len(keys) == 3
     assert all(a != b for a, b in keys)
     assert not any((b, a) in keys for a, b in keys)
+
+
+def test_same_part_number_across_sites_is_not_candidate_pair():
+    df = pd.DataFrame([
+        {"PART_NO": "T-100", "DESCRIPTION": "T-100", "CONTRACT": "HWHSP", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "T-100", "DESCRIPTION": "T-100", "CONTRACT": "B", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "T-101", "DESCRIPTION": "T-100", "CONTRACT": "B", "UNIT_MEAS": "PCS"},
+    ])
+
+    pairs = generate_candidate_pairs(df, ["UNIT_MEAS"])
+    keys = {(p["record_a"]["PART_NO"], p["record_b"]["PART_NO"]) for p in pairs}
+
+    assert ("T-100", "T-100") not in keys
