@@ -15,7 +15,8 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
           <th>Part A</th>
           <th>Part B</th>
           <th>Score</th>
-          <th>Confidence</th>
+          <th>Business status</th>
+          <th>Rule</th>
           <th>Explanation</th>
           <th>Review</th>
         </tr>
@@ -26,9 +27,25 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
             <td><b>{candidate.part_no_a}</b><small>{candidate.description_a}</small></td>
             <td><b>{candidate.part_no_b}</b><small>{candidate.description_b}</small></td>
             <td><Score value={candidate.similarity_score} /></td>
-            <td><span className={`badge ${candidate.confidence_level}`}>{candidate.confidence_level}</span></td>
+            <td>
+              <span className={`badge ${candidate.business_status}`}>{candidate.business_status}</span>
+              <small>{candidate.confidence_level}</small>
+            </td>
+            <td>
+              <span className="rule-pill">{candidate.rule_decision}</span>
+              {candidate.rejection_reason && <small>{candidate.rejection_reason}</small>}
+            </td>
             <td>
               <p>{candidate.explanation}</p>
+              {!!candidate.critical_mismatches?.length && (
+                <div className="mismatch-list">
+                  {candidate.critical_mismatches.map((mismatch, index) => (
+                    <span key={`${mismatch.group}-${index}`}>
+                      {mismatch.label}: {(mismatch.values_a || []).join(', ')} vs {(mismatch.values_b || []).join(', ')}
+                    </span>
+                  ))}
+                </div>
+              )}
               <button className="link" onClick={() => setOpen(open === candidate.id ? null : candidate.id)}>
                 {open === candidate.id ? 'Hide details' : 'Show details'}
               </button>
@@ -40,6 +57,7 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   <span>Technical: {candidate.technical_token_score}</span>
                   <b>Matched: {candidate.matched_fields.join(', ') || 'None'}</b>
                   <b>Mismatched: {candidate.mismatched_fields.join(', ') || 'None'}</b>
+                  <b>Scan mode: {candidate.scan_mode}</b>
                   <p>{candidate.recommended_action}</p>
                 </div>
               )}
@@ -173,7 +191,7 @@ export default function ScanResults() {
         <div>
           <p className="eyebrow">Scan results</p>
           <h1>{scan?.scan_name || 'Loading scan...'}</h1>
-          <p>{scan && `${scan.total_records} records · ${scan.total_candidates} candidates · threshold ${scan.threshold}`}</p>
+          <p>{scan && `${scan.total_records} records · ${scan.total_candidates} candidates · threshold ${scan.threshold} · ${scan.scan_mode}`}</p>
         </div>
         <div className="actions">
           <Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>

@@ -47,6 +47,13 @@ class CandidateResponse(BaseModel):
     mismatched_fields: list[str]
     explanation: str
     recommended_action: str
+    business_status: str
+    rule_decision: str
+    rejection_reason: str | None
+    scan_mode: str
+    critical_mismatches: list[dict]
+    variant_attributes_a: dict
+    variant_attributes_b: dict
     review_status: str
     reviewed_by: str | None
     reviewed_at: datetime | None

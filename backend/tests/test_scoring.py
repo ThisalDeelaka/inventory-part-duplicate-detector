@@ -27,9 +27,9 @@ def test_critical_modifier_and_number_mismatches_stay_low():
     assert fuel_air["final_score"] < 75
     assert numeric["final_score"] < 75
     assert color["final_score"] < 60
-    assert "critical modifier differs" in oil_air["explanation"]
-    assert "critical modifier differs" in fuel_air["explanation"]
-    assert "critical modifier differs" in color["explanation"]
+    assert "critical function differs" in oil_air["explanation"]
+    assert "critical function differs" in fuel_air["explanation"]
+    assert "color differs" in color["explanation"]
 
 
 def test_cross_site_and_missing_classification_explanations():
@@ -49,6 +49,51 @@ def test_inventory_uom_mismatch_blocks_apparent_description_duplicate():
     assert result["final_score"] < 60
     assert result["confidence_level"] == "IGNORE"
     assert "Inventory UOM differs" in result["explanation"]
+
+
+def test_related_but_different_variants_are_not_duplicates():
+    cases = [
+        ("Generator Fuel Filter", "Generator Air Filter", "critical function differs"),
+        ("Generator Oil Filter", "Generator Fuel Filter", "critical function differs"),
+        ("RED PAINT 1L CAN", "BLUE PAINT 1L CAN", "color differs"),
+        ("Decicated Coconut type 1", "Decicated Coconut type 2", "type differs"),
+        ("MCB 20A", "MCB30A", "ampere rating differs"),
+        ("Small Coconut", "eXtra small Coconut", "size differs"),
+        ("Temperature Sensor", "Pressure Sensor", "sensor type differs"),
+    ]
+
+    for left, right, explanation in cases:
+        result = score_candidate(rec("A", left), rec("B", right), ["CONTRACT", "UNIT_MEAS"])
+        assert result["business_status"] == "RELATED_BUT_NOT_DUPLICATE"
+        assert result["final_score"] <= 55
+        assert explanation in result["explanation"]
+
+
+def test_hsn_sac_mismatch_is_data_conflict():
+    left = {**rec("A", "SS Pipe"), "HSN_SAC_CODE": "1001"}
+    right = {**rec("B", "Stainless Steel Pipe"), "HSN_SAC_CODE": "2002"}
+
+    result = score_candidate(left, right, ["CONTRACT", "UNIT_MEAS", "HSN_SAC_CODE"])
+
+    assert result["business_status"] == "DATA_CONFLICT_REVIEW"
+    assert result["rule_decision"] == "DATA_CONFLICT"
+    assert result["final_score"] <= 45
+    assert "HSN/SAC Code differs" in result["explanation"]
+
+
+def test_allowed_likely_duplicates_remain_supported():
+    cases = [
+        ("MCB30A", "MCB 30 Amp"),
+        ("Decicated Coconut type 1", "Desiccated Coconut type 1"),
+        ("SS Pipe", "Stainless Steel Pipe"),
+        ("Generator Oil Filter", "Generator oil  filter"),
+    ]
+
+    for left, right in cases:
+        result = score_candidate(rec("A", left), rec("B", right), ["CONTRACT", "UNIT_MEAS"])
+        assert result["business_status"] in {"LIKELY_DUPLICATE", "POSSIBLE_DUPLICATE_REVIEW"}
+        assert result["rule_decision"] == "ALLOW"
+        assert result["final_score"] >= 60
 
 
 def test_same_part_number_is_not_duplicate_candidate():

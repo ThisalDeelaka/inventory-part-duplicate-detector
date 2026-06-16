@@ -29,6 +29,13 @@ class CandidateRepository:
             mismatched_fields=json.dumps(result["mismatched_fields"]),
             explanation=result["explanation"],
             recommended_action=result["recommended_action"],
+            business_status=result["business_status"],
+            rule_decision=result["rule_decision"],
+            rejection_reason=result["rejection_reason"],
+            scan_mode=result["scan_mode"],
+            critical_mismatches=json.dumps(result["critical_mismatches"]),
+            variant_attributes_a=json.dumps(result["variant_attributes_a"]),
+            variant_attributes_b=json.dumps(result["variant_attributes_b"]),
         )
         self.db.add(candidate)
         return candidate

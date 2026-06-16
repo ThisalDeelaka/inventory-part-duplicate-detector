@@ -5,6 +5,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv
 from app.services.grouping_service import build_duplicate_groups
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_warnings, list_scans, run_scan
@@ -20,6 +21,7 @@ def scan_json(scan, privacy=None):
         "selected_fields": json.loads(scan.selected_fields), "threshold": scan.threshold, "status": scan.status,
         "total_records": scan.total_records, "total_candidates": scan.total_candidates, "warnings_count": scan.warnings_count,
         "started_at": scan.started_at, "completed_at": scan.completed_at, "model_version": scan.model_version,
+        "scan_mode": getattr(scan, "scan_mode", "SAME_SITE_DUPLICATE"),
     }
     if privacy:
         payload["privacy"] = privacy
@@ -34,6 +36,13 @@ def candidate_json(c):
         "fuzzy_score": c.fuzzy_score, "part_no_similarity": c.part_no_similarity, "technical_token_score": c.technical_token_score,
         "matched_fields": json.loads(c.matched_fields), "mismatched_fields": json.loads(c.mismatched_fields), "explanation": c.explanation,
         "recommended_action": c.recommended_action, "review_status": c.review_status, "reviewed_by": c.reviewed_by, "reviewed_at": c.reviewed_at,
+        "business_status": getattr(c, "business_status", "POSSIBLE_DUPLICATE_REVIEW"),
+        "rule_decision": getattr(c, "rule_decision", "ALLOW"),
+        "rejection_reason": getattr(c, "rejection_reason", ""),
+        "scan_mode": getattr(c, "scan_mode", "SAME_SITE_DUPLICATE"),
+        "critical_mismatches": json.loads(getattr(c, "critical_mismatches", "[]") or "[]"),
+        "variant_attributes_a": json.loads(getattr(c, "variant_attributes_a", "{}") or "{}"),
+        "variant_attributes_b": json.loads(getattr(c, "variant_attributes_b", "{}") or "{}"),
     }
 
 
@@ -77,13 +86,13 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), selected_fields: str = Form("[]"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), db: Session = Depends(get_db)):
+async def upload(file: UploadFile = File(...), selected_fields: str = Form("[]"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db)):
     if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
     df, metadata = await read_csv_upload_with_metadata(file)
     validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
     try:
-        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode)
+        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode))
         privacy = security_transparency(file_hash=metadata["file_sha256"], sensitive_mode=sensitive_mode)
         privacy["file_size_bytes"] = metadata["file_size_bytes"]
         return scan_json(scan, privacy=privacy)

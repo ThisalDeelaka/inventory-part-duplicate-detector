@@ -11,7 +11,7 @@ class ScanRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, scan_name, selected_fields, threshold, source_type="CSV"):
+    def create(self, scan_name, selected_fields, threshold, source_type="CSV", scan_mode="SAME_SITE_DUPLICATE"):
         scan = DuplicateScan(
             scan_name=scan_name,
             source_type=source_type,
@@ -19,6 +19,7 @@ class ScanRepository:
             threshold=threshold,
             status="RUNNING",
             model_version=MODEL_VERSION,
+            scan_mode=scan_mode,
         )
         self.db.add(scan)
         self.db.commit()

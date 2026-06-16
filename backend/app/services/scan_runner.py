@@ -2,6 +2,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.engine.candidate_generator import generate_candidate_pairs
+from app.engine.column_semantics import normalize_scan_mode
 from app.engine.scoring import score_candidate
 from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.scan_repository import ScanRepository
@@ -16,12 +17,13 @@ class ScanRunner:
         self.candidates = CandidateRepository(db)
         self.warnings = WarningRepository(db)
 
-    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True):
+    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
+        scan_mode = normalize_scan_mode(scan_mode)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
 
-        scan = self.scans.create(scan_name, selected_fields, threshold, source_type)
+        scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode)
         try:
             for warning in validation["warnings"]:
                 self.warnings.save(scan.id, warning)
@@ -36,7 +38,7 @@ class ScanRunner:
 
             candidates_found = 0
             for pair in pairs:
-                result = score_candidate(pair["record_a"], pair["record_b"], selected_fields)
+                result = score_candidate(pair["record_a"], pair["record_b"], selected_fields, scan_mode)
                 if result["final_score"] >= threshold:
                     self.candidates.save(scan.id, pair["record_a"], pair["record_b"], result)
                     candidates_found += 1

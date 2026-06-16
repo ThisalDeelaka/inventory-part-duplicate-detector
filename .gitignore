@@ -32,3 +32,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local scan/export outputs
+docs/latest_real_scan_*

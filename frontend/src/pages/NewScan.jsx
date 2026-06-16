@@ -22,6 +22,7 @@ export default function NewScan() {
   const [file, setFile] = useState(null)
   const [name, setName] = useState('Inventory duplicate scan')
   const [threshold, setThreshold] = useState(75)
+  const [scanMode, setScanMode] = useState('SAME_SITE_DUPLICATE')
   const [sensitiveMode, setSensitiveMode] = useState(true)
   const [validation, setValidation] = useState(null)
   const [busy, setBusy] = useState('')
@@ -44,6 +45,7 @@ export default function NewScan() {
     f.append('threshold', threshold)
     f.append('selected_fields', JSON.stringify(selected))
     f.append('sensitive_mode', sensitiveMode)
+    f.append('scan_mode', scanMode)
     return f
   }
 
@@ -73,8 +75,16 @@ export default function NewScan() {
         <section className="panel form">
           <label>Scan name<input value={name} onChange={e => setName(e.target.value)} /></label>
           <label>Inventory CSV<input type="file" accept=".csv,text/csv" onChange={e => setFile(e.target.files[0])} /></label>
+          <label>Scan mode
+            <select value={scanMode} onChange={e => setScanMode(e.target.value)}>
+              <option value="SAME_SITE_DUPLICATE">Same-site duplicate scan</option>
+              <option value="CROSS_SITE_STANDARDIZATION">Cross-site standardization scan</option>
+              <option value="DISCOVERY">Discovery scan</option>
+            </select>
+            <small>Same-site mode is strict. Cross-site mode is for standardizing equivalent parts across sites.</small>
+          </label>
           <label className="inline-check"><input type="checkbox" checked={sensitiveMode} onChange={e => setSensitiveMode(e.target.checked)} /><span><b>Sensitive Data Mode</b><small>No raw CSV persistence, local-only NLP, file fingerprint, and sensitive-pattern warnings.</small></span></label>
-          <div><label>Similarity threshold <b>{threshold}</b></label><input type="range" min="60" max="95" value={threshold} onChange={e => setThreshold(+e.target.value)} /><small>Higher thresholds favor precision; lower thresholds increase discovery and review workload.</small></div>
+          <div><label>Review strictness <b>{threshold}</b></label><input type="range" min="60" max="95" value={threshold} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
         </section>
         <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{fields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{f.field}</small></span></label>)}</div></section>
       </div>

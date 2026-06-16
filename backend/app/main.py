@@ -7,11 +7,13 @@ from sqlalchemy import text
 from app.api import routes_config, routes_diagnostics, routes_feedback, routes_load_test, routes_scans
 from app.core.config import settings
 from app.db.database import Base, SessionLocal, engine
+from app.db.migrations import ensure_sqlite_demo_columns
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_sqlite_demo_columns(engine)
     yield
 
 
