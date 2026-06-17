@@ -1,18 +1,17 @@
 from app.core.constants import CONFIDENCE_ACTIONS
-from app.engine.application_context import extract_application_context, find_application_context_mismatch
-from app.engine.business_rules import evaluate_hard_business_rules
-from app.engine.column_semantics import clean_field_value, normalize_scan_mode
-from app.engine.explanation import build_explanation
-from app.engine.generic_description_guard import has_generic_specific_pair
-from app.engine.item_family_classifier import shared_family
-from app.engine.normalizer import extract_technical_tokens, normalize_description, normalize_part_no_with_dictionary
-from app.engine.similarity_model import (
-    calculate_fuzzy_similarity,
-    calculate_part_no_similarity,
-    calculate_technical_token_score,
-    calculate_tfidf_similarity,
+from app.engine.attribute_extractor import profile_record
+from app.engine.column_semantics import normalize_scan_mode
+from app.engine.explanations import append_warning, critical_mismatch_explanation, duplicate_explanation
+from app.engine.guardrails import (
+    application_context_guard,
+    critical_variant_guard,
+    generic_description_guard,
+    hard_field_guard,
+    same_part_guard,
 )
-from app.engine.variant_extractor import extract_variant_attributes, find_critical_mismatches
+from app.engine.models import Decision
+from app.engine.semantic_policy import compare_selected_fields
+from app.engine.similarity import calculate_similarity
 
 
 def confidence_for(score):
@@ -26,11 +25,11 @@ def confidence_for(score):
 
 
 def business_status_for(score):
-    if score >= 90:
-        return "LIKELY_DUPLICATE"
+    if score >= 85:
+        return "DUPLICATE_CANDIDATE"
     if score >= 60:
         return "POSSIBLE_DUPLICATE_REVIEW"
-    return "INSUFFICIENT_DATA"
+    return "UNIQUE_NO_MATCH"
 
 
 def _empty_scores():
@@ -43,158 +42,151 @@ def _empty_scores():
     }
 
 
-def _field_matches(record_a, record_b, selected_fields):
-    matched, mismatched, comparable = [], [], 0
-    for field in selected_fields:
-        value_a = clean_field_value(record_a.get(field))
-        value_b = clean_field_value(record_b.get(field))
-        if not value_a or not value_b:
-            continue
-        comparable += 1
-        if value_a.lower() == value_b.lower():
-            matched.append(field)
-        else:
-            mismatched.append(field)
-    business = (len(matched) / comparable * 100) if comparable else 50.0
-    return matched, mismatched, business
-
-
-def _critical_mismatch_explanation(record_a, record_b, mismatch):
-    family = shared_family(record_a.get("DESCRIPTION"), record_b.get("DESCRIPTION"))
-    left = ", ".join(mismatch["values_a"])
-    right = ", ".join(mismatch["values_b"])
-    return f"Both are {family}, but {mismatch['label']} differs: {left} vs {right}."
-
-
-def _base_payload(record_a, record_b, selected_fields, scan_mode):
-    matched, mismatched, _business = _field_matches(record_a, record_b, selected_fields)
-    attributes_a = extract_variant_attributes(record_a.get("DESCRIPTION"))
-    attributes_b = extract_variant_attributes(record_b.get("DESCRIPTION"))
-    return matched, mismatched, attributes_a, attributes_b
-
-
-def _visibility_payload(record_a, record_b, generic_warning=False, context_warning=False):
+def _visibility_payload(profile_a, profile_b, generic_warning=False, context_warning=False):
     return {
         "generic_description_warning": generic_warning,
-        "application_context_a": extract_application_context(record_a.get("PART_NO"), record_a.get("DESCRIPTION")),
-        "application_context_b": extract_application_context(record_b.get("PART_NO"), record_b.get("DESCRIPTION")),
+        "application_context_a": profile_a.application_context,
+        "application_context_b": profile_b.application_context,
         "application_context_warning": context_warning,
-        "normalized_description_a": normalize_description(record_a.get("DESCRIPTION")),
-        "normalized_description_b": normalize_description(record_b.get("DESCRIPTION")),
-        "normalized_part_no_a": normalize_part_no_with_dictionary(record_a.get("PART_NO")),
-        "normalized_part_no_b": normalize_part_no_with_dictionary(record_b.get("PART_NO")),
+        "normalized_description_a": profile_a.normalized_description,
+        "normalized_description_b": profile_b.normalized_description,
+        "normalized_part_no_a": profile_a.normalized_part_no,
+        "normalized_part_no_b": profile_b.normalized_part_no,
     }
 
 
-def _blocked_result(record_a, record_b, selected_fields, scan_mode, rule):
-    matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
-    score = rule["score_cap"]
-    return {
-        "final_score": score,
-        "confidence_level": confidence_for(score),
-        **_empty_scores(),
-        "matched_fields": matched,
-        "mismatched_fields": mismatched,
-        "explanation": rule["explanation"],
-        "recommended_action": CONFIDENCE_ACTIONS[confidence_for(score)],
-        "business_status": rule["business_status"],
-        "rule_decision": rule["rule_decision"],
-        "rejection_reason": rule["rejection_reason"],
-        "scan_mode": normalize_scan_mode(scan_mode),
-        "critical_mismatches": rule["critical_mismatches"],
-        "variant_attributes_a": attributes_a,
-        "variant_attributes_b": attributes_b,
-        **_visibility_payload(record_a, record_b),
-    }
-
-
-def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE"):
-    scan_mode = normalize_scan_mode(scan_mode)
-    rule = evaluate_hard_business_rules(record_a, record_b, scan_mode)
-    if rule["blocked"]:
-        return _blocked_result(record_a, record_b, selected_fields, scan_mode, rule)
-
-    matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
-    critical_mismatches = find_critical_mismatches(attributes_a, attributes_b)
-    if critical_mismatches:
-        mismatch = critical_mismatches[0]
-        score = 55.0
-        return {
-            "final_score": score,
-            "confidence_level": confidence_for(score),
-            **_empty_scores(),
-            "matched_fields": matched,
-            "mismatched_fields": mismatched,
-            "explanation": _critical_mismatch_explanation(record_a, record_b, mismatch),
-            "recommended_action": CONFIDENCE_ACTIONS[confidence_for(score)],
-            "business_status": "RELATED_BUT_NOT_DUPLICATE",
-            "rule_decision": "DOWNGRADE",
-            "rejection_reason": f"{mismatch['group']}_MISMATCH",
-            "scan_mode": scan_mode,
-            "critical_mismatches": critical_mismatches,
-            "variant_attributes_a": attributes_a,
-            "variant_attributes_b": attributes_b,
-            **_visibility_payload(record_a, record_b),
+def _result(
+    profile_a,
+    profile_b,
+    selected_fields,
+    scan_mode,
+    scores=None,
+    status="UNIQUE_NO_MATCH",
+    rule_decision="ALLOW",
+    rejection_reason="",
+    explanation="",
+    differences=None,
+    warnings=None,
+    generic_warning=False,
+    context_warning=False,
+):
+    matched, mismatched, _business = compare_selected_fields(profile_a.raw, profile_b.raw, selected_fields)
+    score_payload = _empty_scores()
+    final_score = 0.0
+    if scores:
+        final_score = scores.final_score
+        score_payload = {
+            "description_similarity": scores.description_similarity,
+            "tfidf_score": scores.tfidf_score,
+            "fuzzy_score": scores.fuzzy_score,
+            "part_no_similarity": scores.part_no_similarity,
+            "technical_token_score": scores.technical_token_score,
         }
-
-    desc_a, desc_b = record_a.get("DESCRIPTION"), record_b.get("DESCRIPTION")
-    tfidf = calculate_tfidf_similarity(desc_a, desc_b)
-    fuzzy = calculate_fuzzy_similarity(desc_a, desc_b)
-    description = round(tfidf * 0.6 + fuzzy * 0.4, 2)
-    part_no = calculate_part_no_similarity(record_a.get("PART_NO"), record_b.get("PART_NO"))
-    tokens_a = extract_technical_tokens(desc_a)
-    tokens_b = extract_technical_tokens(desc_b)
-    token_score = calculate_technical_token_score(tokens_a, tokens_b)
-    _matched, _mismatched, business = _field_matches(record_a, record_b, selected_fields)
-
-    final = description * 0.6 + business * 0.2 + part_no * 0.1 + token_score * 0.1
-    final = round(max(0.0, min(100.0, final)), 2)
-    explanation = build_explanation(record_a, record_b, matched, mismatched, description)
-    rule_decision = "ALLOW"
-    rejection_reason = ""
-    business_status = business_status_for(final)
-    generic_warning = False
-    context_warning = False
-
-    if has_generic_specific_pair(desc_a, desc_b):
-        generic_warning = True
-        final = min(final, 65.0)
-        explanation = f"{explanation} One description is too generic to confirm duplicate identity."
-        rule_decision = "DOWNGRADE"
-        rejection_reason = "GENERIC_DESCRIPTION"
-        business_status = "INSUFFICIENT_DATA"
-
-    context_mismatch = find_application_context_mismatch(record_a, record_b)
-    if context_mismatch:
-        context_warning = True
-        left = ", ".join(context_mismatch["values_a"])
-        right = ", ".join(context_mismatch["values_b"])
-        final = min(final, 78.0)
-        explanation = f"{explanation} Application context appears different: {left} vs {right}."
-        rule_decision = "DOWNGRADE"
-        rejection_reason = "APPLICATION_CONTEXT_MISMATCH"
-        business_status = "POSSIBLE_DUPLICATE_REVIEW"
-
-    final = round(final, 2)
-    confidence = confidence_for(final)
+    confidence = confidence_for(final_score)
     return {
-        "final_score": final,
+        "final_score": final_score,
         "confidence_level": confidence,
-        "description_similarity": description,
-        "tfidf_score": tfidf,
-        "fuzzy_score": fuzzy,
-        "part_no_similarity": part_no,
-        "technical_token_score": token_score,
+        **score_payload,
         "matched_fields": matched,
         "mismatched_fields": mismatched,
         "explanation": explanation,
         "recommended_action": CONFIDENCE_ACTIONS[confidence],
-        "business_status": business_status,
+        "business_status": status,
         "rule_decision": rule_decision,
         "rejection_reason": rejection_reason,
         "scan_mode": scan_mode,
-        "critical_mismatches": [],
-        "variant_attributes_a": attributes_a,
-        "variant_attributes_b": attributes_b,
-        **_visibility_payload(record_a, record_b, generic_warning, context_warning),
+        "critical_mismatches": differences or [],
+        "variant_attributes_a": profile_a.attributes["variants"],
+        "variant_attributes_b": profile_b.attributes["variants"],
+        **_visibility_payload(profile_a, profile_b, generic_warning, context_warning),
     }
+
+
+def _guard_result(profile_a, profile_b, selected_fields, scan_mode, guard: Decision):
+    score = guard.score_cap or 0.0
+    scores = type("_Scores", (), {
+        "final_score": score,
+        "description_similarity": 0.0,
+        "tfidf_score": 0.0,
+        "fuzzy_score": 0.0,
+        "part_no_similarity": 0.0,
+        "technical_token_score": 0.0,
+    })()
+    explanation = guard.explanation
+    if not explanation and guard.differences:
+        explanation = critical_mismatch_explanation(profile_a, profile_b, guard.differences[0])
+    for warning in guard.warnings:
+        explanation = append_warning(explanation, warning)
+    return _result(
+        profile_a,
+        profile_b,
+        selected_fields,
+        scan_mode,
+        scores=scores,
+        status=guard.status,
+        rule_decision=guard.rule_decision,
+        rejection_reason=guard.rejection_reason,
+        explanation=explanation,
+        differences=guard.differences,
+        generic_warning=any("too generic" in warning for warning in guard.warnings),
+        context_warning=any("Application context" in warning for warning in guard.warnings),
+    )
+
+
+def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE"):
+    scan_mode = normalize_scan_mode(scan_mode)
+    profile_a = profile_record(record_a)
+    profile_b = profile_record(record_b)
+
+    # 1-4. Semantics and deterministic hard stops before similarity.
+    for guard in (
+        same_part_guard(profile_a, profile_b),
+        hard_field_guard(profile_a, profile_b, scan_mode),
+        critical_variant_guard(profile_a, profile_b),
+    ):
+        if guard:
+            return _guard_result(profile_a, profile_b, selected_fields, scan_mode, guard)
+
+    # 5-6. Local similarity scoring after business-safe normalization.
+    matched, mismatched, business_score = compare_selected_fields(record_a, record_b, selected_fields)
+    scores = calculate_similarity(profile_a, profile_b, business_score)
+    explanation = duplicate_explanation(profile_a, profile_b, matched, scores.description_similarity, scores.part_no_similarity)
+    status = business_status_for(scores.final_score)
+    rule_decision = "ALLOW"
+    rejection_reason = ""
+    differences = []
+    generic_warning = False
+    context_warning = False
+
+    # 7. Soft deterministic guardrails after scoring.
+    for guard in (
+        generic_description_guard(profile_a, profile_b),
+        application_context_guard(profile_a, profile_b),
+    ):
+        if not guard:
+            continue
+        if guard.score_cap is not None:
+            scores.final_score = round(min(scores.final_score, guard.score_cap), 2)
+        status = guard.status
+        rule_decision = guard.rule_decision
+        rejection_reason = guard.rejection_reason
+        differences.extend(guard.differences)
+        for warning in guard.warnings:
+            explanation = append_warning(explanation, warning)
+        generic_warning = generic_warning or any("too generic" in warning for warning in guard.warnings)
+        context_warning = context_warning or any("Application context" in warning for warning in guard.warnings)
+
+    return _result(
+        profile_a,
+        profile_b,
+        selected_fields,
+        scan_mode,
+        scores=scores,
+        status=status,
+        rule_decision=rule_decision,
+        rejection_reason=rejection_reason,
+        explanation=explanation,
+        differences=differences,
+        generic_warning=generic_warning,
+        context_warning=context_warning,
+    )

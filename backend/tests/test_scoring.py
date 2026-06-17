@@ -36,7 +36,7 @@ def test_cross_site_and_missing_classification_explanations():
     cross = score_candidate(rec("A","SS Pipe","S1"), rec("B","Stainless Steel Pipe","S2"), ["CONTRACT"])
     missing = score_candidate({"PART_NO":"A","DESCRIPTION":"MCB30A"},{"PART_NO":"B","DESCRIPTION":"MCB 30 A"},[])
     assert "Different site" in cross["explanation"]
-    assert "Classification fields are missing" in missing["explanation"]
+    assert "Candidate is based mainly" in missing["explanation"]
 
 
 def test_inventory_uom_mismatch_blocks_apparent_description_duplicate():
@@ -91,7 +91,7 @@ def test_allowed_likely_duplicates_remain_supported():
 
     for left, right in cases:
         result = score_candidate(rec("A", left), rec("B", right), ["CONTRACT", "UNIT_MEAS"])
-        assert result["business_status"] in {"LIKELY_DUPLICATE", "POSSIBLE_DUPLICATE_REVIEW"}
+        assert result["business_status"] in {"DUPLICATE_CANDIDATE", "POSSIBLE_DUPLICATE_REVIEW"}
         assert result["rule_decision"] == "ALLOW"
         assert result["final_score"] >= 60
 
@@ -103,7 +103,7 @@ def test_desiccated_coconut_domain_synonyms_are_likely_duplicate():
         ["CONTRACT", "UNIT_MEAS"],
     )
 
-    assert result["business_status"] == "LIKELY_DUPLICATE"
+    assert result["business_status"] == "DUPLICATE_CANDIDATE"
     assert result["confidence_level"] in {"HIGH", "MEDIUM"}
     assert result["final_score"] >= 90
     assert "business synonym normalization" in result["explanation"]

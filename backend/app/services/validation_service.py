@@ -3,8 +3,9 @@ import io
 import pandas as pd
 from fastapi import HTTPException, UploadFile
 
-from app.core.constants import FIELD_ALIASES, REQUIRED_FIELDS
+from app.core.constants import FIELD_ALIASES
 from app.core.config import settings
+from app.engine.profiler import profile_dataframe
 from app.services.privacy_service import detect_sensitive_patterns, file_sha256, security_transparency
 
 
@@ -47,16 +48,12 @@ async def read_csv_upload(file: UploadFile) -> pd.DataFrame:
 
 
 def validate_dataframe(df: pd.DataFrame, selected_fields: list[str], sensitive_mode: bool = True):
-    missing_required = [field for field in REQUIRED_FIELDS if field not in df.columns]
+    profile = profile_dataframe(df, selected_fields)
+    missing_required = profile["missing_required_columns"]
     missing_selected = [field for field in selected_fields if field not in df.columns]
-    empty_descriptions = int(df["DESCRIPTION"].fillna("").str.strip().eq("").sum()) if "DESCRIPTION" in df else len(df)
-    duplicate_parts = int(df["PART_NO"].fillna("").duplicated(keep=False).sum()) if "PART_NO" in df else 0
-    high_null = {}
-    for field in selected_fields:
-        if field in df:
-            ratio = float(df[field].fillna("").str.strip().eq("").sum()) / len(df)
-            if ratio >= 0.5:
-                high_null[field] = round(ratio * 100, 1)
+    empty_descriptions = profile["empty_descriptions_count"]
+    duplicate_parts = profile["duplicate_part_number_count"]
+    high_null = profile["high_null_selected_fields"]
     warnings = []
     if empty_descriptions:
         warnings.append({"warning_type": "EMPTY_DESCRIPTION", "message": f"{empty_descriptions} record(s) have empty descriptions and will be skipped."})
@@ -70,7 +67,7 @@ def validate_dataframe(df: pd.DataFrame, selected_fields: list[str], sensitive_m
         warnings.extend(detect_sensitive_patterns(df))
     return {
         "valid": not missing_required,
-        "record_count": len(df), "missing_required_columns": missing_required,
+        "record_count": profile["record_count"], "missing_required_columns": missing_required,
         "missing_optional_selected_columns": missing_selected,
         "empty_descriptions_count": empty_descriptions,
         "duplicate_part_number_count": duplicate_parts,
