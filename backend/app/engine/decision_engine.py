@@ -1,7 +1,7 @@
 from app.core.constants import CONFIDENCE_ACTIONS
 from app.engine.attribute_extractor import profile_record
 from app.engine.column_semantics import normalize_scan_mode
-from app.engine.explanations import append_warning, critical_mismatch_explanation, duplicate_explanation
+from app.engine.explanations import append_warning, critical_mismatch_explanation, duplicate_explanation, generate_explanation
 from app.engine.guardrails import (
     application_context_guard,
     critical_variant_guard,
@@ -62,23 +62,6 @@ def _candidate_attributes(candidate: CandidatePair):
     return attrs_a, attrs_b
 
 
-def _explanation(status: str, similarity: SimilarityResult, guardrails: GuardrailResult) -> str:
-    if status == "DATA_CONFLICT_REVIEW":
-        return "Data conflict found in controlled business fields. Manual master-data review is required."
-    if status == "RELATED_BUT_NOT_DUPLICATE":
-        types = ", ".join(guardrails.conflict_types)
-        return f"Records are related, but critical differentiators differ: {types}."
-    if status == "CROSS_SITE_STANDARDIZATION_CANDIDATE":
-        return "Similar item appears across different sites and should be reviewed for cross-site standardization."
-    if status == "INSUFFICIENT_DATA":
-        return "One or both records have generic or sparse description evidence, so duplicate identity cannot be determined safely."
-    if status == "DUPLICATE_CANDIDATE":
-        return "Records have high normalized similarity and no deterministic business conflicts."
-    if status == "POSSIBLE_DUPLICATE_REVIEW":
-        return "Records have enough similarity for manual review, but not enough evidence for a strong duplicate candidate."
-    return "Records do not have enough similarity to be a useful duplicate candidate."
-
-
 def _decision_result(
     candidate: CandidatePair,
     similarity: SimilarityResult,
@@ -92,11 +75,11 @@ def _decision_result(
     differences = list(guardrails.rule_evidence) + list(similarity.mismatched_features)
     matched = list(similarity.matched_features)
     confidence_score = round(similarity.overall_similarity, 2)
-    return DecisionResult(
+    decision = DecisionResult(
         status=status,
         confidence_score=confidence_score,
         confidence_level=_decision_confidence(confidence_score),
-        explanation=_explanation(status, similarity, guardrails),
+        explanation="",
         matched_evidence=matched,
         differences=differences,
         warnings=warnings,
@@ -125,6 +108,8 @@ def _decision_result(
             "generic_terms": attrs_b.generic_terms,
         },
     )
+    decision.explanation = generate_explanation(candidate, similarity, guardrails, decision)
+    return decision
 
 
 def make_decision(
