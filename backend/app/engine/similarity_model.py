@@ -7,9 +7,22 @@ from sklearn.metrics.pairwise import cosine_similarity
 from app.engine.normalizer import extract_technical_tokens, normalize_description, normalize_part_no_with_dictionary
 
 
+def _similarity_text(text):
+    tokens = normalize_description(text).split()
+    expanded = []
+    for token in tokens:
+        if token == "mcb":
+            expanded.extend(["mcb", "miniature", "circuit", "breaker"])
+        elif token.endswith("a") and token[:-1].isdigit():
+            expanded.extend([token, token[:-1], "amp"])
+        else:
+            expanded.append(token)
+    return " ".join(expanded)
+
+
 @lru_cache(maxsize=100_000)
 def calculate_tfidf_similarity(text_a, text_b) -> float:
-    a, b = normalize_description(text_a), normalize_description(text_b)
+    a, b = _similarity_text(text_a), _similarity_text(text_b)
     if not a or not b:
         return 0.0
     try:
@@ -21,7 +34,7 @@ def calculate_tfidf_similarity(text_a, text_b) -> float:
 
 @lru_cache(maxsize=100_000)
 def calculate_fuzzy_similarity(text_a, text_b) -> float:
-    a, b = normalize_description(text_a), normalize_description(text_b)
+    a, b = _similarity_text(text_a), _similarity_text(text_b)
     if not a or not b:
         return 0.0
     return round((fuzz.token_set_ratio(a, b) * 0.6) + (fuzz.partial_ratio(a, b) * 0.4), 2)

@@ -53,12 +53,17 @@ def _find_type_or_grade(normalized: str) -> list[str]:
 
 def _find_electrical(raw: str, normalized: str) -> list[str]:
     values = set()
-    for match in re.findall(r"\b(\d+(?:\.\d+)?)\s*a\b", raw, flags=re.IGNORECASE):
-        values.add(f"{match.upper()}A")
+    for source in (raw, normalized):
+        for match in re.findall(r"\b(\d+(?:\.\d+)?)\s*a\b", source, flags=re.IGNORECASE):
+            values.add(f"{match.upper()}A")
+        for match in re.findall(r"\b(\d+(?:\.\d+)?)(a)\b", source, flags=re.IGNORECASE):
+            values.add(f"{match[0].upper()}A")
+        for match in re.findall(r"\b(\d+(?:\.\d+)?)\s*v\b", source, flags=re.IGNORECASE):
+            values.add(f"{match.upper()}V")
+        for match in re.findall(r"\b(\d+(?:\.\d+)?)(v)\b", source, flags=re.IGNORECASE):
+            values.add(f"{match[0].upper()}V")
     for match in re.findall(r"\b(\d+(?:\.\d+)?)\s*amp\b", normalized):
         values.add(f"{match.upper()}A")
-    for match in re.findall(r"\b(\d+(?:\.\d+)?)\s*v\b", raw, flags=re.IGNORECASE):
-        values.add(f"{match.upper()}V")
     for match in re.findall(r"\b(\d+(?:\.\d+)?)\s*volt\b", normalized):
         values.add(f"{match.upper()}V")
     return sorted(values)
