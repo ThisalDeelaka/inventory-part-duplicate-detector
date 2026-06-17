@@ -94,6 +94,15 @@ class GuardrailResult:
     explanation: str = ""
     differences: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    hard_conflict: bool = False
+    data_conflict: bool = False
+    review_warning: bool = False
+    scope_warning: bool = False
+    conflict_types: list[str] = field(default_factory=list)
+    warning_types: list[str] = field(default_factory=list)
+    messages: list[str] = field(default_factory=list)
+    rule_evidence: list[dict] = field(default_factory=list)
+    recommended_next_status: str = "POSSIBLE_DUPLICATE_REVIEW"
 
 
 @dataclass
