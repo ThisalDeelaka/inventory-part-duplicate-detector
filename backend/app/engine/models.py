@@ -54,12 +54,34 @@ class CandidatePair:
 
 @dataclass
 class SimilarityResult:
+    overall_similarity: float = 0.0
     tfidf_score: float = 0.0
     fuzzy_score: float = 0.0
     description_similarity: float = 0.0
+    master_description_similarity: float = 0.0
     part_no_similarity: float = 0.0
     technical_token_score: float = 0.0
     final_score: float = 0.0
+    product_class_match: bool | None = None
+    type_code_match: bool | None = None
+    rating_match: bool | None = None
+    color_match: bool | None = None
+    volume_match: bool | None = None
+    material_match: bool | None = None
+    application_context_match: bool | None = None
+    function_or_media_match: bool | None = None
+    generic_description_warning: bool = False
+    matched_features: list[str] = field(default_factory=list)
+    mismatched_features: list[dict] = field(default_factory=list)
+    missing_features: list[str] = field(default_factory=list)
+    rating_a: list[str] = field(default_factory=list)
+    rating_b: list[str] = field(default_factory=list)
+    color_a: list[str] = field(default_factory=list)
+    color_b: list[str] = field(default_factory=list)
+    function_or_media_a: list[str] = field(default_factory=list)
+    function_or_media_b: list[str] = field(default_factory=list)
+    generic_terms_a: list[str] = field(default_factory=list)
+    generic_terms_b: list[str] = field(default_factory=list)
 
 
 @dataclass
