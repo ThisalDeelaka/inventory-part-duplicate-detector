@@ -9,7 +9,8 @@ from app.engine.guardrails import (
     hard_field_guard,
     same_part_guard,
 )
-from app.engine.models import Decision
+from app.engine.attribute_extractor import extract_attributes
+from app.engine.models import CandidatePair, Decision, DecisionResult, GuardrailResult, SimilarityResult
 from app.engine.semantic_policy import compare_selected_fields
 from app.engine.similarity import calculate_similarity
 
@@ -30,6 +31,168 @@ def business_status_for(score):
     if score >= 60:
         return "POSSIBLE_DUPLICATE_REVIEW"
     return "UNIQUE_NO_MATCH"
+
+
+def _decision_confidence(score: float) -> str:
+    return confidence_for(score)
+
+
+def _field_values(candidate: CandidatePair, field: str) -> tuple[str, str]:
+    left = candidate.record_a.raw.get(field)
+    right = candidate.record_b.raw.get(field)
+    return "" if left is None else str(left), "" if right is None else str(right)
+
+
+def _contracts_differ(candidate: CandidatePair) -> bool:
+    left, right = _field_values(candidate, "CONTRACT")
+    return bool(left and right and left.strip().lower() != right.strip().lower())
+
+
+def _candidate_attributes(candidate: CandidatePair):
+    attrs_a = extract_attributes(
+        candidate.record_a.part_no,
+        candidate.record_a.description,
+        candidate.record_a.raw.get("MASTER_PART_DESCRIPTION"),
+    )
+    attrs_b = extract_attributes(
+        candidate.record_b.part_no,
+        candidate.record_b.description,
+        candidate.record_b.raw.get("MASTER_PART_DESCRIPTION"),
+    )
+    return attrs_a, attrs_b
+
+
+def _explanation(status: str, similarity: SimilarityResult, guardrails: GuardrailResult) -> str:
+    if status == "DATA_CONFLICT_REVIEW":
+        return "Data conflict found in controlled business fields. Manual master-data review is required."
+    if status == "RELATED_BUT_NOT_DUPLICATE":
+        types = ", ".join(guardrails.conflict_types)
+        return f"Records are related, but critical differentiators differ: {types}."
+    if status == "CROSS_SITE_STANDARDIZATION_CANDIDATE":
+        return "Similar item appears across different sites and should be reviewed for cross-site standardization."
+    if status == "INSUFFICIENT_DATA":
+        return "One or both records have generic or sparse description evidence, so duplicate identity cannot be determined safely."
+    if status == "DUPLICATE_CANDIDATE":
+        return "Records have high normalized similarity and no deterministic business conflicts."
+    if status == "POSSIBLE_DUPLICATE_REVIEW":
+        return "Records have enough similarity for manual review, but not enough evidence for a strong duplicate candidate."
+    return "Records do not have enough similarity to be a useful duplicate candidate."
+
+
+def _decision_result(
+    candidate: CandidatePair,
+    similarity: SimilarityResult,
+    guardrails: GuardrailResult,
+    status: str,
+    rule_decision: str,
+    rejection_reason: str = "",
+) -> DecisionResult:
+    attrs_a, attrs_b = _candidate_attributes(candidate)
+    warnings = list(guardrails.messages)
+    differences = list(guardrails.rule_evidence) + list(similarity.mismatched_features)
+    matched = list(similarity.matched_features)
+    confidence_score = round(similarity.overall_similarity, 2)
+    return DecisionResult(
+        status=status,
+        confidence_score=confidence_score,
+        confidence_level=_decision_confidence(confidence_score),
+        explanation=_explanation(status, similarity, guardrails),
+        matched_evidence=matched,
+        differences=differences,
+        warnings=warnings,
+        rule_decision=rule_decision,
+        rejection_reason=rejection_reason,
+        normalized_part_no_a=attrs_a.normalized_part_no,
+        normalized_part_no_b=attrs_b.normalized_part_no,
+        normalized_description_a=attrs_a.normalized_description,
+        normalized_description_b=attrs_b.normalized_description,
+        extracted_attributes_a={
+            "product_class": attrs_a.product_class,
+            "type_code": attrs_a.type_code,
+            "rating": attrs_a.rating,
+            "color": attrs_a.color,
+            "application_context": attrs_a.application_context,
+            "function_or_media": attrs_a.function_or_media,
+            "generic_terms": attrs_a.generic_terms,
+        },
+        extracted_attributes_b={
+            "product_class": attrs_b.product_class,
+            "type_code": attrs_b.type_code,
+            "rating": attrs_b.rating,
+            "color": attrs_b.color,
+            "application_context": attrs_b.application_context,
+            "function_or_media": attrs_b.function_or_media,
+            "generic_terms": attrs_b.generic_terms,
+        },
+    )
+
+
+def make_decision(
+    candidate: CandidatePair,
+    similarity: SimilarityResult,
+    guardrails: GuardrailResult,
+    cross_site: bool = False,
+) -> DecisionResult:
+    if guardrails.data_conflict:
+        return _decision_result(
+            candidate,
+            similarity,
+            guardrails,
+            "DATA_CONFLICT_REVIEW",
+            "DATA_CONFLICT",
+            ",".join(guardrails.conflict_types),
+        )
+
+    hard_non_scope_conflicts = [
+        conflict
+        for conflict in guardrails.conflict_types
+        if conflict != "contract_scope_mismatch"
+    ]
+    if hard_non_scope_conflicts:
+        return _decision_result(
+            candidate,
+            similarity,
+            guardrails,
+            "RELATED_BUT_NOT_DUPLICATE",
+            "REJECT_BY_DIFFERENTIATOR",
+            ",".join(hard_non_scope_conflicts),
+        )
+
+    if _contracts_differ(candidate):
+        if cross_site and similarity.overall_similarity >= 60:
+            return _decision_result(
+                candidate,
+                similarity,
+                guardrails,
+                "CROSS_SITE_STANDARDIZATION_CANDIDATE",
+                "CROSS_SITE_REVIEW",
+                "CONTRACT_MISMATCH",
+            )
+        return _decision_result(
+            candidate,
+            similarity,
+            guardrails,
+            "UNIQUE_NO_MATCH",
+            "SCOPE_REJECT",
+            "CONTRACT_MISMATCH",
+        )
+
+    if "generic_or_sparse_description" in guardrails.warning_types:
+        status = "POSSIBLE_DUPLICATE_REVIEW" if similarity.overall_similarity >= 75 else "INSUFFICIENT_DATA"
+        return _decision_result(
+            candidate,
+            similarity,
+            guardrails,
+            status,
+            "GENERIC_REVIEW",
+            "GENERIC_OR_SPARSE_DESCRIPTION",
+        )
+
+    if similarity.overall_similarity >= 85:
+        return _decision_result(candidate, similarity, guardrails, "DUPLICATE_CANDIDATE", "ALLOW")
+    if similarity.overall_similarity >= 60:
+        return _decision_result(candidate, similarity, guardrails, "POSSIBLE_DUPLICATE_REVIEW", "ALLOW")
+    return _decision_result(candidate, similarity, guardrails, "UNIQUE_NO_MATCH", "LOW_SIMILARITY")
 
 
 def _empty_scores():
@@ -190,3 +353,4 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
         generic_warning=generic_warning,
         context_warning=context_warning,
     )
+
