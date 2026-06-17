@@ -25,9 +25,21 @@ class PartRecord:
 class ExtractedAttributes:
     normalized_part_no: str
     normalized_description: str
+    normalized_text: str = ""
+    product_class: list[str] = field(default_factory=list)
+    application_context: list[str] = field(default_factory=list)
+    function_or_media: list[str] = field(default_factory=list)
+    color: list[str] = field(default_factory=list)
+    rating: list[str] = field(default_factory=list)
+    size: list[str] = field(default_factory=list)
+    volume: list[str] = field(default_factory=list)
+    type_code: list[str] = field(default_factory=list)
+    material: list[str] = field(default_factory=list)
+    packaging: list[str] = field(default_factory=list)
+    generic_terms: list[str] = field(default_factory=list)
+    raw_tokens: list[str] = field(default_factory=list)
     technical_tokens: dict[str, list[str]] = field(default_factory=dict)
     variant_attributes: dict[str, list[str]] = field(default_factory=dict)
-    application_context: list[str] = field(default_factory=list)
     is_generic_description: bool = False
 
 
