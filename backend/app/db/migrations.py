@@ -16,10 +16,14 @@ def ensure_sqlite_demo_columns(engine):
             ("scan_mode", "VARCHAR(60) NOT NULL DEFAULT 'SAME_SITE_DUPLICATE'"),
         ],
         "duplicate_candidate": [
+            ("confidence_score", "FLOAT NOT NULL DEFAULT 0.0"),
             ("business_status", "VARCHAR(80) NOT NULL DEFAULT 'POSSIBLE_DUPLICATE_REVIEW'"),
             ("rule_decision", "VARCHAR(50) NOT NULL DEFAULT 'ALLOW'"),
             ("rejection_reason", "VARCHAR(120) DEFAULT ''"),
             ("scan_mode", "VARCHAR(60) NOT NULL DEFAULT 'SAME_SITE_DUPLICATE'"),
+            ("matched_evidence", "TEXT DEFAULT '[]'"),
+            ("differences", "TEXT DEFAULT '[]'"),
+            ("warnings", "TEXT DEFAULT '[]'"),
             ("critical_mismatches", "TEXT DEFAULT '[]'"),
             ("variant_attributes_a", "TEXT DEFAULT '{}'"),
             ("variant_attributes_b", "TEXT DEFAULT '{}'"),
@@ -31,6 +35,8 @@ def ensure_sqlite_demo_columns(engine):
             ("normalized_description_b", "TEXT DEFAULT ''"),
             ("normalized_part_no_a", "TEXT DEFAULT ''"),
             ("normalized_part_no_b", "TEXT DEFAULT ''"),
+            ("extracted_attributes_a", "TEXT DEFAULT '{}'"),
+            ("extracted_attributes_b", "TEXT DEFAULT '{}'"),
         ],
     }
 

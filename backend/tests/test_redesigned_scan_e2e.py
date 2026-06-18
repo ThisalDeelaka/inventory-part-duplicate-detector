@@ -84,22 +84,36 @@ def test_redesigned_scan_api_shape_and_saved_statuses(client, monkeypatch):
     sample = candidates[0]
     for field in (
         "similarity_score",
+        "final_score",
+        "reason",
         "recommended_action",
         "review_status",
         "business_status",
+        "confidence_score",
         "confidence_level",
         "explanation",
+        "matched_evidence",
+        "differences",
+        "warnings",
+        "rule_decision",
+        "rejection_reason",
+        "normalized_part_no_a",
+        "normalized_part_no_b",
+        "normalized_description_a",
+        "normalized_description_b",
+        "extracted_attributes_a",
+        "extracted_attributes_b",
     ):
         assert field in sample
 
-    # The redesigned adapter includes confidence_score before persistence.
-    # The current API persists similarity_score and confidence_level only.
-    assert "confidence_score" not in sample
+    assert sample["confidence_score"] == sample["similarity_score"]
 
     by_pair = {_pair_key(candidate): candidate for candidate in candidates}
     dec = by_pair[frozenset({"DEC CO1", "DEC C01"})]
     assert dec["business_status"] == "DUPLICATE_CANDIDATE"
     assert dec["explanation"]
+    assert dec["extracted_attributes_a"]
+    assert dec["matched_evidence"]
 
     mcb = by_pair[frozenset({"MCB-20", "MCB-30"})]
     assert mcb["business_status"] == "RELATED_BUT_NOT_DUPLICATE"

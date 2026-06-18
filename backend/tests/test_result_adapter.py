@@ -58,7 +58,11 @@ def test_new_business_fields_are_present():
     assert candidate["explanation"]
     assert candidate["rule_decision"] == "ALLOW"
     assert "normalized_description_a" in candidate
+    assert "normalized_part_no_a" in candidate
+    assert "normalized_description_b" in candidate
+    assert "normalized_part_no_b" in candidate
     assert "extracted_attributes_a" in candidate
+    assert "extracted_attributes_b" in candidate
 
 
 def test_evidence_fields_are_preserved():

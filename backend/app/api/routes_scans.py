@@ -43,11 +43,16 @@ def candidate_json(c):
     return {
         "id": c.id, "scan_id": c.scan_id, "contract_a": c.contract_a, "part_no_a": c.part_no_a, "description_a": c.description_a,
         "contract_b": c.contract_b, "part_no_b": c.part_no_b, "description_b": c.description_b, "similarity_score": c.similarity_score,
+        "final_score": c.similarity_score, "score": c.similarity_score, "confidence_score": getattr(c, "confidence_score", c.similarity_score),
         "confidence_level": c.confidence_level, "description_similarity": c.description_similarity, "tfidf_score": c.tfidf_score,
         "fuzzy_score": c.fuzzy_score, "part_no_similarity": c.part_no_similarity, "technical_token_score": c.technical_token_score,
         "matched_fields": json.loads(c.matched_fields), "mismatched_fields": json.loads(c.mismatched_fields), "explanation": c.explanation,
+        "reason": c.explanation,
         "recommended_action": c.recommended_action, "review_status": c.review_status, "reviewed_by": c.reviewed_by, "reviewed_at": c.reviewed_at,
         "business_status": getattr(c, "business_status", "POSSIBLE_DUPLICATE_REVIEW"),
+        "matched_evidence": _json_attr(c, "matched_evidence", "[]"),
+        "differences": _json_attr(c, "differences", "[]"),
+        "warnings": _json_attr(c, "warnings", "[]"),
         "rule_decision": getattr(c, "rule_decision", "ALLOW"),
         "rejection_reason": getattr(c, "rejection_reason", ""),
         "scan_mode": getattr(c, "scan_mode", "SAME_SITE_DUPLICATE"),
@@ -62,6 +67,8 @@ def candidate_json(c):
         "normalized_description_b": getattr(c, "normalized_description_b", "") or "",
         "normalized_part_no_a": getattr(c, "normalized_part_no_a", "") or "",
         "normalized_part_no_b": getattr(c, "normalized_part_no_b", "") or "",
+        "extracted_attributes_a": _json_attr(c, "extracted_attributes_a", "{}"),
+        "extracted_attributes_b": _json_attr(c, "extracted_attributes_b", "{}"),
     }
 
 

@@ -19,6 +19,7 @@ class CandidateRepository:
             part_no_b=str(record_b.get("PART_NO", "")),
             description_b=str(record_b.get("DESCRIPTION", "")),
             similarity_score=result["final_score"],
+            confidence_score=result.get("confidence_score", result["final_score"]),
             confidence_level=result["confidence_level"],
             description_similarity=result["description_similarity"],
             tfidf_score=result["tfidf_score"],
@@ -27,6 +28,9 @@ class CandidateRepository:
             technical_token_score=result["technical_token_score"],
             matched_fields=json.dumps(result["matched_fields"]),
             mismatched_fields=json.dumps(result["mismatched_fields"]),
+            matched_evidence=json.dumps(result.get("matched_evidence", result.get("matched_fields", []))),
+            differences=json.dumps(result.get("differences", result.get("mismatched_fields", []))),
+            warnings=json.dumps(result.get("warnings", [])),
             explanation=result["explanation"],
             recommended_action=result["recommended_action"],
             business_status=result["business_status"],
@@ -44,6 +48,8 @@ class CandidateRepository:
             normalized_description_b=result.get("normalized_description_b", ""),
             normalized_part_no_a=result.get("normalized_part_no_a", ""),
             normalized_part_no_b=result.get("normalized_part_no_b", ""),
+            extracted_attributes_a=json.dumps(result.get("extracted_attributes_a", {})),
+            extracted_attributes_b=json.dumps(result.get("extracted_attributes_b", {})),
         )
         self.db.add(candidate)
         return candidate

@@ -37,6 +37,9 @@ class CandidateResponse(BaseModel):
     part_no_b: str
     description_b: str
     similarity_score: float
+    final_score: float | None = None
+    score: float | None = None
+    confidence_score: float | None = None
     confidence_level: str
     description_similarity: float
     tfidf_score: float
@@ -45,7 +48,11 @@ class CandidateResponse(BaseModel):
     technical_token_score: float
     matched_fields: list[str]
     mismatched_fields: list[str]
+    matched_evidence: list[str] | None = None
+    differences: list[dict] | None = None
+    warnings: list[str] | None = None
     explanation: str
+    reason: str | None = None
     recommended_action: str
     business_status: str
     rule_decision: str
@@ -54,6 +61,12 @@ class CandidateResponse(BaseModel):
     critical_mismatches: list[dict]
     variant_attributes_a: dict
     variant_attributes_b: dict
+    normalized_part_no_a: str | None = None
+    normalized_part_no_b: str | None = None
+    normalized_description_a: str | None = None
+    normalized_description_b: str | None = None
+    extracted_attributes_a: dict | None = None
+    extracted_attributes_b: dict | None = None
     review_status: str
     reviewed_by: str | None
     reviewed_at: datetime | None
