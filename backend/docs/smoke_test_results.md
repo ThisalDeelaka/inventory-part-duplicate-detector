@@ -355,3 +355,120 @@ Issues/fixes:
 
 - Docker Compose initially lacked the redesigned engine environment variables, so the Compose backend service was updated to pass them through with safe defaults.
 - No engine, scan, API, or export logic changes were required.
+
+## Frontend Review Mode Smoke Test
+
+Date: 2026-06-18
+
+Backend command and environment:
+
+```powershell
+$env:USE_REDESIGNED_ENGINE="true"
+$env:REDESIGNED_RESULT_MODE="review"
+$env:REDESIGNED_INCLUDE_STATUSES=""
+cd F:\part-master-duplication-ai\inventory-part-duplicate-detector\backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8013
+```
+
+Frontend command and environment:
+
+```powershell
+$env:VITE_API_URL="http://127.0.0.1:8013"
+cd F:\part-master-duplication-ai\inventory-part-duplicate-detector\frontend
+npm.cmd run dev -- --host 127.0.0.1
+```
+
+Runtime checks:
+
+```text
+GET http://127.0.0.1:8013/health -> healthy
+GET http://127.0.0.1:8013/ready -> ready
+GET http://127.0.0.1:5173 -> 200
+```
+
+CSV used:
+
+```text
+F:\part-master-duplication-ai\data set.csv
+```
+
+Upload settings:
+
+```text
+selected_fields=CONTRACT,INVENTORY_UOM,PART_TYPE
+threshold=60
+scan_mode=SAME_SITE_DUPLICATE
+USE_REDESIGNED_ENGINE=true
+REDESIGNED_RESULT_MODE=review
+```
+
+Upload result:
+
+```text
+POST /api/scans/upload -> COMPLETED
+scan_id: 15
+total_records: 99
+persisted/API candidates: 10
+warnings_count: 3
+```
+
+The candidate count was review-mode sized and far below the earlier all/debug count of 807. This run used a stricter selected-field set than the earlier review-mode backend smoke test, so it returned 10 UI-facing candidates instead of 44.
+
+Key UI data checks:
+
+- `DEC CO1` vs `DEC C01` returned as `DUPLICATE_CANDIDATE` with `HIGH` confidence.
+- The duplicate candidate explanation mentioned business synonym normalization and `desiccated coconut type 1`.
+- `TR LABELS` vs `TR WARNING LABELS` returned as `INSUFFICIENT_DATA`.
+- `MCB 20A` vs `MCB30A` was not returned in default review mode because it is a related-but-not-duplicate debug result.
+- `RED PAINT 1L CAN` vs `BLUE PAINT 1L CAN` was not returned in default review mode because it is a related-but-not-duplicate debug result.
+
+Returned candidate fields used by the polished results UI included:
+
+- `business_status`
+- `similarity_score`
+- `confidence_score`
+- `confidence_level`
+- `explanation`
+- `matched_evidence`
+- `differences`
+- `warnings`
+- `normalized_part_no_a`
+- `normalized_part_no_b`
+- `normalized_description_a`
+- `normalized_description_b`
+- `extracted_attributes_a`
+- `extracted_attributes_b`
+
+Export result:
+
+```text
+GET /api/scans/15/export -> 10 CSV rows
+```
+
+Export row count matched the persisted candidate count. Export contained old fields and redesigned evidence fields:
+
+- `similarity_score`
+- `final_score`
+- `score`
+- `recommended_action`
+- `review_status`
+- `business_status`
+- `confidence_score`
+- `confidence_level`
+- `explanation`
+- `matched_evidence`
+- `differences`
+- `warnings`
+- `extracted_attributes_a`
+- `extracted_attributes_b`
+
+Browser/UI note:
+
+- The frontend dev server served the app successfully on `http://127.0.0.1:5173`.
+- The scan results API returned the exact fields now rendered by the polished results page.
+- A local headless Chrome DOM dump was attempted but produced no DOM output in this shell environment, so this note should be treated as a runtime frontend/API smoke check rather than a full human visual click-through.
+
+Issues/fixes:
+
+- The first background process launch attempted to use unsupported `Start-Process -Environment` on this PowerShell version. The smoke run was restarted using a compatible environment-variable launch style. No application code fix was required.
+- No backend engine, scan, export, or frontend rendering code changes were required during this smoke run.
