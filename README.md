@@ -1,75 +1,202 @@
 # Part Master Duplication Identifier
 
-A production-oriented demo for identifying possible duplicate Inventory Part master records from ERP CSV exports. It uses configurable business conditions, local hybrid NLP similarity, confidence scoring, explanations, data-quality warnings, and human review feedback.
+**AI-Assisted ERP/IFS Part Master Identity Resolution Engine**
 
-The current version uses IFS-compatible CSV field names. It has **no direct IFS integration**, no paid AI API, no deep learning, no authentication, and no automatic merging.
+This project is a CSV-based demo for identifying possible duplicate ERP/IFS Inventory Part Master records. It is designed around real master-data behavior: part descriptions, part numbers, units of measure, product classifications, compliance fields, and business context all matter.
 
-## Features
+This is not a simple text similarity tool. The redesigned engine uses deterministic, business-rule-aware matching to produce review-ready duplicate candidates with scores, explanations, evidence, and safety warnings.
 
-- CSV upload and validation-only workflow
-- Supports real ERP export files like the workspace `data set.csv`; aliases such as `PART_TYPE`, `INVENTORY_UOM`, `COMMODITY_GROUP_1`, `COMMODITY_GROUP_2`, and `SAFETY_CODE` are mapped automatically
-- Sensitive Data Mode: no raw CSV persistence, no external AI API usage, SHA-256 file fingerprint, and sensitive-pattern warnings
-- Configurable business-field blocking and threshold
-- TF-IDF character n-grams, RapidFuzz, part-number, technical-token, and business-rule scoring
-- Confidence, explanations, matched/mismatched fields, and recommended action
-- Persistent review feedback and comments
-- Result export, diagnostics, warnings, and synthetic load tests
-- Docker Compose and Kubernetes-ready examples
+The system does **not** auto-merge records. It does **not** directly update IFS. Real IFS Cloud integration is future scope after the detection engine is validated.
 
-## Local run
+## Business Problem
 
-Backend (Python 3.11+):
+Part Master duplication is risky because text similarity alone creates noisy false positives. Similar descriptions can mean related but different inventory parts.
 
-```bash
+Examples handled by the redesigned engine:
+
+- `MCB 20A` vs `MCB30A` are related electrical items, but not duplicates because the ampere rating differs.
+- `Generator Fuel Filter` vs `Generator Air Filter` are related filters, but not duplicates because the filter function differs.
+- `RED PAINT 1L CAN` vs `BLUE PAINT 1L CAN` are different color variants.
+- `DEC CO1` vs `DEC C01` can be a likely duplicate after domain normalization maps both toward `desiccated coconut type 1`.
+- `Labels` vs `Warning Labels` is too generic or sparse to confirm duplicate identity with high confidence.
+
+The goal is to reduce manual review noise while preserving important uncertainty. Human review remains required.
+
+## Engine Pipeline
+
+```text
+CSV Upload
+  -> Normalization
+  -> Attribute Extraction
+  -> Candidate Generation
+  -> Similarity Scoring
+  -> Guardrails
+  -> Decision Engine
+  -> Explanation
+  -> API Result
+  -> Frontend Review
+  -> Export
+```
+
+The engine combines normalized part numbers/descriptions, extracted attributes, local similarity scoring, deterministic guardrails, and explainable decision statuses. It is intentionally local and repeatable: no paid AI API and no LLM pairwise duplicate decision is used in the current version.
+
+## Business Statuses
+
+The system returns candidate statuses for human review. It never calls a pair a confirmed duplicate before review.
+
+- `DUPLICATE_CANDIDATE`: Strong evidence suggests the records may represent the same part.
+- `POSSIBLE_DUPLICATE_REVIEW`: Similar enough for manual review, but evidence is not strong enough for a higher-confidence candidate.
+- `RELATED_BUT_NOT_DUPLICATE`: Items are similar or related, but a critical differentiator such as rating, color, type, or function indicates they should not be treated as duplicates.
+- `DATA_CONFLICT_REVIEW`: A compliance or strong identity field differs, such as `HSN_SAC_CODE` or `SAFETY_CODE`; review as a data conflict, not as a confirmed duplicate.
+- `CROSS_SITE_STANDARDIZATION_CANDIDATE`: Similar item appears across different sites/contracts and may be useful for standardization review.
+- `INSUFFICIENT_DATA`: Description or evidence is too generic/sparse to safely classify as a duplicate candidate.
+- `UNIQUE_NO_MATCH`: No meaningful duplicate evidence was found.
+
+## Runtime Environment
+
+The legacy scan behavior remains available. The redesigned deterministic engine is controlled by runtime flags.
+
+`USE_REDESIGNED_ENGINE`
+
+- Default: `false`
+- Set to `true` to enable the redesigned deterministic engine.
+
+`REDESIGNED_RESULT_MODE`
+
+- Default: `review`
+- `review` persists/shows review-ready statuses and hides debug-only related/no-match results.
+- `all` persists/shows all statuses, including `RELATED_BUT_NOT_DUPLICATE` and `UNIQUE_NO_MATCH`, for debugging and analysis.
+
+`REDESIGNED_INCLUDE_STATUSES`
+
+- Optional comma-separated override.
+- When set, it controls exactly which statuses are persisted/returned.
+
+Demo mode:
+
+```powershell
+$env:USE_REDESIGNED_ENGINE="true"
+$env:REDESIGNED_RESULT_MODE="review"
+$env:REDESIGNED_INCLUDE_STATUSES=""
+```
+
+## How To Run
+
+From the project root:
+
+```powershell
+cd F:\part-master-duplication-ai\inventory-part-duplicate-detector
+```
+
+Backend:
+
+```powershell
 cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+$env:USE_REDESIGNED_ENGINE="true"
+$env:REDESIGNED_RESULT_MODE="review"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8013
 ```
 
-Frontend (Node 20+):
+Frontend:
 
-```bash
+```powershell
 cd frontend
-npm install
-npm run dev
+$env:VITE_API_URL="http://127.0.0.1:8013"
+npm.cmd run dev -- --host 127.0.0.1
 ```
 
-Set `VITE_API_URL` before the frontend build when the API is not at `http://127.0.0.1:8000`. On Windows, `127.0.0.1` is more reliable than `localhost` when Docker or other local proxies are also listening.
+Open:
 
-Open the Vite URL shown in the terminal, usually `http://localhost:5173`. API documentation is at `http://127.0.0.1:8000/docs`.
+```text
+http://127.0.0.1:5173
+```
 
-## Docker Compose
+Backend API:
 
-```bash
+```text
+http://127.0.0.1:8013/docs
+```
+
+Docker:
+
+```powershell
+$env:USE_REDESIGNED_ENGINE="true"
+$env:REDESIGNED_RESULT_MODE="review"
+$env:REDESIGNED_INCLUDE_STATUSES=""
 docker compose up --build
 ```
 
-Frontend: `http://localhost:5173`; backend: `http://127.0.0.1:8000`.
+## Testing
 
-## Tests and evaluation
+Backend tests:
 
-```bash
+```powershell
 cd backend
-pytest
-python -m app.services.evaluate_model
+python -m pytest
 ```
 
-## Limitations
+Frontend build:
 
-Scores are candidate-ranking signals, not proof. SQLite and synchronous scans suit a demo; production scale must use PostgreSQL, background workers, bounded upload sizes, tenant-aware security, observability, and organization-specific evaluation data. Kubernetes manifests are realistic starting points, not turnkey production infrastructure.
+```powershell
+cd frontend
+npm.cmd run build
+```
 
-For sensitive ERP exports, see `docs/data_security_and_privacy.md`.
-For the redesigned deterministic backend engine and `USE_REDESIGNED_ENGINE` switch, see `backend/docs/redesigned_engine.md`.
+Latest known verification:
 
-## Troubleshooting
+- Backend tests: `117 passed`
+- Frontend build: passed
 
-- Missing required fields: provide `PART_NO` and `DESCRIPTION`.
-- Optional aliases in the original workspace dataset are accepted for `PART_TYPE`, `INVENTORY_UOM`, `COMMODITY_GROUP_1`, `COMMODITY_GROUP_2`, and `SAFETY_CODE`.
-- If PowerShell blocks `npm.ps1`, run `npm.cmd install` and `npm.cmd run dev`.
-- If CORS is blocked during local development, use `http://127.0.0.1:8000` for the backend or set `CORS_ORIGINS` / `CORS_ORIGIN_REGEX`.
+## Export
 
-## Positioning
+Candidate export keeps legacy fields and includes redesigned evidence fields for auditability.
 
-This demo is a production-oriented duplicate intelligence engine for Inventory Part master data. It safely identifies possible duplicates while preserving uncertainty, explanation, and human control. Future IFS Cloud integration remains a documented adapter boundary after the detection engine is validated.
+Exported evidence includes:
+
+- `business_status`
+- `confidence_score`
+- `confidence_level`
+- `explanation`
+- `matched_evidence`
+- `differences`
+- `warnings`
+- normalized descriptions and part numbers
+- extracted attributes
+
+This makes the output suitable for business review, data-quality analysis, and later model/policy tuning.
+
+## Safety Boundaries
+
+Current version:
+
+- CSV-based demo only.
+- No auto-merge.
+- No direct IFS update.
+- No direct connection to IFS database tables.
+- No real IFS Cloud API/OData integration.
+- No LLM pairwise duplicate decision.
+- Human review is required before any business action.
+
+The current system identifies possible duplicate candidates. It does not establish final duplicate truth.
+
+## Future Enhancements
+
+Planned or possible future work:
+
+- IFS Cloud API/OData integration.
+- Live duplicate warning during inventory part creation.
+- Feedback loop from reviewer decisions.
+- Optional LLM-assisted attribute extraction, not pairwise automatic duplicate decisions.
+- Policy configuration UI for business rules and field importance.
+- Golden/survivor record recommendation after human-approved duplicate groups.
+- PostgreSQL and background workers for larger production deployments.
+- Customer-specific evaluation datasets and threshold/policy tuning.
+
+## Useful Docs
+
+- `backend/docs/redesigned_engine.md`
+- `backend/docs/runtime_env.md`
+- `backend/docs/smoke_test_results.md`
+- `docs/kubernetes_readiness.md`
+- `docs/future_ifs_integration.md`
+- `docs/data_security_and_privacy.md`
