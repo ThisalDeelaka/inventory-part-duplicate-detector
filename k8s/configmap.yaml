@@ -9,3 +9,6 @@ data:
   CORS_ORIGINS: https://inventory-duplicate.example.com
   MAX_UPLOAD_BYTES: "52428800"
   MAX_CSV_RECORDS: "100000"
+  USE_REDESIGNED_ENGINE: "false"
+  REDESIGNED_RESULT_MODE: "review"
+  REDESIGNED_INCLUDE_STATUSES: ""
