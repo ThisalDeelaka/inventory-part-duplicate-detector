@@ -6,3 +6,5 @@
 
 .form select{padding:11px;border:1px solid #cbd5d9;border-radius:7px;background:white}.DUPLICATE_CANDIDATE,.LIKELY_DUPLICATE{background:#d9f3e7;color:#126542}.POSSIBLE_DUPLICATE_REVIEW,.CROSS_SITE_STANDARDIZATION_CANDIDATE{background:#fff0c9;color:#815b00}.RELATED_BUT_NOT_DUPLICATE,.REJECTED_BY_BUSINESS_RULE,.DATA_CONFLICT_REVIEW,.INSUFFICIENT_DATA,.UNIQUE_NO_MATCH{background:#ffe0da;color:#9b3828}.rule-pill{display:inline-block;background:#eef4f5;color:#35424d;border-radius:12px;padding:4px 7px;font-size:11px;font-weight:800}.mismatch-list{display:grid;gap:4px;margin-top:8px}.mismatch-list span{background:#fff8e8;border-left:3px solid #e2a521;padding:6px 8px;border-radius:6px;font-size:12px}
 
+.evidence-details{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));align-items:start}.evidence-details p{grid-column:1/-1}.evidence-block{background:#f0f5f5;border-radius:6px;padding:8px 9px;font-size:12px}.evidence-block>b{display:block;margin-bottom:5px}.evidence-block ul{margin:0;padding-left:18px}.evidence-block li{margin:2px 0;line-height:1.35}
+
