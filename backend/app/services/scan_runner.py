@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 from sqlalchemy.orm import Session
 
@@ -12,6 +14,21 @@ from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.scan_repository import ScanRepository
 from app.repositories.warning_repository import WarningRepository
 from app.services.validation_service import validate_dataframe
+
+
+logger = logging.getLogger(__name__)
+
+REVIEW_RESULT_STATUSES = {
+    "DUPLICATE_CANDIDATE",
+    "POSSIBLE_DUPLICATE_REVIEW",
+    "DATA_CONFLICT_REVIEW",
+    "CROSS_SITE_STANDARDIZATION_CANDIDATE",
+    "INSUFFICIENT_DATA",
+}
+ALL_RESULT_STATUSES = REVIEW_RESULT_STATUSES | {
+    "RELATED_BUT_NOT_DUPLICATE",
+    "UNIQUE_NO_MATCH",
+}
 
 
 class ScanRunner:
@@ -81,10 +98,43 @@ class ScanRunner:
         decisions = run_duplicate_detection_pipeline(records, selected_fields, cross_site=cross_site)
         adapted_results = decision_results_to_scan_candidates(decisions)
         pairs = generate_candidate_pairs(records, selected_fields, cross_site=cross_site)
+        allowed_statuses = self._redesigned_allowed_statuses()
 
         candidates_found = 0
+        produced_status_counts = {}
+        persisted_status_counts = {}
         for pair, result in zip(pairs, adapted_results, strict=False):
+            status = result.get("business_status", "POSSIBLE_DUPLICATE_REVIEW")
+            produced_status_counts[status] = produced_status_counts.get(status, 0) + 1
+            if status not in allowed_statuses:
+                continue
             if result["final_score"] >= threshold:
                 self.candidates.save(scan_id, pair.record_a.raw, pair.record_b.raw, result)
                 candidates_found += 1
+                persisted_status_counts[status] = persisted_status_counts.get(status, 0) + 1
+        logger.info(
+            "Redesigned engine scan_id=%s produced=%s persisted=%s mode=%s allowed_statuses=%s produced_status_counts=%s persisted_status_counts=%s",
+            scan_id,
+            len(adapted_results),
+            candidates_found,
+            self._redesigned_result_mode(),
+            sorted(allowed_statuses),
+            produced_status_counts,
+            persisted_status_counts,
+        )
         return candidates_found, len(pairs)
+
+    def _redesigned_result_mode(self) -> str:
+        mode = str(getattr(settings, "redesigned_result_mode", "review") or "review").strip().lower()
+        return mode if mode in {"review", "all"} else "review"
+
+    def _redesigned_allowed_statuses(self) -> set[str]:
+        configured = str(getattr(settings, "redesigned_include_statuses", "") or "").strip()
+        if configured:
+            requested = {item.strip().upper() for item in configured.split(",") if item.strip()}
+            safe = requested & ALL_RESULT_STATUSES
+            if safe:
+                return safe
+        if self._redesigned_result_mode() == "all":
+            return set(ALL_RESULT_STATUSES)
+        return set(REVIEW_RESULT_STATUSES)

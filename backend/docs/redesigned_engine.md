@@ -108,6 +108,61 @@ uvicorn app.main:app --reload
 
 Docker/Kubernetes deployments can set the same environment variable through Compose or ConfigMap values.
 
+## Result Filtering Controls
+
+The redesigned scan runner can persist either review-ready results or every generated result. This filtering happens only after the isolated pipeline has produced decisions. The core engine still evaluates all generated candidate pairs.
+
+```text
+REDESIGNED_RESULT_MODE=review
+REDESIGNED_INCLUDE_STATUSES=
+```
+
+`REDESIGNED_RESULT_MODE` allowed values:
+
+- `review`
+- `all`
+
+Default is `review`.
+
+Review mode persists statuses useful for the demo UI:
+
+- `DUPLICATE_CANDIDATE`
+- `POSSIBLE_DUPLICATE_REVIEW`
+- `DATA_CONFLICT_REVIEW`
+- `CROSS_SITE_STANDARDIZATION_CANDIDATE`
+- `INSUFFICIENT_DATA`
+
+Review mode excludes noisy debug statuses by default:
+
+- `RELATED_BUT_NOT_DUPLICATE`
+- `UNIQUE_NO_MATCH`
+
+All mode persists every generated status, including:
+
+- `RELATED_BUT_NOT_DUPLICATE`
+- `UNIQUE_NO_MATCH`
+
+Use all mode when debugging engine behavior or validating guardrails:
+
+```powershell
+$env:REDESIGNED_RESULT_MODE="all"
+```
+
+`REDESIGNED_INCLUDE_STATUSES` can override mode defaults with a comma-separated status list:
+
+```powershell
+$env:REDESIGNED_INCLUDE_STATUSES="DUPLICATE_CANDIDATE,RELATED_BUT_NOT_DUPLICATE"
+```
+
+Invalid status names are ignored. If no valid explicit statuses are provided, the mode default is used.
+
+Why review mode is better for the demo UI:
+
+- It keeps the result table focused on records that require human action.
+- It avoids showing hundreds of `UNIQUE_NO_MATCH` rows.
+- It hides related-but-intentionally-different items unless a reviewer is debugging guardrail behavior.
+- It does not change export semantics; export includes whatever was persisted for that scan.
+
 ## Current API Candidate Fields
 
 The candidate API keeps legacy fields:

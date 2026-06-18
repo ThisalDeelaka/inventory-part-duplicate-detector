@@ -65,6 +65,8 @@ def _pipeline_statuses():
 
 def test_redesigned_scan_api_shape_and_saved_statuses(client, monkeypatch):
     monkeypatch.setattr(settings, "use_redesigned_engine", True)
+    monkeypatch.setattr(settings, "redesigned_result_mode", "all")
+    monkeypatch.setattr(settings, "redesigned_include_statuses", "")
 
     upload = client.post(
         "/api/scans/upload",

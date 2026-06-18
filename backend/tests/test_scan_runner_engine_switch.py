@@ -78,6 +78,19 @@ def frame():
     ])
 
 
+def mixed_status_frame():
+    return pd.DataFrame([
+        {"PART_NO": "DEC CO1", "DESCRIPTION": "Decicated Coconut type 1", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "DEC C01", "DESCRIPTION": "Dec Coco 1", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "MCB-20", "DESCRIPTION": "MCB 20A", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "MCB-30", "DESCRIPTION": "MCB30A", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "TR LABELS", "DESCRIPTION": "Labels", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "TR WARNING LABELS", "DESCRIPTION": "Warning labels", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "BIKE-1", "DESCRIPTION": "Bicycle Tire", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+        {"PART_NO": "BRUSH-1", "DESCRIPTION": "Paint Brush", "CONTRACT": "SMBE", "UNIT_MEAS": "PCS"},
+    ])
+
+
 def runner():
     item = ScanRunner(FakeDb())
     item.scans = FakeScanRepository()
@@ -88,6 +101,7 @@ def runner():
 
 def test_legacy_mode_is_default():
     assert settings.use_redesigned_engine is False
+    assert settings.redesigned_result_mode == "review"
 
 
 def test_legacy_path_is_used_when_switch_false(monkeypatch):
@@ -117,6 +131,8 @@ def test_redesigned_path_is_used_when_switch_true(monkeypatch):
 def test_redesigned_path_processes_dec_coconut_pair(monkeypatch):
     item = runner()
     monkeypatch.setattr(settings, "use_redesigned_engine", True)
+    monkeypatch.setattr(settings, "redesigned_result_mode", "review")
+    monkeypatch.setattr(settings, "redesigned_include_statuses", "")
 
     scan, pair_count = item.run(frame(), "scan", ["CONTRACT", "UNIT_MEAS"], 75)
 
@@ -127,3 +143,45 @@ def test_redesigned_path_processes_dec_coconut_pair(monkeypatch):
     assert result["business_status"] == "DUPLICATE_CANDIDATE"
     assert result["explanation"]
     assert "confidence_score" in result
+
+
+def test_redesigned_review_mode_filters_noisy_statuses(monkeypatch):
+    item = runner()
+    monkeypatch.setattr(settings, "use_redesigned_engine", True)
+    monkeypatch.setattr(settings, "redesigned_result_mode", "review")
+    monkeypatch.setattr(settings, "redesigned_include_statuses", "")
+
+    scan, _pair_count = item.run(mixed_status_frame(), "scan", ["CONTRACT", "UNIT_MEAS"], 0)
+    statuses = [saved[3]["business_status"] for saved in item.candidates.items]
+
+    assert scan.total_candidates == len(statuses)
+    assert "DUPLICATE_CANDIDATE" in statuses
+    assert "INSUFFICIENT_DATA" in statuses
+    assert "RELATED_BUT_NOT_DUPLICATE" not in statuses
+    assert "UNIQUE_NO_MATCH" not in statuses
+
+
+def test_redesigned_all_mode_persists_debug_statuses(monkeypatch):
+    item = runner()
+    monkeypatch.setattr(settings, "use_redesigned_engine", True)
+    monkeypatch.setattr(settings, "redesigned_result_mode", "all")
+    monkeypatch.setattr(settings, "redesigned_include_statuses", "")
+
+    item.run(mixed_status_frame(), "scan", ["CONTRACT", "UNIT_MEAS"], 0)
+    statuses = [saved[3]["business_status"] for saved in item.candidates.items]
+
+    assert "RELATED_BUT_NOT_DUPLICATE" in statuses
+    assert "UNIQUE_NO_MATCH" in statuses
+
+
+def test_explicit_redesigned_status_filter_overrides_mode(monkeypatch):
+    item = runner()
+    monkeypatch.setattr(settings, "use_redesigned_engine", True)
+    monkeypatch.setattr(settings, "redesigned_result_mode", "all")
+    monkeypatch.setattr(settings, "redesigned_include_statuses", "RELATED_BUT_NOT_DUPLICATE")
+
+    item.run(mixed_status_frame(), "scan", ["CONTRACT", "UNIT_MEAS"], 0)
+    statuses = [saved[3]["business_status"] for saved in item.candidates.items]
+
+    assert statuses
+    assert set(statuses) == {"RELATED_BUT_NOT_DUPLICATE"}

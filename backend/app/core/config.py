@@ -10,6 +10,8 @@ class Settings:
     max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
     max_csv_records = int(os.getenv("MAX_CSV_RECORDS", "100000"))
     use_redesigned_engine = os.getenv("USE_REDESIGNED_ENGINE", "false").strip().lower() in {"1", "true", "yes", "on"}
+    redesigned_result_mode = os.getenv("REDESIGNED_RESULT_MODE", "review").strip().lower()
+    redesigned_include_statuses = os.getenv("REDESIGNED_INCLUDE_STATUSES", "").strip()
     database_url = os.getenv(
         "DATABASE_URL",
         f"sqlite:///{Path(__file__).resolve().parents[3] / 'inventory_detector.db'}",
