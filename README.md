@@ -61,6 +61,7 @@ python -m app.services.evaluate_model
 Scores are candidate-ranking signals, not proof. SQLite and synchronous scans suit a demo; production scale must use PostgreSQL, background workers, bounded upload sizes, tenant-aware security, observability, and organization-specific evaluation data. Kubernetes manifests are realistic starting points, not turnkey production infrastructure.
 
 For sensitive ERP exports, see `docs/data_security_and_privacy.md`.
+For the redesigned deterministic backend engine and `USE_REDESIGNED_ENGINE` switch, see `backend/docs/redesigned_engine.md`.
 
 ## Troubleshooting
 
