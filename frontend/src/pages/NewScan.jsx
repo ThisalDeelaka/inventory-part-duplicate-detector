@@ -18,7 +18,12 @@ const FALLBACK_FIELDS = [
 
 export default function NewScan() {
   const [fields, setFields] = useState([])
+  const [mappingFields, setMappingFields] = useState([
+    { field: 'PART_NO', display: 'Part No', required: true },
+    { field: 'DESCRIPTION', display: 'Item Description', required: true },
+  ])
   const [selected, setSelected] = useState(['CONTRACT', 'UNIT_MEAS'])
+  const [columnMapping, setColumnMapping] = useState({})
   const [file, setFile] = useState(null)
   const [name, setName] = useState('Inventory duplicate scan')
   const [threshold, setThreshold] = useState(75)
@@ -31,7 +36,10 @@ export default function NewScan() {
 
   useEffect(() => {
     api.get('/api/config/fields')
-      .then(x => setFields(x.filter(f => !f.required)))
+      .then(x => {
+        setFields(x.filter(f => !f.required))
+        setMappingFields(x)
+      })
       .catch(() => {
         setFields(FALLBACK_FIELDS)
         setError(`Backend is not reachable at ${api.baseUrl}. Start the FastAPI backend, then refresh this page.`)
@@ -44,6 +52,7 @@ export default function NewScan() {
     f.append('scan_name', name)
     f.append('threshold', threshold)
     f.append('selected_fields', JSON.stringify(selected))
+    f.append('column_mapping', JSON.stringify(columnMapping))
     f.append('sensitive_mode', sensitiveMode)
     f.append('scan_mode', scanMode)
     return f
@@ -52,7 +61,11 @@ export default function NewScan() {
   const validate = async () => {
     if (!file) return setError('Choose a CSV file first.')
     setBusy('validate'); setError('')
-    try { setValidation(await api.postForm('/api/scans/validate-only', form())) }
+    try {
+      const result = await api.postForm('/api/scans/validate-only', form())
+      setValidation(result)
+      setColumnMapping(current => ({ ...result.resolved_column_mapping, ...current }))
+    }
     catch (e) { setError(e.message) }
     finally { setBusy('') }
   }
@@ -74,7 +87,7 @@ export default function NewScan() {
       <div className="two-col">
         <section className="panel form">
           <label>Scan name<input value={name} onChange={e => setName(e.target.value)} /></label>
-          <label>Inventory CSV<input type="file" accept=".csv,text/csv" onChange={e => setFile(e.target.files[0])} /></label>
+          <label>Inventory CSV<input type="file" accept=".csv,text/csv" onChange={e => { setFile(e.target.files[0]); setValidation(null); setColumnMapping({}) }} /></label>
           <label>Scan mode
             <select value={scanMode} onChange={e => setScanMode(e.target.value)}>
               <option value="SAME_SITE_DUPLICATE">Same-site duplicate scan</option>
@@ -90,6 +103,7 @@ export default function NewScan() {
       </div>
       <div className="actions"><button className="secondary" onClick={validate} disabled={!!busy}>{busy === 'validate' ? 'Validating...' : 'Validate only'}</button><button onClick={run} disabled={!!busy}>{busy === 'scan' ? 'Scanning...' : 'Run scan'}</button></div>
       {validation && <section className="panel"><h2>Validation result <span className={validation.valid ? 'badge HIGH' : 'badge LOW'}>{validation.valid ? 'VALID' : 'BLOCKED'}</span></h2><div className="metrics"><span>{validation.record_count} records</span><span>{validation.empty_descriptions_count} empty descriptions</span><span>{validation.duplicate_part_number_count} repeated part rows</span><span>{validation.warnings.length} warnings</span></div>{validation.privacy && <div className="security-summary"><b>Security transparency</b><span>Raw CSV stored: {validation.privacy.raw_csv_stored ? 'Yes' : 'No'}</span><span>External AI used: {validation.privacy.external_ai_used ? 'Yes' : 'No'}</span><span>Local processing: {validation.privacy.local_processing_only ? 'Yes' : 'No'}</span><small>SHA-256: {validation.privacy.file_sha256}</small></div>}{validation.warnings.map((w, i) => <p className="warning" key={i}>{w.message}</p>)}</section>}
+      {validation?.available_columns && <section className="panel"><h2>CSV column mapping</h2><p>Common IFS labels are detected automatically. Choose an uploaded column below only when this environment uses a custom label, then validate again.</p><div className="checks">{mappingFields.map(field => <label key={field.field}><span>{field.display}{field.required ? ' *' : ''}<small>{field.field}</small></span><select value={columnMapping[field.field] || ''} onChange={event => setColumnMapping(current => ({ ...current, [field.field]: event.target.value }))}><option value="">Automatic / not available</option>{validation.available_columns.map(column => <option value={column} key={column}>{column}</option>)}</select></label>)}</div></section>}
     </>
   )
 }

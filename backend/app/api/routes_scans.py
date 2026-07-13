@@ -10,7 +10,7 @@ from app.services.export_service import candidates_to_csv
 from app.services.grouping_service import build_duplicate_groups
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
-from app.services.validation_service import parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
+from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
@@ -96,18 +96,24 @@ def warnings(scan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/validate-only")
-async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), sensitive_mode: bool = Form(True)):
-    df, metadata = await read_csv_upload_with_metadata(file)
+async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True)):
+    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
     result = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
+    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts")})
+    for target, sources in metadata["column_mapping_conflicts"].items():
+        result["warnings"].append({
+            "warning_type": "AMBIGUOUS_COLUMN_MAPPING",
+            "message": f"Multiple uploaded columns could be {target}: {', '.join(sources)}. Choose the correct column in CSV column mapping and validate again.",
+        })
     result["privacy"] = security_transparency(file_hash=metadata["file_sha256"], sensitive_mode=sensitive_mode)
     result["privacy"]["file_size_bytes"] = metadata["file_size_bytes"]
     return result
 
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), selected_fields: str = Form("[]"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db)):
+async def upload(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db)):
     if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
-    df, metadata = await read_csv_upload_with_metadata(file)
+    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
     validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
     try:

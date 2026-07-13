@@ -1,9 +1,12 @@
 import io
+import json
+import re
+import unicodedata
 
 import pandas as pd
 from fastapi import HTTPException, UploadFile
 
-from app.core.constants import FIELD_ALIASES, REQUIRED_FIELDS
+from app.core.constants import FIELD_ALIASES, FIELD_DEFINITIONS, REQUIRED_FIELDS
 from app.core.config import settings
 from app.services.privacy_service import detect_sensitive_patterns, file_sha256, security_transparency
 
@@ -22,7 +25,88 @@ def parse_selected_fields(value: str | None) -> list[str]:
     return [item.strip().upper() for item in value.split(",") if item.strip()]
 
 
-async def read_csv_upload_with_metadata(file: UploadFile) -> tuple[pd.DataFrame, dict]:
+def normalize_column_name(value: str) -> str:
+    """Convert display-style ERP headers to stable machine-style names."""
+    text = unicodedata.normalize("NFKC", str(value)).lstrip("\ufeff").strip().upper()
+    text = re.sub(r"[^A-Z0-9]+", "_", text)
+    return re.sub(r"_+", "_", text).strip("_")
+
+
+def parse_column_mapping(value: str | None) -> dict[str, str]:
+    """Parse a canonical-field -> uploaded-column mapping supplied by the UI/API."""
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(400, "column_mapping must be a JSON object") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(400, "column_mapping must be a JSON object")
+
+    allowed = {item["field"] for item in FIELD_DEFINITIONS}
+    result = {}
+    for canonical, source in parsed.items():
+        canonical_name = normalize_column_name(canonical)
+        source_name = str(source).strip()
+        if canonical_name not in allowed:
+            raise HTTPException(400, f"Unsupported canonical field in column_mapping: {canonical}")
+        if source_name:
+            result[canonical_name] = source_name
+    return result
+
+
+def apply_column_mapping(df: pd.DataFrame, explicit_mapping: dict[str, str] | None = None) -> tuple[pd.DataFrame, dict]:
+    """Resolve uploaded headers to canonical fields, with explicit mappings winning."""
+    explicit_mapping = explicit_mapping or {}
+    original_columns = [str(column) for column in df.columns]
+    normalized_lookup: dict[str, list[str]] = {}
+    for column in original_columns:
+        normalized_lookup.setdefault(normalize_column_name(column), []).append(column)
+
+    explicit_sources = {}
+    for canonical, requested_source in explicit_mapping.items():
+        matches = normalized_lookup.get(normalize_column_name(requested_source), [])
+        if len(matches) != 1:
+            detail = "was not found" if not matches else "matches multiple uploaded columns"
+            raise HTTPException(400, f"Mapped column {requested_source!r} for {canonical} {detail}")
+        if matches[0] in explicit_sources:
+            raise HTTPException(400, f"Uploaded column {requested_source!r} cannot map to more than one canonical field")
+        explicit_sources[matches[0]] = canonical
+
+    reserved_targets = set(explicit_sources.values())
+    renamed = {}
+    resolved = {}
+    target_sources: dict[str, list[str]] = {}
+    canonical_fields = {item["field"] for item in FIELD_DEFINITIONS}
+    for position, source in enumerate(original_columns, start=1):
+        normalized = normalize_column_name(source)
+        if source in explicit_sources:
+            target = explicit_sources[source]
+        else:
+            automatic = FIELD_ALIASES.get(normalized, normalized)
+            target = f"UNMAPPED_{normalized}_{position}" if automatic in reserved_targets else automatic
+        renamed[source] = target
+        target_sources.setdefault(target, []).append(source)
+        if target in canonical_fields:
+            resolved[target] = source
+
+    collisions = {target: sources for target, sources in target_sources.items() if len(sources) > 1}
+    for target, sources in collisions.items():
+        resolved.pop(target, None)
+        for source in sources:
+            position = original_columns.index(source) + 1
+            renamed[source] = f"UNMAPPED_{normalize_column_name(source)}_{position}"
+
+    mapped = df.rename(columns=renamed)
+    return mapped, {
+        "available_columns": original_columns,
+        "resolved_column_mapping": resolved,
+        "normalized_columns": list(mapped.columns),
+        "column_mapping_conflicts": collisions,
+    }
+
+
+async def read_csv_upload_with_metadata(file: UploadFile, column_mapping: dict[str, str] | None = None) -> tuple[pd.DataFrame, dict]:
     content = await file.read()
     if not content:
         raise HTTPException(400, "CSV file is empty")
@@ -32,13 +116,12 @@ async def read_csv_upload_with_metadata(file: UploadFile) -> tuple[pd.DataFrame,
         df = pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
     except Exception as exc:
         raise HTTPException(400, f"Unable to parse CSV: {exc}") from exc
-    df.columns = [str(c).strip().upper() for c in df.columns]
-    df = df.rename(columns={old: new for old, new in FIELD_ALIASES.items() if new not in df.columns})
+    df, column_metadata = apply_column_mapping(df, column_mapping)
     if df.empty:
         raise HTTPException(400, "CSV contains no data rows")
     if len(df) > settings.max_csv_records:
         raise HTTPException(413, f"CSV contains {len(df)} records, above the configured synchronous scan limit of {settings.max_csv_records}")
-    return df, {"file_sha256": file_sha256(content), "file_size_bytes": len(content)}
+    return df, {"file_sha256": file_sha256(content), "file_size_bytes": len(content), **column_metadata}
 
 
 async def read_csv_upload(file: UploadFile) -> pd.DataFrame:

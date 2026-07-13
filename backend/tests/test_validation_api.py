@@ -1,4 +1,5 @@
 import io
+import json
 
 from app.db.models import DuplicateCandidate
 from app.services.export_service import sanitize_csv_cell
@@ -66,3 +67,82 @@ def test_sensitive_data_mode_returns_transparency_and_pattern_warnings(client):
     warning_types = {warning["warning_type"] for warning in body["warnings"]}
     assert "POSSIBLE_EMAIL" in warning_types
     assert "POSSIBLE_PROJECT_REFERENCE" in warning_types
+
+
+def test_human_readable_ifs_headers_are_mapped_automatically(client):
+    csv = (
+        b"Part No,Part Description,Site,Part Type,Inventory UoM,Commodity Group 1,"
+        b"Product Code,Product Family,Product Category,HSN/SAC Code\n"
+        b"A-1,Motor 10MM,S1,Purchased,PCS,MECH,P01,F01,C01,1000\n"
+        b"A-2,Motor 10 mm,S1,Purchased,PCS,MECH,P01,F01,C01,1000\n"
+    )
+    response = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("ifs-export.csv", csv, "text/csv")},
+        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]'},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert body["missing_optional_selected_columns"] == []
+    assert body["resolved_column_mapping"]["PART_NO"] == "Part No"
+    assert body["resolved_column_mapping"]["DESCRIPTION"] == "Part Description"
+    assert body["resolved_column_mapping"]["CONTRACT"] == "Site"
+    assert body["resolved_column_mapping"]["HSN_SAC_CODE"] == "HSN/SAC Code"
+
+
+def test_arbitrary_headers_can_be_mapped_explicitly(client):
+    csv = b"Stock Identifier,Long Text,Facility,Stock Unit\nA,Motor,S1,PCS\nB,Motor assembly,S1,PCS\n"
+    mapping = {
+        "PART_NO": "Stock Identifier",
+        "DESCRIPTION": "Long Text",
+        "CONTRACT": "Facility",
+        "UNIT_MEAS": "Stock Unit",
+    }
+    response = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("custom.csv", csv, "text/csv")},
+        data={
+            "selected_fields": '["CONTRACT","UNIT_MEAS"]',
+            "column_mapping": json.dumps(mapping),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert body["resolved_column_mapping"] == mapping
+
+
+def test_explicit_mapping_can_override_an_automatic_description_column(client):
+    csv = b"Part No,Part Description,Master Part Description\nA,Short text,Preferred detailed text\n"
+    response = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("override.csv", csv, "text/csv")},
+        data={"column_mapping": json.dumps({"DESCRIPTION": "Master Part Description"})},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["valid"] is True
+    assert response.json()["resolved_column_mapping"]["DESCRIPTION"] == "Master Part Description"
+
+
+def test_ambiguous_automatic_aliases_require_an_explicit_choice(client):
+    csv = b"Part No,Part Number,Part Description\nA,A-ALT,Motor\n"
+    initial = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("ambiguous.csv", csv, "text/csv")},
+    )
+    assert initial.status_code == 200
+    assert initial.json()["valid"] is False
+    assert initial.json()["column_mapping_conflicts"]["PART_NO"] == ["Part No", "Part Number"]
+    assert any(w["warning_type"] == "AMBIGUOUS_COLUMN_MAPPING" for w in initial.json()["warnings"])
+
+    resolved = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("ambiguous.csv", csv, "text/csv")},
+        data={"column_mapping": json.dumps({"PART_NO": "Part No"})},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["valid"] is True

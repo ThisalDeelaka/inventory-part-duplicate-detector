@@ -7,7 +7,8 @@ The current version uses IFS-compatible CSV field names. It has **no direct IFS 
 ## Features
 
 - CSV upload and validation-only workflow
-- Supports real ERP export files like the workspace `data set.csv`; aliases such as `PART_TYPE`, `INVENTORY_UOM`, `COMMODITY_GROUP_1`, `COMMODITY_GROUP_2`, and `SAFETY_CODE` are mapped automatically
+- Supports technical and human-readable IFS/ERP headers. Spaces, punctuation, slashes, and casing are normalized; common labels such as `Part No`, `Part Description`, `Site`, `Inventory UoM`, and `HSN/SAC Code` are mapped automatically
+- Includes an explicit CSV column-mapping override for environment-specific labels that cannot be inferred safely
 - Sensitive Data Mode: no raw CSV persistence, no external AI API usage, SHA-256 file fingerprint, and sensitive-pattern warnings
 - Configurable business-field blocking and threshold
 - TF-IDF character n-grams, RapidFuzz, part-number, technical-token, and business-rule scoring
@@ -64,7 +65,7 @@ For sensitive ERP exports, see `docs/data_security_and_privacy.md`.
 
 ## Troubleshooting
 
-- Missing required fields: provide `PART_NO` and `DESCRIPTION`.
+- Missing required fields: map the uploaded Part No and Description columns to `PART_NO` and `DESCRIPTION` in the validation screen.
 - Optional aliases in the original workspace dataset are accepted for `PART_TYPE`, `INVENTORY_UOM`, `COMMODITY_GROUP_1`, `COMMODITY_GROUP_2`, and `SAFETY_CODE`.
 - If PowerShell blocks `npm.ps1`, run `npm.cmd install` and `npm.cmd run dev`.
 - If CORS is blocked during local development, use `http://127.0.0.1:8000` for the backend or set `CORS_ORIGINS` / `CORS_ORIGIN_REGEX`.
