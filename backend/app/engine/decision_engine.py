@@ -3,7 +3,7 @@ from app.engine.application_context import extract_application_context, find_app
 from app.engine.business_rules import evaluate_hard_business_rules
 from app.engine.column_semantics import clean_field_value, normalize_scan_mode
 from app.engine.explanation import build_explanation
-from app.engine.generic_description_guard import has_generic_specific_pair
+from app.engine.generic_description_guard import has_generic_description
 from app.engine.item_family_classifier import shared_family
 from app.engine.normalizer import extract_technical_tokens, normalize_description, normalize_part_no_with_dictionary
 from app.engine.similarity_model import (
@@ -12,7 +12,7 @@ from app.engine.similarity_model import (
     calculate_technical_token_score,
     calculate_tfidf_similarity,
 )
-from app.engine.variant_extractor import extract_variant_attributes, find_critical_mismatches
+from app.engine.variant_extractor import extract_variant_attributes, find_critical_mismatches, find_one_sided_qualifier
 
 
 def confidence_for(score):
@@ -137,6 +137,33 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
             **_visibility_payload(record_a, record_b),
         }
 
+    one_sided_qualifier = find_one_sided_qualifier(attributes_a, attributes_b)
+    if one_sided_qualifier:
+        score = 65.0
+        left = ", ".join(one_sided_qualifier["values_a"]) or "not specified"
+        right = ", ".join(one_sided_qualifier["values_b"]) or "not specified"
+        explanation = (
+            f"The {one_sided_qualifier['label']} qualifier is present on only one description: "
+            f"{left} vs {right}. The broader description is insufficient to confirm duplicate identity."
+        )
+        return {
+            "final_score": score,
+            "confidence_level": confidence_for(score),
+            **_empty_scores(),
+            "matched_fields": matched,
+            "mismatched_fields": mismatched,
+            "explanation": explanation,
+            "recommended_action": CONFIDENCE_ACTIONS[confidence_for(score)],
+            "business_status": "INSUFFICIENT_DATA",
+            "rule_decision": "DOWNGRADE",
+            "rejection_reason": f"{one_sided_qualifier['group']}_UNSPECIFIED",
+            "scan_mode": scan_mode,
+            "critical_mismatches": [one_sided_qualifier],
+            "variant_attributes_a": attributes_a,
+            "variant_attributes_b": attributes_b,
+            **_visibility_payload(record_a, record_b, generic_warning=True),
+        }
+
     desc_a, desc_b = record_a.get("DESCRIPTION"), record_b.get("DESCRIPTION")
     tfidf = calculate_tfidf_similarity(desc_a, desc_b)
     fuzzy = calculate_fuzzy_similarity(desc_a, desc_b)
@@ -156,7 +183,7 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
     generic_warning = False
     context_warning = False
 
-    if has_generic_specific_pair(desc_a, desc_b):
+    if has_generic_description(desc_a, desc_b):
         generic_warning = True
         final = min(final, 65.0)
         explanation = f"{explanation} One description is too generic to confirm duplicate identity."

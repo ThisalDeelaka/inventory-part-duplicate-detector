@@ -1,4 +1,5 @@
 from app.engine.scoring import score_candidate
+from app.engine.generic_description_guard import is_generic_description
 
 
 def rec(part, description, site="S1", unit="PCS", commodity="X", hsn="1000"):
@@ -137,6 +138,84 @@ def test_generic_label_description_is_low_confidence_review():
     assert result["confidence_level"] not in {"HIGH", "MEDIUM"}
     assert result["final_score"] <= 65
     assert "One description is too generic to confirm duplicate identity." in result["explanation"]
+
+
+def test_known_generic_business_descriptions_raise_warning():
+    for description in ("test part", "sales part", "component", "inventory part"):
+        assert is_generic_description(description) is True
+        result = score_candidate(
+            rec("GENERIC", description),
+            rec("SPECIFIC", "Hydraulic pump assembly"),
+            ["CONTRACT", "UNIT_MEAS"],
+        )
+        assert result["generic_description_warning"] is True
+        assert result["business_status"] == "INSUFFICIENT_DATA"
+        assert result["final_score"] <= 65
+
+
+def test_two_generic_descriptions_are_also_insufficient():
+    result = score_candidate(
+        rec("GENERIC-1", "Test Part"),
+        rec("GENERIC-2", "Sales Part"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["generic_description_warning"] is True
+    assert result["business_status"] == "INSUFFICIENT_DATA"
+    assert result["final_score"] <= 65
+
+
+def test_mutually_exclusive_qualifiers_are_not_duplicates():
+    cases = [
+        ("Wired User Interface", "Wireless User Interface", "connectivity differs"),
+        ("Indoor Fan Unit", "Outdoor Fan Unit", "environment differs"),
+        ("Manual Control Valve", "Automatic Control Valve", "operation mode differs"),
+    ]
+    for left, right, explanation in cases:
+        result = score_candidate(rec("A", left), rec("B", right), ["CONTRACT", "UNIT_MEAS"])
+        assert result["business_status"] == "RELATED_BUT_NOT_DUPLICATE"
+        assert result["final_score"] <= 55
+        assert explanation in result["explanation"]
+
+
+def test_matching_description_bases_with_different_trailing_variants_are_not_duplicates():
+    cases = [
+        ("Serial Part 1", "Serial Part 2"),
+        ("Raw Material 01", "Raw Material 02"),
+        ("Pump Assembly First", "Pump Assembly Second"),
+    ]
+    for left, right in cases:
+        result = score_candidate(rec("A", left), rec("B", right), ["CONTRACT", "UNIT_MEAS"])
+        assert result["business_status"] == "RELATED_BUT_NOT_DUPLICATE"
+        assert result["rejection_reason"] == "TRAILING_VARIANT_SUFFIX_MISMATCH"
+        assert result["final_score"] <= 55
+        assert "trailing variant suffix differs" in result["explanation"]
+
+
+def test_reported_false_positive_pairs_remain_below_duplicate_confidence():
+    serial = score_candidate(
+        rec("SN-P1", "Serial Part 1"),
+        rec("SN-P2", "Serial Part 2"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+    connectivity = score_candidate(
+        rec("P10009845", "Wired User Interface"),
+        rec("P12509845", "Wireless User Interface"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+    base_variant = score_candidate(
+        rec("VTZSR55", "Ventechi Z series units"),
+        rec("VTZSR55-I", "Ventechi Z series indoor unit"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert serial["final_score"] < 75
+    assert serial["rejection_reason"] == "TRAILING_VARIANT_SUFFIX_MISMATCH"
+    assert connectivity["final_score"] < 75
+    assert connectivity["rejection_reason"] == "CONNECTIVITY_MISMATCH"
+    assert base_variant["final_score"] < 75
+    assert base_variant["rejection_reason"] == "ENVIRONMENT_UNSPECIFIED"
+    assert base_variant["generic_description_warning"] is True
 
 
 def test_application_context_mismatch_warns_without_rejecting():

@@ -20,6 +20,10 @@ GENERIC_TERMS = {
     "spare",
     "tool",
     "kit",
+    "test",
+    "sales",
+    "component",
+    "inventory",
 }
 
 
@@ -34,3 +38,8 @@ def has_generic_specific_pair(description_a: str, description_b: str) -> bool:
     generic_a = is_generic_description(description_a)
     generic_b = is_generic_description(description_b)
     return generic_a != generic_b
+
+
+def has_generic_description(description_a: str, description_b: str) -> bool:
+    """Return true when either side is too generic to establish identity."""
+    return is_generic_description(description_a) or is_generic_description(description_b)
