@@ -146,3 +146,60 @@ def test_ambiguous_automatic_aliases_require_an_explicit_choice(client):
     )
     assert resolved.status_code == 200
     assert resolved.json()["valid"] is True
+
+
+def test_below_threshold_business_rule_exclusions_are_auditable(client):
+    csv = (
+        b"PART_NO,DESCRIPTION,CONTRACT,UNIT_MEAS\n"
+        b"SN-P1,Serial Part 1,S1,PCS\n"
+        b"SN-P2,Serial Part 2,S1,PCS\n"
+        b"UNRELATED,Coffee Mug,S1,PCS\n"
+    )
+    upload = client.post(
+        "/api/scans/upload",
+        files={"file": ("rule-exclusion.csv", csv, "text/csv")},
+        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "75"},
+    )
+
+    assert upload.status_code == 200
+    body = upload.json()
+    assert body["total_candidates"] == 0
+    assert body["rejections_count"] == 1
+
+    exclusions = client.get(f"/api/scans/{body['scan_id']}/rejections")
+    assert exclusions.status_code == 200
+    assert len(exclusions.json()) == 1
+    item = exclusions.json()[0]
+    assert item["rejection_reason"] == "TRAILING_VARIANT_SUFFIX_MISMATCH"
+    assert item["critical_mismatches"][0]["group"] == "TRAILING_VARIANT_SUFFIX"
+    assert "trailing variant suffix differs" in item["explanation"]
+
+    export = client.get(f"/api/scans/{body['scan_id']}/rejections/export")
+    assert export.status_code == 200
+    assert "TRAILING_VARIANT_SUFFIX_MISMATCH" in export.text
+    assert "trailing variant suffix differs" in export.text
+
+
+def test_structural_role_candidate_keeps_mismatch_evidence(client):
+    csv = (
+        b"PART_NO,DESCRIPTION,CONTRACT,UNIT_MEAS\n"
+        b"SJ COMP PART1,SJ COMP PART1,S1,PCS\n"
+        b"SJ TOP PART1,SJ TOP PART1,S1,PCS\n"
+    )
+    upload = client.post(
+        "/api/scans/upload",
+        files={"file": ("structural-role.csv", csv, "text/csv")},
+        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "75"},
+    )
+
+    assert upload.status_code == 200
+    body = upload.json()
+    assert body["total_candidates"] == 1
+    assert body["rejections_count"] == 0
+
+    candidates = client.get(f"/api/scans/{body['scan_id']}/candidates").json()
+    assert candidates[0]["business_status"] == "POSSIBLE_DUPLICATE_REVIEW"
+    assert candidates[0]["rule_decision"] == "DOWNGRADE"
+    assert candidates[0]["rejection_reason"] == "STRUCTURAL_ROLE_MISMATCH"
+    assert candidates[0]["critical_mismatches"][0]["group"] == "STRUCTURAL_ROLE"
+    assert "Different structural role detected" in candidates[0]["explanation"]

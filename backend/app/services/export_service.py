@@ -29,3 +29,18 @@ def candidates_to_csv(candidates):
         row = {field: sanitize_csv_cell(getattr(c, field)) for field in fields}
         writer.writerow(row)
     return output.getvalue()
+
+
+def rejections_to_csv(rejections):
+    output = io.StringIO()
+    fields = [
+        "part_no_a", "description_a", "contract_a",
+        "part_no_b", "description_b", "contract_b",
+        "similarity_score", "confidence_level", "business_status",
+        "rule_decision", "rejection_reason", "critical_mismatches", "explanation",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    for item in rejections:
+        writer.writerow({field: sanitize_csv_cell(getattr(item, field)) for field in fields})
+    return output.getvalue()

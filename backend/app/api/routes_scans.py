@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.engine.column_semantics import normalize_scan_mode
-from app.services.export_service import candidates_to_csv
+from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
-from app.services.scan_service import get_scan, get_scan_candidates, get_scan_warnings, list_scans, run_scan
+from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
 
@@ -31,6 +31,7 @@ def scan_json(scan, privacy=None):
         "id": scan.id, "scan_id": scan.id, "scan_name": scan.scan_name, "source_type": scan.source_type,
         "selected_fields": json.loads(scan.selected_fields), "threshold": scan.threshold, "status": scan.status,
         "total_records": scan.total_records, "total_candidates": scan.total_candidates, "warnings_count": scan.warnings_count,
+        "rejections_count": getattr(scan, "rejections_count", 0) or 0,
         "started_at": scan.started_at, "completed_at": scan.completed_at, "model_version": scan.model_version,
         "scan_mode": getattr(scan, "scan_mode", "SAME_SITE_DUPLICATE"),
     }
@@ -95,6 +96,29 @@ def warnings(scan_id: int, db: Session = Depends(get_db)):
     return [{"id": w.id, "scan_id": w.scan_id, "warning_type": w.warning_type, "message": w.message, "record_reference": w.record_reference, "created_at": w.created_at} for w in get_scan_warnings(db, scan_id)]
 
 
+@router.get("/{scan_id}/rejections")
+def rejections(scan_id: int, db: Session = Depends(get_db)):
+    if not get_scan(db, scan_id): raise HTTPException(404, "Scan not found")
+    return [{
+        "id": item.id,
+        "scan_id": item.scan_id,
+        "contract_a": item.contract_a,
+        "part_no_a": item.part_no_a,
+        "description_a": item.description_a,
+        "contract_b": item.contract_b,
+        "part_no_b": item.part_no_b,
+        "description_b": item.description_b,
+        "similarity_score": item.similarity_score,
+        "confidence_level": item.confidence_level,
+        "business_status": item.business_status,
+        "rule_decision": item.rule_decision,
+        "rejection_reason": item.rejection_reason,
+        "critical_mismatches": _json_attr(item, "critical_mismatches", "[]"),
+        "explanation": item.explanation,
+        "created_at": item.created_at,
+    } for item in get_scan_rejections(db, scan_id)]
+
+
 @router.post("/validate-only")
 async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True)):
     df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
@@ -130,3 +154,14 @@ def export(scan_id: int, db: Session = Depends(get_db)):
     scan = get_scan(db, scan_id)
     if not scan: raise HTTPException(404, "Scan not found")
     return Response(candidates_to_csv(get_scan_candidates(db, scan_id)), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-candidates.csv"'})
+
+
+@router.get("/{scan_id}/rejections/export")
+def export_rejections(scan_id: int, db: Session = Depends(get_db)):
+    scan = get_scan(db, scan_id)
+    if not scan: raise HTTPException(404, "Scan not found")
+    return Response(
+        rejections_to_csv(get_scan_rejections(db, scan_id)),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-rule-exclusions.csv"'},
+    )

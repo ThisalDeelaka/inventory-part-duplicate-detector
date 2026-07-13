@@ -6,6 +6,7 @@ from app.engine.column_semantics import normalize_scan_mode
 from app.engine.scoring import score_candidate
 from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.scan_repository import ScanRepository
+from app.repositories.rejection_repository import RejectionRepository
 from app.repositories.warning_repository import WarningRepository
 from app.services.validation_service import validate_dataframe
 
@@ -16,6 +17,7 @@ class ScanRunner:
         self.scans = ScanRepository(db)
         self.candidates = CandidateRepository(db)
         self.warnings = WarningRepository(db)
+        self.rejections = RejectionRepository(db)
 
     def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
         scan_mode = normalize_scan_mode(scan_mode)
@@ -37,11 +39,15 @@ class ScanRunner:
                 self.warnings.save(scan.id, {"warning_type": warning_type, "message": message})
 
             candidates_found = 0
+            rejections_found = 0
             for pair in pairs:
                 result = score_candidate(pair["record_a"], pair["record_b"], selected_fields, scan_mode)
                 if result["final_score"] >= threshold:
                     self.candidates.save(scan.id, pair["record_a"], pair["record_b"], result)
                     candidates_found += 1
+                elif result["rule_decision"] != "ALLOW":
+                    self.rejections.save(scan.id, pair["record_a"], pair["record_b"], result)
+                    rejections_found += 1
 
             self.db.commit()
             warning_count = self.warnings.count_for_scan(scan.id)
@@ -50,6 +56,7 @@ class ScanRunner:
                 "COMPLETED",
                 total_records=len(df),
                 total_candidates=candidates_found,
+                rejections_count=rejections_found,
                 warnings_count=warning_count,
             ), len(pairs)
         except Exception:

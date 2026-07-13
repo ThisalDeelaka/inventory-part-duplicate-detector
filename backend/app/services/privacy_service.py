@@ -24,6 +24,7 @@ def security_transparency(file_hash: str | None = None, sensitive_mode: bool = T
         "persisted_data": [
             "scan summary",
             "candidate pairs above threshold",
+            "business-rule exclusions below threshold",
             "similarity scores",
             "explanations",
             "warnings",

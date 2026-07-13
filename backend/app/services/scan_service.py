@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.scan_repository import ScanRepository
+from app.repositories.rejection_repository import RejectionRepository
 from app.repositories.warning_repository import WarningRepository
 from app.services.scan_runner import ScanRunner
 
@@ -24,3 +25,7 @@ def get_scan_candidates(db: Session, scan_id):
 
 def get_scan_warnings(db: Session, scan_id):
     return WarningRepository(db).list_for_scan(scan_id)
+
+
+def get_scan_rejections(db: Session, scan_id):
+    return RejectionRepository(db).list_for_scan(scan_id)

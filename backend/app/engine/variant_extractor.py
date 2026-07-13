@@ -19,6 +19,21 @@ SIDE = {"left", "right", "front", "rear"}
 CONNECTIVITY = {"wired", "wireless"}
 ENVIRONMENT = {"indoor", "outdoor"}
 OPERATION_MODE = {"manual", "automatic"}
+PLACEMENT = {"internal", "external"}
+HIERARCHY = {"primary", "secondary"}
+SIGNAL_TYPE = {"analog", "digital"}
+STRUCTURAL_ROLE_MAP = {
+    "top": "top",
+    "comp": "component",
+    "component": "component",
+    "assy": "assembly",
+    "assembly": "assembly",
+    "sub": "subassembly",
+    "subassembly": "subassembly",
+    "base": "base",
+    "module": "module",
+    "kit": "kit",
+}
 
 VARIANT_GROUP_LABELS = {
     "FILTER_FUNCTION": "critical function",
@@ -32,9 +47,19 @@ VARIANT_GROUP_LABELS = {
     "CONNECTIVITY": "connectivity",
     "ENVIRONMENT": "environment",
     "OPERATION_MODE": "operation mode",
+    "PLACEMENT": "placement",
+    "HIERARCHY": "hierarchy",
+    "SIGNAL_TYPE": "signal type",
 }
 
-ONE_SIDED_QUALIFIER_GROUPS = {"CONNECTIVITY", "ENVIRONMENT", "OPERATION_MODE"}
+ONE_SIDED_QUALIFIER_GROUPS = {
+    "CONNECTIVITY",
+    "ENVIRONMENT",
+    "OPERATION_MODE",
+    "PLACEMENT",
+    "HIERARCHY",
+    "SIGNAL_TYPE",
+}
 ORDINAL_WORDS = {
     "first": "1",
     "second": "2",
@@ -106,6 +131,20 @@ def _find_trailing_variant(description) -> tuple[list[str], list[str]]:
     return [], []
 
 
+def _find_structural_roles(normalized: str) -> list[str]:
+    words = normalized.split()
+    roles = set()
+    if "subassembly" in words or (
+        "sub" in words and ({"assembly", "assy"} & set(words))
+    ):
+        roles.add("subassembly")
+    for word in words:
+        role = STRUCTURAL_ROLE_MAP.get(word)
+        if role and not (role == "assembly" and "subassembly" in roles):
+            roles.add(role)
+    return sorted(roles)
+
+
 def extract_variant_attributes(description) -> dict[str, list[str]]:
     raw = "" if description is None else str(description).lower()
     normalized = normalize_description(description)
@@ -123,6 +162,10 @@ def extract_variant_attributes(description) -> dict[str, list[str]]:
         "CONNECTIVITY": sorted(words & CONNECTIVITY),
         "ENVIRONMENT": sorted(words & ENVIRONMENT),
         "OPERATION_MODE": sorted(words & OPERATION_MODE),
+        "PLACEMENT": sorted(words & PLACEMENT),
+        "HIERARCHY": sorted(words & HIERARCHY),
+        "SIGNAL_TYPE": sorted(words & SIGNAL_TYPE),
+        "STRUCTURAL_ROLE": _find_structural_roles(normalized),
         "TRAILING_VARIANT_SUFFIX": trailing_suffix,
         "TRAILING_VARIANT_BASE": trailing_base,
     }
@@ -166,4 +209,18 @@ def find_one_sided_qualifier(attributes_a: dict, attributes_b: dict) -> dict | N
                 "values_a": sorted(values_a),
                 "values_b": sorted(values_b),
             }
+    return None
+
+
+def find_structural_role_mismatch(attributes_a: dict, attributes_b: dict) -> dict | None:
+    """Return softer evidence when assembly roles differ between descriptions."""
+    values_a = set(attributes_a.get("STRUCTURAL_ROLE", []))
+    values_b = set(attributes_b.get("STRUCTURAL_ROLE", []))
+    if values_a and values_b and values_a != values_b:
+        return {
+            "group": "STRUCTURAL_ROLE",
+            "label": "structural role",
+            "values_a": sorted(values_a),
+            "values_b": sorted(values_b),
+        }
     return None

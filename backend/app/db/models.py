@@ -21,12 +21,14 @@ class DuplicateScan(Base):
     total_records = Column(Integer, default=0)
     total_candidates = Column(Integer, default=0)
     warnings_count = Column(Integer, default=0)
+    rejections_count = Column(Integer, default=0)
     scan_mode = Column(String(60), default="SAME_SITE_DUPLICATE", nullable=False)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at = Column(DateTime(timezone=True))
     model_version = Column(String(50), nullable=False)
     candidates = relationship("DuplicateCandidate", cascade="all, delete-orphan")
     warnings = relationship("ScanWarning", cascade="all, delete-orphan")
+    rejections = relationship("RuleExclusionAudit", cascade="all, delete-orphan")
 
 
 class DuplicateCandidate(Base):
@@ -88,4 +90,24 @@ class ScanWarning(Base):
     warning_type = Column(String(80), nullable=False)
     message = Column(Text, nullable=False)
     record_reference = Column(String(200))
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RuleExclusionAudit(Base):
+    __tablename__ = "rule_exclusion_audit"
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    contract_a = Column(String(100))
+    part_no_a = Column(String(200), nullable=False)
+    description_a = Column(Text, nullable=False)
+    contract_b = Column(String(100))
+    part_no_b = Column(String(200), nullable=False)
+    description_b = Column(Text, nullable=False)
+    similarity_score = Column(Float, nullable=False)
+    confidence_level = Column(String(20), nullable=False)
+    business_status = Column(String(80), nullable=False)
+    rule_decision = Column(String(50), nullable=False)
+    rejection_reason = Column(String(120), nullable=False)
+    critical_mismatches = Column(Text, default="[]")
+    explanation = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

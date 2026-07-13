@@ -155,7 +155,7 @@ Current controls:
 - Processing is local inside the backend.
 - No external AI API is called.
 - A SHA-256 file fingerprint can be calculated for traceability.
-- Only scan summaries, candidate pairs above threshold, scores, explanations, warnings, and review feedback are persisted.
+- Scan summaries, candidate pairs above threshold, below-threshold business-rule exclusions, scores, explanations, warnings, and review feedback are persisted. Ordinary low-similarity pairs are discarded.
 - Sensitive-pattern warnings are produced for values that look like emails, phone numbers, project/work-order references, or supplier/manufacturer references.
 
 This does not replace enterprise data governance. For real ERP deployment, the application should run inside the customer's controlled network or Kubernetes cluster with approved storage, logging, retention, access control, and audit policies.
@@ -255,7 +255,7 @@ The final score is converted into a confidence level:
 | 60 to 74 | LOW | Weak match; review only in discovery mode |
 | Below 60 | IGNORE | Not likely duplicate |
 
-Candidates below the user-selected threshold are not stored as scan results.
+Candidates below the user-selected threshold are not stored as normal scan results. Pairs deliberately excluded by deterministic business rules are retained separately in the rule-exclusion audit so reviewers can inspect the reason and mismatch evidence. Ordinary low-similarity pairs are not retained.
 
 ### Step 9: Explanation Generation
 
@@ -328,6 +328,7 @@ Main tables:
 - duplicate_candidate: pair-level result, descriptions, scores, matched fields, mismatched fields, explanation, recommended action, and review status.
 - duplicate_feedback: reviewer decision and comment.
 - scan_warning: validation, data-quality, privacy, and scan warnings.
+- rule_exclusion_audit: below-threshold pairs deliberately excluded by deterministic rules, with score, decision, mismatch evidence, and explanation.
 
 SQLite is acceptable for the local demo. For production-scale ERP deployment, PostgreSQL or another enterprise database should replace SQLite.
 

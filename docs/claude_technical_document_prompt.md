@@ -235,7 +235,7 @@ Explain this flow from CSV upload to final review result:
 10. Each pair is scored using the hybrid AI/NLP model.
 11. Final score is classified into confidence bands.
 12. Explanation is generated.
-13. Candidates above threshold are saved.
+13. Candidates above threshold are saved as review results; below-threshold business-rule exclusions are saved separately for audit transparency.
 14. Warnings are saved.
 15. User reviews candidates.
 16. User marks each candidate as Duplicate, Not Duplicate, or Unsure.
@@ -390,7 +390,7 @@ Current controls:
 - No external AI API.
 - Raw uploaded CSV is not persisted.
 - SHA-256 file fingerprint can be calculated.
-- Only scan summaries, candidates, warnings, scores, explanations, and feedback are persisted.
+- Scan summaries, candidates, below-threshold business-rule exclusions, warnings, scores, explanations, and feedback are persisted. Ordinary low-similarity pairs are discarded.
 - Sensitive-pattern warnings can detect email-like values, phone-like values, project/work-order references, and supplier/manufacturer references.
 - Upload-size and row-count limits exist.
 
@@ -677,6 +677,25 @@ Document these tables:
 - warning_type
 - message
 - record_reference
+- created_at
+
+### rule_exclusion_audit
+
+- id
+- scan_id
+- contract_a
+- part_no_a
+- description_a
+- contract_b
+- part_no_b
+- description_b
+- similarity_score
+- confidence_level
+- business_status
+- rule_decision
+- rejection_reason
+- critical_mismatches
+- explanation
 - created_at
 
 ---

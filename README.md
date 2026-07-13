@@ -13,6 +13,7 @@ The current version uses IFS-compatible CSV field names. It has **no direct IFS 
 - Configurable business-field blocking and threshold
 - TF-IDF character n-grams, RapidFuzz, part-number, technical-token, and business-rule scoring
 - Confidence, explanations, matched/mismatched fields, and recommended action
+- Separate rule-exclusion audit export showing below-threshold pairs removed by deterministic business rules
 - Persistent review feedback and comments
 - Result export, diagnostics, warnings, and synthetic load tests
 - Docker Compose and Kubernetes-ready examples

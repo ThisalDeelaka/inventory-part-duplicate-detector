@@ -13,13 +13,14 @@ When enabled:
 - No external AI, LLM, or paid model API is called.
 - A SHA-256 fingerprint is calculated so the scanned file can be identified without storing it.
 - Validation checks for possible sensitive patterns such as email-like values, phone-like values, project/work-order references, and supplier/vendor/manufacturer references.
-- Scan results persist only candidate pairs, scores, explanations, warnings, and review feedback.
+- Scan results persist candidate pairs above threshold and business-rule exclusions below threshold, including their scores, deterministic explanations, and mismatch evidence. Ordinary low-similarity pairs are not persisted.
 
 ## What Is Stored
 
 - Scan summary
 - Selected fields and threshold
 - Candidate pairs above threshold
+- Pairs excluded specifically by deterministic business rules, retained for audit transparency
 - Similarity scores and explanations
 - Data-quality and sensitive-pattern warnings
 - Human review feedback

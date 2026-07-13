@@ -12,7 +12,12 @@ from app.engine.similarity_model import (
     calculate_technical_token_score,
     calculate_tfidf_similarity,
 )
-from app.engine.variant_extractor import extract_variant_attributes, find_critical_mismatches, find_one_sided_qualifier
+from app.engine.variant_extractor import (
+    extract_variant_attributes,
+    find_critical_mismatches,
+    find_one_sided_qualifier,
+    find_structural_role_mismatch,
+)
 
 
 def confidence_for(score):
@@ -116,6 +121,7 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
 
     matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
     critical_mismatches = find_critical_mismatches(attributes_a, attributes_b)
+    structural_role_mismatch = find_structural_role_mismatch(attributes_a, attributes_b)
     if critical_mismatches:
         mismatch = critical_mismatches[0]
         score = 55.0
@@ -182,6 +188,7 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
     business_status = business_status_for(final)
     generic_warning = False
     context_warning = False
+    reported_mismatches = []
 
     if has_generic_description(desc_a, desc_b):
         generic_warning = True
@@ -202,6 +209,20 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
         rejection_reason = "APPLICATION_CONTEXT_MISMATCH"
         business_status = "POSSIBLE_DUPLICATE_REVIEW"
 
+    if structural_role_mismatch:
+        left = ", ".join(structural_role_mismatch["values_a"])
+        right = ", ".join(structural_role_mismatch["values_b"])
+        final = min(final, 85.0)
+        explanation = (
+            f"{explanation} Different structural role detected: {left} vs {right}. "
+            "Verify manually before treating these records as duplicates."
+        )
+        rule_decision = "DOWNGRADE"
+        rejection_reason = "STRUCTURAL_ROLE_MISMATCH"
+        if not generic_warning:
+            business_status = "POSSIBLE_DUPLICATE_REVIEW"
+        reported_mismatches.append(structural_role_mismatch)
+
     final = round(final, 2)
     confidence = confidence_for(final)
     return {
@@ -220,7 +241,7 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
         "rule_decision": rule_decision,
         "rejection_reason": rejection_reason,
         "scan_mode": scan_mode,
-        "critical_mismatches": [],
+        "critical_mismatches": reported_mismatches,
         "variant_attributes_a": attributes_a,
         "variant_attributes_b": attributes_b,
         **_visibility_payload(record_a, record_b, generic_warning, context_warning),

@@ -17,7 +17,7 @@ The backend separates transport, orchestration, scoring, repositories, and persi
 
 ## Data flow
 
-The API validates required columns and hands scan execution to `ScanRunner`. `ScanRunner` records warnings, removes unusable empty-description rows, blocks records using selected business fields or description tokens, scores unique pairs, and persists candidates above the threshold through repository classes. Review feedback updates the candidate and appends an immutable feedback record.
+The API validates required columns and hands scan execution to `ScanRunner`. `ScanRunner` records warnings, removes unusable empty-description rows, blocks records using selected business fields or description tokens, and scores unique pairs. Candidates above the threshold are persisted as review results. Below-threshold pairs deliberately excluded by a deterministic business rule are persisted separately as rule-exclusion audit evidence; ordinary low-similarity pairs are discarded. Review feedback updates the candidate and appends an immutable feedback record.
 
 ## Reliability and uncertainty
 

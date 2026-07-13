@@ -170,6 +170,9 @@ def test_mutually_exclusive_qualifiers_are_not_duplicates():
         ("Wired User Interface", "Wireless User Interface", "connectivity differs"),
         ("Indoor Fan Unit", "Outdoor Fan Unit", "environment differs"),
         ("Manual Control Valve", "Automatic Control Valve", "operation mode differs"),
+        ("Internal Sensor", "External Sensor", "placement differs"),
+        ("Primary Pump", "Secondary Pump", "hierarchy differs"),
+        ("Analog Input", "Digital Input", "signal type differs"),
     ]
     for left, right, explanation in cases:
         result = score_candidate(rec("A", left), rec("B", right), ["CONTRACT", "UNIT_MEAS"])
@@ -216,6 +219,45 @@ def test_reported_false_positive_pairs_remain_below_duplicate_confidence():
     assert base_variant["final_score"] < 75
     assert base_variant["rejection_reason"] == "ENVIRONMENT_UNSPECIFIED"
     assert base_variant["generic_description_warning"] is True
+
+
+def test_structural_role_differences_are_visible_review_candidates():
+    cases = [
+        ("SJ COMP PART1", "SJ TOP PART1", "component", "top"),
+        ("AM SC PART Top part", "AM SC PART comp part", "top", "component"),
+        ("TOP PART", "COMPONENT PART", "top", "component"),
+    ]
+    for left, right, role_a, role_b in cases:
+        result = score_candidate(rec(left, left), rec(right, right), ["CONTRACT", "UNIT_MEAS"])
+        assert result["business_status"] in {"POSSIBLE_DUPLICATE_REVIEW", "INSUFFICIENT_DATA"}
+        assert result["business_status"] != "LIKELY_DUPLICATE"
+        assert result["rule_decision"] == "DOWNGRADE"
+        assert result["rejection_reason"] == "STRUCTURAL_ROLE_MISMATCH"
+        assert result["final_score"] < 90
+        assert result["critical_mismatches"][0]["group"] == "STRUCTURAL_ROLE"
+        assert result["critical_mismatches"][0]["values_a"] == [role_a]
+        assert result["critical_mismatches"][0]["values_b"] == [role_b]
+        assert "Different structural role detected" in result["explanation"]
+
+
+def test_known_true_positive_families_are_not_overcorrected():
+    likely_cases = [
+        ("RPSMD1", "RPSMD1", "RPSMD2", "RPSMD1"),
+        ("KETTLE", "Singer Kettles", "KETTLES", "Singer Kettles"),
+        ("AP-BRG-FR-22", "FRANCIS TURBINE LOWER BEARING", "CB-BRG-FR-22", "Francis Turbine Lower Bearing"),
+    ]
+    for part_a, description_a, part_b, description_b in likely_cases:
+        result = score_candidate(rec(part_a, description_a), rec(part_b, description_b), ["CONTRACT", "UNIT_MEAS"])
+        assert result["business_status"] == "LIKELY_DUPLICATE"
+        assert result["confidence_level"] == "HIGH"
+
+    fan_blade = score_candidate(
+        rec("SP-FAN BLADE", "fan blade"),
+        rec("SH- FAN BLADE", "fan bladeSH- FAN BLADE"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+    assert fan_blade["final_score"] >= 75
+    assert fan_blade["rule_decision"] == "ALLOW"
 
 
 def test_application_context_mismatch_warns_without_rejecting():

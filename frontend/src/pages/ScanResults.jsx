@@ -209,6 +209,7 @@ export default function ScanResults() {
         </div>
         <div className="actions">
           <Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
+          <button className="secondary" onClick={() => api.download(`/api/scans/${id}/rejections/export`, `scan-${id}-rule-exclusions.csv`)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
           <button onClick={() => api.download(`/api/scans/${id}/export`, `scan-${id}-candidates.csv`)}>Export CSV</button>
         </div>
       </header>
