@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,3 +58,17 @@ class CandidateResponse(BaseModel):
     review_status: str
     reviewed_by: str | None
     reviewed_at: datetime | None
+
+
+class MappingProfileColumn(BaseModel):
+    source_column: str
+    canonical_field: str | None = None
+    match_type: Literal["exact", "display", "alias", "profile", "manual", "unmapped"] = "manual"
+    normalized_source: str | None = None
+
+
+class MappingProfileCreate(BaseModel):
+    profile_name: str = Field(default="CSV mapping profile")
+    header_signature: str
+    source_columns: list[str] = Field(default_factory=list)
+    column_mapping: list[MappingProfileColumn] = Field(default_factory=list)

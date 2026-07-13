@@ -46,7 +46,11 @@ def detect_sensitive_patterns(df: pd.DataFrame) -> list[dict]:
         ("POSSIBLE_SUPPLIER_REFERENCE", SUPPLIER_RE, "supplier/vendor/manufacturer references"),
     ]
 
-    text_columns = [column for column in df.columns if df[column].dtype == object]
+    text_columns = [
+        column
+        for column in df.columns
+        if pd.api.types.is_object_dtype(df[column]) or pd.api.types.is_string_dtype(df[column])
+    ]
     for warning_type, pattern, label in checks:
         matches = 0
         columns = set()

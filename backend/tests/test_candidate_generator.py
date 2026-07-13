@@ -17,6 +17,18 @@ def test_same_site_and_uom_grouping():
     assert set(pairs[0]["matched_fields"]) == {"CONTRACT", "UNIT_MEAS"}
 
 
+def test_primary_blocking_is_case_insensitive_for_selected_fields():
+    df = pd.DataFrame([
+        {"PART_NO": "KM-FM", "DESCRIPTION": "KM Fan Module", "CONTRACT": "K-MRO", "UNIT_MEAS": "pcs"},
+        {"PART_NO": "KM/FANMODULE", "DESCRIPTION": "KM Fan Module", "CONTRACT": "K-MRO", "UNIT_MEAS": "PCS"},
+    ])
+
+    pairs = generate_candidate_pairs(df, ["CONTRACT", "UNIT_MEAS"])
+
+    assert len(pairs) == 1
+    assert {pairs[0]["record_a"]["PART_NO"], pairs[0]["record_b"]["PART_NO"]} == {"KM-FM", "KM/FANMODULE"}
+
+
 def test_missing_field_warns_without_crash():
     pairs = generate_candidate_pairs(frame(), ["MISSING"])
     assert pairs
@@ -63,3 +75,33 @@ def test_domain_synonym_pair_is_generated_when_selected_fields_match():
     assert len(pairs) == 1
     assert pairs[0]["record_a"]["PART_NO"] == "DEC CO1"
     assert pairs[0]["record_b"]["PART_NO"] == "DEC C01"
+
+
+def test_secondary_root_blocking_recovers_variant_part_numbers():
+    df = pd.DataFrame([
+        {"PART_NO": "KM-FM", "DESCRIPTION": "KM Fan Module", "CONTRACT": "SITE-A", "UNIT_MEAS": "EA"},
+        {"PART_NO": "KM/FANMODULE", "DESCRIPTION": "KM Fan Module", "CONTRACT": "SITE-B", "UNIT_MEAS": "EA"},
+    ])
+
+    result = generate_candidate_pairs(df, [], debug_mode=True)
+
+    assert len(result["pairs"]) == 1
+    assert result["diagnostics"]["candidate_pair_count"] == 1
+    assert any(row["block_sources"] for row in result["diagnostics"]["rows"])
+
+
+def test_ranked_quota_keeps_pairs_from_a_small_block_when_large_block_exceeds_cap():
+    large_block = [
+        {"PART_NO": f"LARGE-{index}", "DESCRIPTION": f"large item {index}", "CONTRACT": "LARGE", "UNIT_MEAS": "PCS"}
+        for index in range(201)
+    ]
+    small_block = [
+        {"PART_NO": f"SMALL-{index}", "DESCRIPTION": f"small item {index}", "CONTRACT": "SMALL", "UNIT_MEAS": "PCS"}
+        for index in range(4)
+    ]
+
+    pairs = generate_candidate_pairs(pd.DataFrame(large_block + small_block), ["CONTRACT", "UNIT_MEAS"])
+
+    small_pairs = [pair for pair in pairs if pair["record_a"]["CONTRACT"] == "SMALL"]
+    assert len(pairs) == 20_000
+    assert len(small_pairs) >= 5
