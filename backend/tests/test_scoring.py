@@ -69,6 +69,34 @@ def test_related_but_different_variants_are_not_duplicates():
         assert explanation in result["explanation"]
 
 
+def test_left_and_right_side_abbreviations_are_critical_mismatches():
+    result = score_candidate(
+        rec("FRONT-LS-SHOCK", "FRONT L/S SHOCK"),
+        rec("FRONT-RS-SHOCK", "FRONT R/S SHOCK"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["business_status"] == "RELATED_BUT_NOT_DUPLICATE"
+    assert result["final_score"] <= 55
+    assert any(
+        mismatch["group"] == "SIDE"
+        and mismatch["values_a"] == ["front", "left"]
+        and mismatch["values_b"] == ["front", "right"]
+        for mismatch in result["critical_mismatches"]
+    )
+
+
+def test_same_side_abbreviations_remain_likely_duplicates():
+    result = score_candidate(
+        rec("FRONT-LS-SHOCK-01", "FRONT L/S SHOCK"),
+        rec("FRONT-LS-SHOCK-02", "FRONT L/S SHOCK"),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+
+    assert result["business_status"] == "LIKELY_DUPLICATE"
+    assert result["critical_mismatches"] == []
+
+
 def test_hsn_sac_mismatch_is_data_conflict():
     left = {**rec("A", "SS Pipe"), "HSN_SAC_CODE": "1001"}
     right = {**rec("B", "Stainless Steel Pipe"), "HSN_SAC_CODE": "2002"}
