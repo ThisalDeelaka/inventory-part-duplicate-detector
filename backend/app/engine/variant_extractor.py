@@ -15,11 +15,7 @@ SIZE_PHRASES = {
     "extra large": "extra large",
 }
 SENSOR_TYPE = {"temperature", "pressure", "flow", "level"}
-SIDE = {"left", "right", "front", "rear", "back"}
-SIDE_ALIASES = {
-    "left": r"\b(?:l\s*/\s*s|lh|left)\b",
-    "right": r"\b(?:r\s*/\s*s|rh|right)\b",
-}
+SIDE = {"left", "right", "front", "rear"}
 
 VARIANT_GROUP_LABELS = {
     "FILTER_FUNCTION": "critical function",
@@ -76,14 +72,6 @@ def _find_dimensions(raw: str, normalized: str) -> list[str]:
     return sorted(values)
 
 
-def _find_side(raw: str, normalized: str) -> list[str]:
-    values = _words(normalized) & SIDE
-    for side, pattern in SIDE_ALIASES.items():
-        if re.search(pattern, raw, flags=re.IGNORECASE):
-            values.add(side)
-    return sorted(values)
-
-
 def extract_variant_attributes(description) -> dict[str, list[str]]:
     raw = "" if description is None else str(description).lower()
     normalized = normalize_description(description)
@@ -96,7 +84,7 @@ def extract_variant_attributes(description) -> dict[str, list[str]]:
         "ELECTRICAL_RATING": _find_electrical(raw, normalized),
         "DIMENSION": _find_dimensions(raw, normalized),
         "SENSOR_TYPE": sorted(words & SENSOR_TYPE),
-        "SIDE": _find_side(raw, normalized),
+        "SIDE": sorted(words & SIDE),
     }
 
 
