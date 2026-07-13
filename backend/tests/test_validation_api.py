@@ -5,7 +5,6 @@ from app.services.export_service import sanitize_csv_cell
 
 
 CSV = b"PART_NO,DESCRIPTION,CONTRACT,UNIT_MEAS\nA,MCB30A,S1,PCS\nB,MCB 30 A,S1,PCS\n"
-RENAMED_CSV = b"Part No,Part Description in Use,Site,Inventory UoM\nA,MCB30A,S1,PCS\nB,MCB 30 A,S1,PCS\n"
 
 
 def test_validation_service_reports_missing_required(client):
@@ -19,62 +18,6 @@ def test_health_and_scan_upload(client):
     response = client.post("/api/scans/upload", files={"file": ("parts.csv", CSV, "text/csv")}, data={"selected_fields":'["CONTRACT","UNIT_MEAS"]',"threshold":"60","scan_name":"Test"})
     assert response.status_code == 200
     assert response.json()["status"] == "COMPLETED"
-
-
-def test_upload_accepts_erp_style_column_names(client):
-    response = client.post(
-        "/api/scans/validate-only",
-        files={"file": ("renamed.csv", RENAMED_CSV, "text/csv")},
-        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]'},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["valid"] is True
-    assert body["missing_required_columns"] == []
-    mapped = {row["canonical_field"] for row in body["column_mapping"] if row["canonical_field"]}
-    assert {"PART_NO", "DESCRIPTION", "CONTRACT", "UNIT_MEAS"}.issubset(mapped)
-
-    upload = client.post(
-        "/api/scans/upload",
-        files={"file": ("renamed.csv", RENAMED_CSV, "text/csv")},
-        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "60", "scan_name": "Renamed"},
-    )
-    assert upload.status_code == 200
-    assert upload.json()["status"] == "COMPLETED"
-
-
-def test_mapping_profile_is_reused_on_repeat_upload(client):
-    first = client.post(
-        "/api/scans/validate-only",
-        files={"file": ("renamed.csv", RENAMED_CSV, "text/csv")},
-        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]'},
-    )
-    assert first.status_code == 200
-    body = first.json()
-    assert body["profile"] is None
-
-    save = client.post(
-        "/api/scans/mapping-profiles",
-        json={
-            "profile_name": "Renamed ERP export",
-            "header_signature": body["header_signature"],
-            "source_columns": [row["source_column"] for row in body["column_mapping"]],
-            "column_mapping": body["column_mapping"],
-        },
-    )
-    assert save.status_code == 200
-    assert save.json()["profile_name"] == "Renamed ERP export"
-
-    second = client.post(
-        "/api/scans/validate-only",
-        files={"file": ("renamed.csv", RENAMED_CSV, "text/csv")},
-        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]'},
-    )
-    assert second.status_code == 200
-    body = second.json()
-    assert body["profile"] is not None
-    assert body["profile_applied"] is True
-    assert body["profile"]["usage_count"] >= 2
 
 
 def test_feedback_endpoint(client, db):

@@ -29,5 +29,5 @@ def generate_synthetic_dataframe(record_count, duplicate_rate, variation_rate):
 def run_load_test(db, request):
     df = generate_synthetic_dataframe(request.record_count, request.duplicate_rate, request.variation_rate)
     started = time.perf_counter()
-    scan, pair_count, _diagnostics = run_scan(db, df, f"Synthetic load test {request.record_count}", ["CONTRACT", "UNIT_MEAS", "PRIME_COMMODITY"], request.threshold, "SYNTHETIC")
+    scan, pair_count = run_scan(db, df, f"Synthetic load test {request.record_count}", ["CONTRACT", "UNIT_MEAS", "PRIME_COMMODITY"], request.threshold, "SYNTHETIC")
     return {"scan_id": scan.id, "record_count": request.record_count, "candidate_pair_count": pair_count, "processing_time_seconds": round(time.perf_counter() - started, 3), "candidates_found": scan.total_candidates, "warnings_count": scan.warnings_count}

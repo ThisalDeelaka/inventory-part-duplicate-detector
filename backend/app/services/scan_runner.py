@@ -17,7 +17,7 @@ class ScanRunner:
         self.candidates = CandidateRepository(db)
         self.warnings = WarningRepository(db)
 
-    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE", debug_mode: bool = False):
+    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
         scan_mode = normalize_scan_mode(scan_mode)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
@@ -29,31 +29,12 @@ class ScanRunner:
                 self.warnings.save(scan.id, warning)
 
             usable = df[df["DESCRIPTION"].fillna("").str.strip().ne("")].copy()
-            generated = generate_candidate_pairs(usable, selected_fields, debug_mode=debug_mode)
-            if debug_mode:
-                pairs = generated["pairs"]
-                diagnostics = generated["diagnostics"]
-            else:
-                pairs = generated
-                diagnostics = None
+            pairs = generate_candidate_pairs(usable, selected_fields)
 
             existing_warnings = {(w["warning_type"], w["message"]) for w in validation["warnings"]}
             generated_warnings = {(w["warning_type"], w["message"]) for pair in pairs for w in pair["warnings"]}
             for warning_type, message in generated_warnings - existing_warnings:
                 self.warnings.save(scan.id, {"warning_type": warning_type, "message": message})
-
-            if debug_mode and diagnostics:
-                self.warnings.save(
-                    scan.id,
-                    {
-                        "warning_type": "BLOCKING_DIAGNOSTIC",
-                        "message": (
-                            f"Candidate diagnostics: {diagnostics['candidate_pair_count']} pair(s) from {diagnostics['row_count']} row(s); "
-                            f"primary fields: {', '.join(diagnostics['primary_blocking_fields']) or 'none'}; "
-                            f"pair limit reached: {diagnostics['pair_limit_reached']}"
-                        ),
-                    },
-                )
 
             candidates_found = 0
             for pair in pairs:
@@ -70,7 +51,7 @@ class ScanRunner:
                 total_records=len(df),
                 total_candidates=candidates_found,
                 warnings_count=warning_count,
-            ), len(pairs), diagnostics
+            ), len(pairs)
         except Exception:
             self.db.rollback()
             self.scans.update_status(scan, "FAILED", total_records=len(df))

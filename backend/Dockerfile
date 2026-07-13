@@ -1,9 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
-ENV PIP_DEFAULT_TIMEOUT=100 \
-	PIP_RETRIES=10
-RUN pip install --no-cache-dir --default-timeout 100 --retries 10 -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

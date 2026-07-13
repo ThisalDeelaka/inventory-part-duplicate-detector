@@ -89,17 +89,3 @@ class ScanWarning(Base):
     message = Column(Text, nullable=False)
     record_reference = Column(String(200))
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-
-
-class ColumnMappingProfile(Base):
-    __tablename__ = "column_mapping_profile"
-    id = Column(Integer, primary_key=True)
-    profile_name = Column(String(200), nullable=False)
-    header_signature = Column(String(500), nullable=False, unique=True, index=True)
-    source_columns = Column(Text, nullable=False, default="[]")
-    column_mapping = Column(Text, nullable=False, default="[]")
-    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-    last_used_at = Column(DateTime(timezone=True))
-    usage_count = Column(Integer, default=0, nullable=False)
-    is_active = Column(String(10), default="true", nullable=False)
