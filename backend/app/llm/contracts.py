@@ -63,10 +63,22 @@ class ColumnSuggestionResponse(StrictContract):
     requires_confirmation: Literal[True]
 
 
+class DifficultValueFieldContext(str, Enum):
+    PART_NO = "PART_NO"
+    DESCRIPTION = "DESCRIPTION"
+
+
 class DifficultValueRequest(StrictContract):
     raw_value: RawText
-    field_context: ShortText
+    field_context: DifficultValueFieldContext
     item_family_context: ShortText | None = None
+
+    @field_validator("raw_value")
+    @classmethod
+    def raw_value_must_be_useful(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("raw_value must not be blank")
+        return value
 
 
 class DifficultValueResponse(StrictContract):

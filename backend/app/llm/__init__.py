@@ -12,6 +12,7 @@ from app.llm.contracts import (
     DeterministicConfidence,
     DeterministicRuleDecision,
     DeterministicStatus,
+    DifficultValueFieldContext,
     DifficultValueRequest,
     DifficultValueResponse,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "DeterministicConfidence",
     "DeterministicRuleDecision",
     "DeterministicStatus",
+    "DifficultValueFieldContext",
     "DifficultValueRequest",
     "DifficultValueResponse",
     "DisabledLLMProvider",

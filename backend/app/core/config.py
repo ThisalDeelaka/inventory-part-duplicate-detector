@@ -58,6 +58,27 @@ class Settings(BaseModel):
     llm_timeout_seconds: float = Field(
         default_factory=lambda: os.getenv("LLM_TIMEOUT_SECONDS", "20"), gt=0, le=120
     )
+    llm_cache_enabled: bool = Field(
+        default_factory=lambda: os.getenv("LLM_CACHE_ENABLED", "true")
+    )
+    llm_cache_max_entries: int = Field(
+        default_factory=lambda: os.getenv("LLM_CACHE_MAX_ENTRIES", "256"),
+        gt=0,
+        le=4096,
+    )
+    llm_cache_ttl_seconds: float = Field(
+        default_factory=lambda: os.getenv("LLM_CACHE_TTL_SECONDS", "3600"),
+        gt=0,
+        le=86400,
+    )
+    llm_audit_enabled: bool = Field(
+        default_factory=lambda: os.getenv("LLM_AUDIT_ENABLED", "true")
+    )
+    llm_audit_max_entries: int = Field(
+        default_factory=lambda: os.getenv("LLM_AUDIT_MAX_ENTRIES", "1000"),
+        gt=0,
+        le=10000,
+    )
 
 
 settings = Settings()

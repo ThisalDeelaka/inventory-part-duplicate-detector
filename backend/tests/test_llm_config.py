@@ -13,6 +13,11 @@ LLM_ENVIRONMENT_VARIABLES = (
     "GROQ_API_KEY",
     "GROQ_MODEL",
     "LLM_TIMEOUT_SECONDS",
+    "LLM_CACHE_ENABLED",
+    "LLM_CACHE_MAX_ENTRIES",
+    "LLM_CACHE_TTL_SECONDS",
+    "LLM_AUDIT_ENABLED",
+    "LLM_AUDIT_MAX_ENTRIES",
 )
 LEGACY_ENVIRONMENT_VARIABLES = (
     "MODEL_VERSION",
@@ -40,6 +45,11 @@ def test_llm_settings_defaults_are_disabled_and_secret_safe():
     assert configuration.groq_model == "llama-3.3-70b-versatile"
     assert configuration.llm_timeout_seconds == 20
     assert configuration.groq_api_key.get_secret_value() == ""
+    assert configuration.llm_cache_enabled is True
+    assert configuration.llm_cache_max_entries == 256
+    assert configuration.llm_cache_ttl_seconds == 3600
+    assert configuration.llm_audit_enabled is True
+    assert configuration.llm_audit_max_entries == 1000
 
 
 def test_legacy_settings_defaults_remain_compatible():
@@ -143,3 +153,43 @@ def test_unsupported_provider_is_rejected():
 def test_invalid_timeout_is_rejected(timeout):
     with pytest.raises(ValidationError):
         Settings(llm_timeout_seconds=timeout)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("llm_cache_max_entries", 0),
+        ("llm_cache_max_entries", 4097),
+        ("llm_cache_ttl_seconds", 0),
+        ("llm_cache_ttl_seconds", 86401),
+        ("llm_audit_max_entries", 0),
+        ("llm_audit_max_entries", 10001),
+    ],
+)
+def test_invalid_cache_and_audit_limits_are_rejected(field, value):
+    with pytest.raises(ValidationError):
+        Settings(**{field: value})
+
+
+def test_cache_and_audit_environment_overrides_are_isolated(monkeypatch):
+    monkeypatch.setenv("LLM_CACHE_ENABLED", "false")
+    monkeypatch.setenv("LLM_CACHE_MAX_ENTRIES", "12")
+    monkeypatch.setenv("LLM_CACHE_TTL_SECONDS", "45")
+    monkeypatch.setenv("LLM_AUDIT_ENABLED", "false")
+    monkeypatch.setenv("LLM_AUDIT_MAX_ENTRIES", "34")
+
+    overridden = Settings()
+    assert overridden.llm_cache_enabled is False
+    assert overridden.llm_cache_max_entries == 12
+    assert overridden.llm_cache_ttl_seconds == 45
+    assert overridden.llm_audit_enabled is False
+    assert overridden.llm_audit_max_entries == 34
+
+    for name in LLM_ENVIRONMENT_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    reset = Settings()
+    assert reset.llm_cache_enabled is True
+    assert reset.llm_cache_max_entries == 256
+    assert reset.llm_cache_ttl_seconds == 3600
+    assert reset.llm_audit_enabled is True
+    assert reset.llm_audit_max_entries == 1000

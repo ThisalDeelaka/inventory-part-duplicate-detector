@@ -8,9 +8,11 @@ from app.llm.contracts import (
     ColumnSuggestionRequest,
     ColumnSuggestionResponse,
     CriticalMismatchEvidence,
+    DifficultValueFieldContext,
     DifficultValueRequest,
     DifficultValueResponse,
 )
+from app.llm.service_contracts import LLMCapability, LLMExecutionMetadata
 
 
 def _column_response(**overrides):
@@ -122,6 +124,41 @@ def test_difficult_value_item_family_context_is_genuinely_optional(context):
             field_context="DESCRIPTION",
             unexpected="not allowed",
         )
+
+
+@pytest.mark.parametrize(
+    "context",
+    ["ACCOUNTING_GROUP", "UNIT_MEAS", "OTHER", "arbitrary free text"],
+)
+def test_difficult_value_rejects_unsupported_contexts(context):
+    with pytest.raises(ValidationError):
+        DifficultValueRequest(raw_value="MTR", field_context=context)
+
+
+def test_difficult_value_requires_nonblank_raw_text_without_rewriting_it():
+    with pytest.raises(ValidationError):
+        DifficultValueRequest(raw_value="   ", field_context="DESCRIPTION")
+
+    raw = "  MTR 10KW  "
+    request = DifficultValueRequest(
+        raw_value=raw, field_context=DifficultValueFieldContext.DESCRIPTION
+    )
+    assert request.raw_value == raw
+
+
+def test_execution_metadata_advisory_label_is_mandatory():
+    values = {
+        "capability": LLMCapability.COLUMN_SUGGESTION,
+        "provider": "groq",
+        "model": "model",
+        "prompt_version": "v1",
+        "cache_hit": False,
+        "latency_ms": 0,
+        "llm_used": True,
+    }
+    assert LLMExecutionMetadata(**values).advisory is True
+    with pytest.raises(ValidationError):
+        LLMExecutionMetadata(**values, advisory=False)
 
 
 def test_difficult_value_response_preserves_raw_value_and_bounds_collections():
