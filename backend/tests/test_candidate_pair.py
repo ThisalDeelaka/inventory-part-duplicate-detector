@@ -213,10 +213,15 @@ def test_legacy_adapter_matches_complete_direct_scoring_result(record_a, record_
     }
     candidate = CandidatePair.from_legacy_mapping(source)
 
-    assert LegacyDeterministicScoringEngine().score_candidate(
+    typed_result = LegacyDeterministicScoringEngine().score_candidate(
         candidate,
         selected_fields,
-    ) == score_candidate(record_a, record_b, selected_fields)
+    )
+    assert typed_result.to_legacy_dict() == score_candidate(
+        record_a,
+        record_b,
+        selected_fields,
+    )
 
 
 def test_generated_pair_round_trip_preserves_current_shape_and_missing_values():

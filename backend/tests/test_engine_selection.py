@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from app.contracts.candidates import CandidatePair
+from app.contracts.results import CandidateScoringResult
 from app.core.config import Settings, settings
 from app.db.models import (
     DuplicateCandidate,
@@ -100,7 +101,7 @@ def test_legacy_adapter_returns_complete_direct_scoring_result(record_a, record_
     assert adapter.score_candidate(
         candidate,
         selected_fields,
-    ) == score_candidate(
+    ).to_legacy_dict() == score_candidate(
         record_a,
         record_b,
         selected_fields,
@@ -112,16 +113,19 @@ def test_scan_selects_engine_once_and_scores_every_pair_through_it(db, monkeypat
         def __init__(self):
             self.calls = 0
             self.candidates = []
+            self.results = []
 
         def score_candidate(self, candidate, selected_fields, scan_mode):
             self.calls += 1
             self.candidates.append(candidate)
-            return score_candidate(
+            result = CandidateScoringResult.from_legacy_mapping(score_candidate(
                 candidate.record_a.to_legacy_dict(),
                 candidate.record_b.to_legacy_dict(),
                 selected_fields,
                 scan_mode,
-            )
+            ))
+            self.results.append(result)
+            return result
 
     spy = SpyEngine()
     selection_calls = 0
@@ -152,6 +156,10 @@ def test_scan_selects_engine_once_and_scores_every_pair_through_it(db, monkeypat
     assert spy.calls == pair_count
     assert len(spy.candidates) == pair_count
     assert all(isinstance(candidate, CandidatePair) for candidate in spy.candidates)
+    assert all(
+        isinstance(result, CandidateScoringResult)
+        for result in spy.results
+    )
     assert all(
         candidate.record_a.raw_attributes['CLIENT_SPECIFIC_FIELD']
         == 'preserved extra value'

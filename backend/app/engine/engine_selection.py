@@ -1,6 +1,7 @@
-from typing import Any, Protocol
+from typing import Protocol
 
 from app.contracts.candidates import CandidatePair
+from app.contracts.results import CandidateScoringResult
 from app.core.config import settings
 from app.engine.scoring import score_candidate
 
@@ -11,7 +12,7 @@ class CandidateScoringEngine(Protocol):
         candidate: CandidatePair,
         selected_fields: list[str],
         scan_mode: str = 'SAME_SITE_DUPLICATE',
-    ) -> dict[str, Any]: ...
+    ) -> CandidateScoringResult: ...
 
 
 class LegacyDeterministicScoringEngine:
@@ -20,12 +21,15 @@ class LegacyDeterministicScoringEngine:
         candidate: CandidatePair,
         selected_fields: list[str],
         scan_mode: str = 'SAME_SITE_DUPLICATE',
-    ) -> dict[str, Any]:
-        return score_candidate(
+    ) -> CandidateScoringResult:
+        legacy_result = score_candidate(
             candidate.record_a.to_legacy_dict(),
             candidate.record_b.to_legacy_dict(),
             selected_fields,
             scan_mode,
+        )
+        return CandidateScoringResult.from_legacy_mapping(
+            legacy_result
         )
 
 

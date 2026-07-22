@@ -45,11 +45,12 @@ class ScanRunner:
             for pair in pairs:
                 candidate = CandidatePair.from_legacy_mapping(pair)
                 result = scoring_engine.score_candidate(candidate, selected_fields, scan_mode)
-                if result["final_score"] >= threshold:
-                    self.candidates.save(scan.id, pair["record_a"], pair["record_b"], result)
+                legacy_result = result.to_legacy_dict()
+                if result.final_score >= threshold:
+                    self.candidates.save(scan.id, pair["record_a"], pair["record_b"], legacy_result)
                     candidates_found += 1
-                elif result["rule_decision"] != "ALLOW":
-                    self.rejections.save(scan.id, pair["record_a"], pair["record_b"], result)
+                elif result.rule_decision != "ALLOW":
+                    self.rejections.save(scan.id, pair["record_a"], pair["record_b"], legacy_result)
                     rejections_found += 1
 
             self.db.commit()
