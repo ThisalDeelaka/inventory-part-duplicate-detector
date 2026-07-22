@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from app.contracts.records import CanonicalRecord
 from app.core.config import Settings, settings
 from app.db.models import (
     DuplicateCandidate,
@@ -29,6 +30,7 @@ def _record(part_no: str, description: str, unit: str = 'PCS') -> dict[str, str]
         'CONTRACT': 'S1',
         'UNIT_MEAS': unit,
         'HSN_SAC_CODE': '1000',
+        'CLIENT_SPECIFIC_FIELD': 'preserved extra value',
     }
 
 
@@ -88,7 +90,11 @@ def test_legacy_adapter_returns_complete_direct_scoring_result(record_a, record_
     selected_fields = ['CONTRACT', 'UNIT_MEAS']
     adapter = LegacyDeterministicScoringEngine()
 
-    assert adapter.score_candidate(record_a, record_b, selected_fields) == score_candidate(
+    assert adapter.score_candidate(
+        CanonicalRecord.from_legacy_mapping(record_a),
+        CanonicalRecord.from_legacy_mapping(record_b),
+        selected_fields,
+    ) == score_candidate(
         record_a,
         record_b,
         selected_fields,
@@ -99,10 +105,17 @@ def test_scan_selects_engine_once_and_scores_every_pair_through_it(db, monkeypat
     class SpyEngine:
         def __init__(self):
             self.calls = 0
+            self.records = []
 
         def score_candidate(self, record_a, record_b, selected_fields, scan_mode):
             self.calls += 1
-            return score_candidate(record_a, record_b, selected_fields, scan_mode)
+            self.records.extend((record_a, record_b))
+            return score_candidate(
+                record_a.to_legacy_dict(),
+                record_b.to_legacy_dict(),
+                selected_fields,
+                scan_mode,
+            )
 
     spy = SpyEngine()
     selection_calls = 0
@@ -131,6 +144,11 @@ def test_scan_selects_engine_once_and_scores_every_pair_through_it(db, monkeypat
     assert pair_count == 3
     assert selection_calls == 1
     assert spy.calls == pair_count
+    assert all(isinstance(record, CanonicalRecord) for record in spy.records)
+    assert all(
+        record.raw_attributes['CLIENT_SPECIFIC_FIELD'] == 'preserved extra value'
+        for record in spy.records
+    )
 
 
 def test_redesigned_engine_request_fails_before_any_scan_side_effect(db, monkeypatch):
