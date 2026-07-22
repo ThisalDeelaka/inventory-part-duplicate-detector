@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import Score from '../components/Score'
 import CandidateLlmTools from '../components/CandidateLlmTools'
 import LlmStatus from '../components/LlmStatus'
+import { scanExportTargets } from '../utils/llmUi'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
   if (!items.length) {
@@ -166,6 +167,7 @@ function GroupView({ groups, openGroup, setOpenGroup }) {
 
 export default function ScanResults() {
   const { id } = useParams()
+  const exportTargets = scanExportTargets(id)
   const [scan, setScan] = useState(null)
   const [items, setItems] = useState([])
   const [groups, setGroups] = useState([])
@@ -213,9 +215,12 @@ export default function ScanResults() {
         <LlmStatus />
         <div className="actions">
           <Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
-          <button type="button" className="secondary" onClick={() => api.download(`/api/scans/${id}/rejections/export`, `scan-${id}-rule-exclusions.csv`)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
-          <button type="button" onClick={() => api.download(`/api/scans/${id}/export`, `scan-${id}-candidates.csv`)}>Export CSV</button>
+          <button type="button" className="secondary" onClick={() => api.download(exportTargets.exclusions.path, exportTargets.exclusions.filename)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
+          <button type="button" onClick={() => api.download(exportTargets.candidates.path, exportTargets.candidates.filename)}>Export CSV</button>
+          <button type="button" className="secondary" title="Does not call Groq. Exports only saved advisory or deterministic bypass status." onClick={() => api.download(exportTargets.exclusionsWithLlm.path, exportTargets.exclusionsWithLlm.filename)}>Rule exclusions with LLM status</button>
+          <button type="button" title="Does not call Groq. Exports only saved advisory or deterministic bypass status." onClick={() => api.download(exportTargets.candidatesWithLlm.path, exportTargets.candidatesWithLlm.filename)}>Export CSV with saved LLM advisories</button>
         </div>
+        <small className="export-note">Does not call Groq. Exports only saved advisory or deterministic bypass status.</small>
       </header>
 
       {error && <div className="error">{error}</div>}

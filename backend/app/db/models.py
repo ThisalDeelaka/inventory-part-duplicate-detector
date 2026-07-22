@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -71,6 +71,34 @@ class DuplicateCandidate(Base):
     reviewed_by = Column(String(100))
     reviewed_at = Column(DateTime(timezone=True))
     feedback = relationship("DuplicateFeedback", cascade="all, delete-orphan")
+    llm_advisory_snapshots = relationship("LlmAdvisorySnapshot", cascade="all, delete-orphan")
+
+
+class LlmAdvisorySnapshot(Base):
+    __tablename__ = "llm_advisory_snapshot"
+    __table_args__ = (
+        UniqueConstraint("candidate_id", "capability", name="uq_llm_snapshot_candidate_capability"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    candidate_id = Column(Integer, ForeignKey("duplicate_candidate.id"), nullable=False, index=True)
+    capability = Column(String(50), nullable=False)
+    state = Column(String(30), nullable=False)
+    llm_used = Column(Boolean, nullable=False, default=False)
+    cache_hit = Column(Boolean, nullable=False, default=False)
+    provider = Column(String(100))
+    model = Column(String(200))
+    prompt_version = Column(String(100))
+    assessment = Column(String(50))
+    confidence = Column(Float)
+    recommended_action = Column(String(80))
+    supporting_evidence = Column(Text)
+    conflicting_evidence = Column(Text)
+    bypass_reason = Column(String(200))
+    safe_error_category = Column(String(80))
+    deterministic_result_authoritative = Column(Boolean, nullable=False, default=True)
+    generated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class DuplicateFeedback(Base):

@@ -39,6 +39,11 @@ from app.llm.services import (
     DifficultValueInterpretationService,
     LLMStructuredOutputError,
 )
+from app.services.llm_snapshot_service import (
+    SnapshotPersistenceError,
+    persist_candidate_advisory_failure,
+    persist_candidate_advisory_result,
+)
 
 
 router = APIRouter(prefix="/api/llm", tags=["llm-assistance"])
@@ -196,6 +201,26 @@ async def candidate_advisory(
         **_service_kwargs(configuration, cache, audit, provider_factory)
     )
     try:
-        return await service.advise(candidate)
+        result = await service.advise(candidate)
+        persist_candidate_advisory_result(db, candidate.id, result)
+        return result
+    except SnapshotPersistenceError:
+        raise HTTPException(
+            500,
+            {
+                "category": "snapshot_persistence_failure",
+                "message": "LLM advisory could not be saved safely",
+            },
+        ) from None
     except Exception as exc:
+        try:
+            persist_candidate_advisory_failure(db, candidate.id, exc, configuration)
+        except SnapshotPersistenceError:
+            raise HTTPException(
+                500,
+                {
+                    "category": "snapshot_persistence_failure",
+                    "message": "LLM advisory outcome could not be saved safely",
+                },
+            ) from None
         raise _safe_http_error(exc) from None

@@ -15,6 +15,7 @@ import {
   isCurrentValidationToken,
   nextValidationToken,
   normalizeLlmError,
+  scanExportTargets,
 } from '../src/utils/llmUi.js'
 
 test('normalizes safe backend errors and rejects secret or raw payload text', () => {
@@ -57,6 +58,26 @@ test('candidate advisory request has a positive path ID and no body', () => {
     options: { method: 'POST' },
   })
   assert.equal(Object.hasOwn(request.options, 'body'), false)
+})
+
+test('scan export targets preserve deterministic downloads and add DB-only LLM-aware downloads', () => {
+  const targets = scanExportTargets(12)
+  assert.deepEqual(targets, {
+    candidates: { path: '/api/scans/12/export', filename: 'scan-12-candidates.csv' },
+    exclusions: { path: '/api/scans/12/rejections/export', filename: 'scan-12-rule-exclusions.csv' },
+    candidatesWithLlm: { path: '/api/scans/12/export-with-llm', filename: 'scan-12-candidates-with-llm.csv' },
+    exclusionsWithLlm: { path: '/api/scans/12/rejections/export-with-llm', filename: 'scan-12-rule-exclusions-with-llm.csv' },
+  })
+  for (const target of Object.values(targets)) {
+    assert.match(target.path, /^\/api\/scans\/12\//)
+    assert.doesNotMatch(target.path, /\/api\/llm\/|advisory|interpret|suggest/i)
+  }
+})
+
+test('scan export targets reject non-positive and invalid IDs', () => {
+  for (const invalidId of [0, -1, 'invalid', 1.5, null]) {
+    assert.throws(() => scanExportTargets(invalidId), /positive/)
+  }
 })
 
 test('state keys are stable and context-specific', () => {

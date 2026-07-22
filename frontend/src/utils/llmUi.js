@@ -90,6 +90,28 @@ export function candidateAdvisoryRequest(candidateId) {
   return { path: '/api/llm/candidates/' + id + '/advisory', options: { method: 'POST' } }
 }
 
+export function scanExportTargets(scanId) {
+  const id = assertPositiveCandidateId(scanId)
+  return {
+    candidates: {
+      path: `/api/scans/${id}/export`,
+      filename: `scan-${id}-candidates.csv`,
+    },
+    exclusions: {
+      path: `/api/scans/${id}/rejections/export`,
+      filename: `scan-${id}-rule-exclusions.csv`,
+    },
+    candidatesWithLlm: {
+      path: `/api/scans/${id}/export-with-llm`,
+      filename: `scan-${id}-candidates-with-llm.csv`,
+    },
+    exclusionsWithLlm: {
+      path: `/api/scans/${id}/rejections/export-with-llm`,
+      filename: `scan-${id}-rule-exclusions-with-llm.csv`,
+    },
+  }
+}
+
 export function columnSuggestionStateKey(sourceColumn) {
   return 'column:' + String(sourceColumn)
 }

@@ -5,9 +5,15 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.db.models import LlmAdvisorySnapshot
 from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
+from app.services.llm_export_service import (
+    candidate_snapshot_capability,
+    candidates_with_llm_to_csv,
+    rejections_with_llm_to_csv,
+)
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
@@ -164,4 +170,37 @@ def export_rejections(scan_id: int, db: Session = Depends(get_db)):
         rejections_to_csv(get_scan_rejections(db, scan_id)),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-rule-exclusions.csv"'},
+    )
+
+
+@router.get("/{scan_id}/export-with-llm")
+def export_with_llm(scan_id: int, db: Session = Depends(get_db)):
+    scan = get_scan(db, scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found")
+    candidates = get_scan_candidates(db, scan_id)
+    candidate_ids = [candidate.id for candidate in candidates]
+    snapshots = []
+    if candidate_ids:
+        snapshots = db.query(LlmAdvisorySnapshot).filter(
+            LlmAdvisorySnapshot.candidate_id.in_(candidate_ids),
+            LlmAdvisorySnapshot.capability == candidate_snapshot_capability(),
+        ).all()
+    snapshot_map = {snapshot.candidate_id: snapshot for snapshot in snapshots}
+    return Response(
+        candidates_with_llm_to_csv(candidates, snapshot_map),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-candidates-with-llm.csv"'},
+    )
+
+
+@router.get("/{scan_id}/rejections/export-with-llm")
+def export_rejections_with_llm(scan_id: int, db: Session = Depends(get_db)):
+    scan = get_scan(db, scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found")
+    return Response(
+        rejections_with_llm_to_csv(get_scan_rejections(db, scan_id)),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-rule-exclusions-with-llm.csv"'},
     )

@@ -10,4 +10,6 @@ button:disabled{cursor:not-allowed;opacity:.65}button:focus-visible,.button:focu
 
 @media(max-width:900px){.llm-status{width:100%}.evidence-split,.interpret-grid{grid-template-columns:1fr}.llm-heading{flex-direction:column}.llm-column-list>article{grid-template-columns:1fr}.llm-column-list .llm-result,.llm-column-list .llm-error{grid-column:auto}.actions{justify-content:flex-start;flex-wrap:wrap}}
 @media(max-width:520px){main{padding:16px}.panel{padding:15px}.llm-column-list button,.llm-heading button,.interpret-grid button{width:100%}.grid{grid-template-columns:1fr}}
+.export-note{flex-basis:100%;color:#65717b;text-align:right}
+@media(max-width:900px){.export-note{text-align:left}}
 
