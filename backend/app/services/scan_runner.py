@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.engine.candidate_generator import generate_candidate_pairs
 from app.engine.column_semantics import normalize_scan_mode
-from app.engine.scoring import score_candidate
+from app.engine.engine_selection import select_candidate_scoring_engine
 from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.scan_repository import ScanRepository
 from app.repositories.rejection_repository import RejectionRepository
@@ -20,6 +20,8 @@ class ScanRunner:
         self.rejections = RejectionRepository(db)
 
     def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
+        scoring_engine = select_candidate_scoring_engine()
+        score_candidate = scoring_engine.score_candidate
         scan_mode = normalize_scan_mode(scan_mode)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:

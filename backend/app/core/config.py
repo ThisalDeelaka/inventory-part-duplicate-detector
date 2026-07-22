@@ -2,7 +2,27 @@ import os
 from pathlib import Path
 
 
+_TRUE_VALUES = frozenset({'1', 'true', 'yes', 'on'})
+_FALSE_VALUES = frozenset({'0', 'false', 'no', 'off'})
+
+
+def _environment_bool(name: str, default: bool = False) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    value = raw_value.strip().lower()
+    if value in _TRUE_VALUES:
+        return True
+    if value in _FALSE_VALUES:
+        return False
+    accepted = sorted(_TRUE_VALUES | _FALSE_VALUES)
+    raise ValueError(f'{name} must be one of {accepted}, got {raw_value!r}')
+
+
 class Settings:
+    def __init__(self):
+        self.use_redesigned_engine = _environment_bool('USE_REDESIGNED_ENGINE', default=False)
+
     service_name = "inventory-part-duplicate-detector"
     model_version = os.getenv("MODEL_VERSION", "hybrid-nlp-v1")
     default_threshold = float(os.getenv("DEFAULT_THRESHOLD", "75"))
