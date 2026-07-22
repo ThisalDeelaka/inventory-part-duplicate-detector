@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from app.contracts.records import CanonicalRecord
+from app.contracts.candidates import CandidatePair
 from app.core.config import Settings, settings
 from app.db.models import (
     DuplicateCandidate,
@@ -89,10 +89,16 @@ def test_selector_true_raises_without_constructing_legacy_adapter(monkeypatch):
 def test_legacy_adapter_returns_complete_direct_scoring_result(record_a, record_b):
     selected_fields = ['CONTRACT', 'UNIT_MEAS']
     adapter = LegacyDeterministicScoringEngine()
+    candidate = CandidatePair.from_legacy_mapping({
+        'record_a': record_a,
+        'record_b': record_b,
+        'matched_fields': ['CONTRACT'],
+        'mismatched_fields': [],
+        'warnings': [],
+    })
 
     assert adapter.score_candidate(
-        CanonicalRecord.from_legacy_mapping(record_a),
-        CanonicalRecord.from_legacy_mapping(record_b),
+        candidate,
         selected_fields,
     ) == score_candidate(
         record_a,
@@ -105,14 +111,14 @@ def test_scan_selects_engine_once_and_scores_every_pair_through_it(db, monkeypat
     class SpyEngine:
         def __init__(self):
             self.calls = 0
-            self.records = []
+            self.candidates = []
 
-        def score_candidate(self, record_a, record_b, selected_fields, scan_mode):
+        def score_candidate(self, candidate, selected_fields, scan_mode):
             self.calls += 1
-            self.records.extend((record_a, record_b))
+            self.candidates.append(candidate)
             return score_candidate(
-                record_a.to_legacy_dict(),
-                record_b.to_legacy_dict(),
+                candidate.record_a.to_legacy_dict(),
+                candidate.record_b.to_legacy_dict(),
                 selected_fields,
                 scan_mode,
             )
@@ -144,11 +150,21 @@ def test_scan_selects_engine_once_and_scores_every_pair_through_it(db, monkeypat
     assert pair_count == 3
     assert selection_calls == 1
     assert spy.calls == pair_count
-    assert all(isinstance(record, CanonicalRecord) for record in spy.records)
+    assert len(spy.candidates) == pair_count
+    assert all(isinstance(candidate, CandidatePair) for candidate in spy.candidates)
     assert all(
-        record.raw_attributes['CLIENT_SPECIFIC_FIELD'] == 'preserved extra value'
-        for record in spy.records
+        candidate.record_a.raw_attributes['CLIENT_SPECIFIC_FIELD']
+        == 'preserved extra value'
+        and candidate.record_b.raw_attributes['CLIENT_SPECIFIC_FIELD']
+        == 'preserved extra value'
+        for candidate in spy.candidates
     )
+    assert all(
+        candidate.matched_fields == ('CONTRACT', 'UNIT_MEAS')
+        for candidate in spy.candidates
+    )
+    assert all(candidate.mismatched_fields == () for candidate in spy.candidates)
+    assert all(candidate.warnings == () for candidate in spy.candidates)
 
 
 def test_redesigned_engine_request_fails_before_any_scan_side_effect(db, monkeypatch):

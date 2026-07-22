@@ -1,6 +1,6 @@
 from typing import Any, Protocol
 
-from app.contracts.records import CanonicalRecord
+from app.contracts.candidates import CandidatePair
 from app.core.config import settings
 from app.engine.scoring import score_candidate
 
@@ -8,8 +8,7 @@ from app.engine.scoring import score_candidate
 class CandidateScoringEngine(Protocol):
     def score_candidate(
         self,
-        record_a: CanonicalRecord,
-        record_b: CanonicalRecord,
+        candidate: CandidatePair,
         selected_fields: list[str],
         scan_mode: str = 'SAME_SITE_DUPLICATE',
     ) -> dict[str, Any]: ...
@@ -18,14 +17,13 @@ class CandidateScoringEngine(Protocol):
 class LegacyDeterministicScoringEngine:
     def score_candidate(
         self,
-        record_a: CanonicalRecord,
-        record_b: CanonicalRecord,
+        candidate: CandidatePair,
         selected_fields: list[str],
         scan_mode: str = 'SAME_SITE_DUPLICATE',
     ) -> dict[str, Any]:
         return score_candidate(
-            record_a.to_legacy_dict(),
-            record_b.to_legacy_dict(),
+            candidate.record_a.to_legacy_dict(),
+            candidate.record_b.to_legacy_dict(),
             selected_fields,
             scan_mode,
         )

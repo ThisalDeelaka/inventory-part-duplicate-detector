@@ -1,7 +1,7 @@
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.contracts.records import CanonicalRecord
+from app.contracts.candidates import CandidatePair
 from app.engine.candidate_generator import generate_candidate_pairs
 from app.engine.column_semantics import normalize_scan_mode
 from app.engine.engine_selection import select_candidate_scoring_engine
@@ -22,15 +22,6 @@ class ScanRunner:
 
     def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
         scoring_engine = select_candidate_scoring_engine()
-
-        def score_candidate(record_a, record_b, fields, mode):
-            return scoring_engine.score_candidate(
-                CanonicalRecord.from_legacy_mapping(record_a),
-                CanonicalRecord.from_legacy_mapping(record_b),
-                fields,
-                mode,
-            )
-
         scan_mode = normalize_scan_mode(scan_mode)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
@@ -52,7 +43,8 @@ class ScanRunner:
             candidates_found = 0
             rejections_found = 0
             for pair in pairs:
-                result = score_candidate(pair["record_a"], pair["record_b"], selected_fields, scan_mode)
+                candidate = CandidatePair.from_legacy_mapping(pair)
+                result = scoring_engine.score_candidate(candidate, selected_fields, scan_mode)
                 if result["final_score"] >= threshold:
                     self.candidates.save(scan.id, pair["record_a"], pair["record_b"], result)
                     candidates_found += 1
