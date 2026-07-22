@@ -106,6 +106,33 @@ def apply_column_mapping(df: pd.DataFrame, explicit_mapping: dict[str, str] | No
     }
 
 
+def bounded_nonblank_samples(values, limit: int = 5, max_characters: int = 512) -> list[str]:
+    """Collect a bounded useful prefix without consuming the remaining iterable."""
+    samples = []
+    for value in values:
+        if pd.isna(value):
+            continue
+        text = str(value)
+        if not text.strip():
+            continue
+        samples.append(text[:max_characters])
+        if len(samples) == limit:
+            break
+    return samples
+
+
+def bounded_column_samples(
+    df: pd.DataFrame, unresolved_columns: list[str]
+) -> dict[str, list[str]]:
+    """Return bounded samples for unresolved source columns in source order."""
+    unresolved = set(unresolved_columns)
+    return {
+        str(column): bounded_nonblank_samples(df[column])
+        for column in df.columns
+        if str(column) in unresolved
+    }
+
+
 async def read_csv_upload_with_metadata(file: UploadFile, column_mapping: dict[str, str] | None = None) -> tuple[pd.DataFrame, dict]:
     content = await file.read()
     if not content:
@@ -116,12 +143,25 @@ async def read_csv_upload_with_metadata(file: UploadFile, column_mapping: dict[s
         df = pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
     except Exception as exc:
         raise HTTPException(400, f"Unable to parse CSV: {exc}") from exc
-    df, column_metadata = apply_column_mapping(df, column_mapping)
+    source_df = df
+    df, column_metadata = apply_column_mapping(source_df, column_mapping)
     if df.empty:
         raise HTTPException(400, "CSV contains no data rows")
     if len(df) > settings.max_csv_records:
         raise HTTPException(413, f"CSV contains {len(df)} records, above the configured synchronous scan limit of {settings.max_csv_records}")
-    return df, {"file_sha256": file_sha256(content), "file_size_bytes": len(content), **column_metadata}
+    resolved_sources = set(column_metadata["resolved_column_mapping"].values())
+    unresolved_columns = [
+        column
+        for column in column_metadata["available_columns"]
+        if column not in resolved_sources
+    ]
+    column_samples = bounded_column_samples(source_df, unresolved_columns)
+    return df, {
+        "file_sha256": file_sha256(content),
+        "file_size_bytes": len(content),
+        "column_samples": column_samples,
+        **column_metadata,
+    }
 
 
 async def read_csv_upload(file: UploadFile) -> pd.DataFrame:

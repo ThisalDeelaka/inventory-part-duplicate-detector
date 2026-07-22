@@ -123,7 +123,7 @@ def rejections(scan_id: int, db: Session = Depends(get_db)):
 async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True)):
     df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
     result = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
-    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts")})
+    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples")})
     for target, sources in metadata["column_mapping_conflicts"].items():
         result["warnings"].append({
             "warning_type": "AMBIGUOUS_COLUMN_MAPPING",

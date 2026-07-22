@@ -1,8 +1,11 @@
 import io
 import json
 
+from app.core.config import settings
 from app.db.models import DuplicateCandidate
 from app.services.export_service import sanitize_csv_cell
+from app.services import validation_service
+from app.services.validation_service import bounded_nonblank_samples
 
 
 CSV = b"PART_NO,DESCRIPTION,CONTRACT,UNIT_MEAS\nA,MCB30A,S1,PCS\nB,MCB 30 A,S1,PCS\n"
@@ -90,6 +93,7 @@ def test_human_readable_ifs_headers_are_mapped_automatically(client):
     assert body["resolved_column_mapping"]["DESCRIPTION"] == "Part Description"
     assert body["resolved_column_mapping"]["CONTRACT"] == "Site"
     assert body["resolved_column_mapping"]["HSN_SAC_CODE"] == "HSN/SAC Code"
+    assert body["column_samples"] == {}
 
 
 def test_arbitrary_headers_can_be_mapped_explicitly(client):
@@ -113,6 +117,93 @@ def test_arbitrary_headers_can_be_mapped_explicitly(client):
     body = response.json()
     assert body["valid"] is True
     assert body["resolved_column_mapping"] == mapping
+    assert body["column_samples"] == {}
+
+
+def test_validation_samples_only_unresolved_columns_in_source_order(client):
+    long_value = "X" * 600
+    unknown_values = ["", long_value, "one", "", "two", "three", "four", "five"]
+    rows = [
+        f"P{index},,{value},Motor {index},S1"
+        for index, value in enumerate(unknown_values, start=1)
+    ]
+    csv = (
+        "Part No,Unknown Empty,Unknown Values,Long Text,Site\n"
+        + "\n".join(rows)
+        + "\n"
+    ).encode()
+    response = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("bounded.csv", csv, "text/csv")},
+        data={"column_mapping": json.dumps({"DESCRIPTION": "Long Text"})},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert body["resolved_column_mapping"]["PART_NO"] == "Part No"
+    assert body["resolved_column_mapping"]["DESCRIPTION"] == "Long Text"
+    assert body["resolved_column_mapping"]["CONTRACT"] == "Site"
+    assert list(body["column_samples"]) == ["Unknown Empty", "Unknown Values"]
+    assert body["column_samples"]["Unknown Empty"] == []
+    assert body["column_samples"]["Unknown Values"] == [
+        long_value[:512],
+        "one",
+        "two",
+        "three",
+        "four",
+    ]
+    assert "Part No" not in body["column_samples"]
+    assert "Long Text" not in body["column_samples"]
+    assert "Site" not in body["column_samples"]
+    assert "rows" not in body
+    assert "complete_csv" not in body
+    assert "csv" not in body
+
+
+def test_bounded_sample_helper_stops_after_five_useful_values():
+    def guarded_values():
+        yield ""
+        yield "one"
+        yield "two"
+        yield "three"
+        yield "four"
+        yield "five"
+        raise AssertionError("iterable was consumed beyond the bounded prefix")
+
+    assert bounded_nonblank_samples(guarded_values()) == [
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+    ]
+
+
+def test_sampling_runs_only_after_empty_and_record_limit_checks(client, monkeypatch):
+    def unexpected_sampling(*_args, **_kwargs):
+        raise AssertionError("sampling ran before validation rejection")
+
+    monkeypatch.setattr(
+        validation_service,
+        "bounded_column_samples",
+        unexpected_sampling,
+    )
+    empty_data = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("headers-only.csv", b"PART_NO,DESCRIPTION\n", "text/csv")},
+    )
+    oversized_csv = (
+        b"PART_NO,DESCRIPTION\n"
+        + b"A,Motor\n" * (settings.max_csv_records + 1)
+    )
+    oversized = client.post(
+        "/api/scans/validate-only",
+        files={"file": ("oversized.csv", oversized_csv, "text/csv")},
+    )
+
+    assert empty_data.status_code == 400
+    assert oversized.status_code == 413
 
 
 def test_explicit_mapping_can_override_an_automatic_description_column(client):

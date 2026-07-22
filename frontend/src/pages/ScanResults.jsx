@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import Score from '../components/Score'
+import CandidateLlmTools from '../components/CandidateLlmTools'
+import LlmStatus from '../components/LlmStatus'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
   if (!items.length) {
@@ -56,7 +58,7 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   )}
                 </div>
               )}
-              <button className="link" onClick={() => setOpen(open === candidate.id ? null : candidate.id)}>
+              <button type="button" className="link" onClick={() => setOpen(open === candidate.id ? null : candidate.id)}>
                 {open === candidate.id ? 'Hide details' : 'Show details'}
               </button>
               {open === candidate.id && (
@@ -73,6 +75,7 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   <b>Normalized part no A: {candidate.normalized_part_no_a || 'None'}</b>
                   <b>Normalized part no B: {candidate.normalized_part_no_b || 'None'}</b>
                   <p>{candidate.recommended_action}</p>
+                  <CandidateLlmTools candidate={candidate} />
                 </div>
               )}
             </td>
@@ -84,9 +87,9 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                 onChange={(event) => setComments({ ...comments, [candidate.id]: event.target.value })}
               />
               <div className="review">
-                <button onClick={() => review(candidate, 'DUPLICATE')}>Duplicate</button>
-                <button className="secondary" onClick={() => review(candidate, 'NOT_DUPLICATE')}>Not duplicate</button>
-                <button className="ghost" onClick={() => review(candidate, 'UNSURE')}>Unsure</button>
+                <button type="button" onClick={() => review(candidate, 'DUPLICATE')}>Duplicate</button>
+                <button type="button" className="secondary" onClick={() => review(candidate, 'NOT_DUPLICATE')}>Not duplicate</button>
+                <button type="button" className="ghost" onClick={() => review(candidate, 'UNSURE')}>Unsure</button>
               </div>
             </td>
           </tr>
@@ -141,7 +144,7 @@ function GroupView({ groups, openGroup, setOpenGroup }) {
               </tbody>
             </table>
           </div>
-          <button className="link" onClick={() => setOpenGroup(openGroup === group.group_id ? null : group.group_id)}>
+          <button type="button" className="link" onClick={() => setOpenGroup(openGroup === group.group_id ? null : group.group_id)}>
             {openGroup === group.group_id ? 'Hide pair evidence' : 'Show pair evidence'}
           </button>
           {openGroup === group.group_id && (
@@ -207,20 +210,21 @@ export default function ScanResults() {
           <h1>{scan?.scan_name || 'Loading scan...'}</h1>
           <p>{scan && `${scan.total_records} records · ${scan.total_candidates} candidates · threshold ${scan.threshold} · ${scan.scan_mode}`}</p>
         </div>
+        <LlmStatus />
         <div className="actions">
           <Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
-          <button className="secondary" onClick={() => api.download(`/api/scans/${id}/rejections/export`, `scan-${id}-rule-exclusions.csv`)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
-          <button onClick={() => api.download(`/api/scans/${id}/export`, `scan-${id}-candidates.csv`)}>Export CSV</button>
+          <button type="button" className="secondary" onClick={() => api.download(`/api/scans/${id}/rejections/export`, `scan-${id}-rule-exclusions.csv`)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
+          <button type="button" onClick={() => api.download(`/api/scans/${id}/export`, `scan-${id}-candidates.csv`)}>Export CSV</button>
         </div>
       </header>
 
       {error && <div className="error">{error}</div>}
 
       <div className="view-toggle">
-        <button className={view === 'groups' ? '' : 'secondary'} onClick={() => setView('groups')}>
+        <button type="button" className={view === 'groups' ? '' : 'secondary'} onClick={() => setView('groups')}>
           Group View ({groups.length})
         </button>
-        <button className={view === 'pairs' ? '' : 'secondary'} onClick={() => setView('pairs')}>
+        <button type="button" className={view === 'pairs' ? '' : 'secondary'} onClick={() => setView('pairs')}>
           Pair View ({items.length})
         </button>
       </div>

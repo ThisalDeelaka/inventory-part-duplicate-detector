@@ -1,0 +1,17 @@
+Stock Ref,Item Narrative,Site Code,Inventory UOM,HSN Code
+MTR-10K-A,Motor 10 kW 415 V three phase flange mounted,SITE-MOTOR,PCS,8501
+MOTOR10K-B,Electric motor ten kilowatt 415V 3 phase flange mount,SITE-MOTOR,PCS,8501
+GOF-220-A,Gen oil fltr element model 220,SITE-GEN-FILTER,PCS,8421
+FILTER-220-B,Generator oil filter element model 220,SITE-GEN-FILTER,PCS,8421
+FLT-X100-A,Air filter element X100,SITE-FILTER-TYPE,PCS,8421
+FLT-X100-O,Oil filter element X100,SITE-FILTER-TYPE,PCS,8421
+ASM-440-L,Pump bracket assembly left side 440,SITE-ASSEMBLY,PCS,8413
+ASM-440-R,Pump bracket assembly right side 440,SITE-ASSEMBLY,PCS,8413
+BRG-6205-A,BRG 6205 2RS C3,SITE-BEARING,PCS,8482
+BEARING-6205-B,Bearing 6205 double seal clearance C3,SITE-BEARING,PCS,8482
+TS-PT100-A,Temp sns PT100 0-200 C,SITE-TEMP,PCS,9025
+SENSOR-PT100-B,Temperature sensor PT100 range 0 to 200 C,SITE-TEMP,PCS,9025
+MTR-5K-H1,Electric motor 5 kW 415 V three phase,SITE-HSN,PCS,8501
+MTR-5K-H2,Electric motor 5 kW 415 V three phase,SITE-HSN,PCS,8503
+SEAL-32-A,Mechanical seal for pump shaft 32 mm,SITE-SEAL,PCS,8484
+MECH-SEAL-32B,Pump mechanical seal 32mm shaft,SITE-SEAL,PCS,8484
