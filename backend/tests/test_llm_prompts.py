@@ -135,3 +135,26 @@ def test_response_schema_prompts_include_enums_true_invariants_and_no_secrets():
     serialized = json.dumps(RESPONSE_SCHEMAS).lower()
     for prohibited in ("api_key", "authorization", "database_url", "environment"):
         assert prohibited not in serialized
+
+
+def test_candidate_triage_prompt_defines_balanced_semantic_decisions():
+    prompt = SYSTEM_PROMPTS[LLMCapability.CANDIDATE_TRIAGE]
+
+    for guidance in (
+        "Abbreviations",
+        "spelling variation",
+        "punctuation",
+        "word ordering",
+        "equivalent terminology",
+        "generic word",
+        "product, purpose, model, type, material, size, rating, side, placement, or technical role",
+        "genuinely insufficient",
+        "do not use it as the default response",
+        "rather than copying the deterministic score",
+        "deterministic result must remain preserved and authoritative",
+    ):
+        assert guidance in prompt
+    assert "SUPPORTS_DUPLICATE" in prompt
+    assert "SUPPORTS_NON_DUPLICATE" in prompt
+    assert "INCONCLUSIVE" in prompt
+    assert "Exact response JSON Schema" in prompt
