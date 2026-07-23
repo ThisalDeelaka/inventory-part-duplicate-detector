@@ -224,13 +224,13 @@ def test_safe_failure_is_saved_without_raw_detail_and_later_success_replaces_it(
     assert failed.status_code == 504
     snapshot = db.query(LlmAdvisorySnapshot).one()
     assert snapshot.state == "FAILED"
-    assert snapshot.safe_error_category == "timeout"
+    assert snapshot.safe_error_category == "provider_timeout"
     serialized = json.dumps({key: value for key, value in snapshot.__dict__.items() if not key.startswith("_")}, default=str)
     assert private_detail not in serialized
     failed_csv = client.get(f"/api/scans/{scan.id}/export-with-llm").text
     assert private_detail not in failed_csv
     failed_row = _rows(client.get(f"/api/scans/{scan.id}/export-with-llm"))[0]
-    assert failed_row["llm_safe_error_category"] == "timeout"
+    assert failed_row["llm_safe_error_category"] == "provider_timeout"
     assert failed_row["llm_assessment"] == ""
     succeeded = client.post(f"/api/llm/candidates/{candidate.id}/advisory")
     assert succeeded.status_code == 200
@@ -243,7 +243,7 @@ def test_safe_failure_is_saved_without_raw_detail_and_later_success_replaces_it(
     [
         ("disabled", 503, None, False, False),
         ("configuration", 503, LLMProviderConfigurationError("private configuration detail"), True, True),
-        ("timeout", 504, LLMProviderTimeoutError("private timeout detail"), True, False),
+        ("provider_timeout", 504, LLMProviderTimeoutError("private timeout detail"), True, False),
         ("provider_failure", 502, LLMProviderHTTPError("private provider response"), True, False),
         ("invalid_provider_output", 502, LLMProviderMalformedJSONError("private malformed body"), True, False),
     ],

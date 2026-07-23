@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from typing import Callable, TypeVar
 
@@ -16,9 +17,13 @@ from app.engine.variant_extractor import extract_variant_attributes
 from app.llm.audit import LLMAuditOutcome, LLMAuditStore
 from app.llm.cache import LLMCache
 from app.llm.contracts import (
+    AdvisoryAssessment,
+    AdvisoryRecommendedAction,
     CandidateAdvisoryRequest,
     CandidateAdvisoryResponse,
+    CandidateDecisionBasis,
     CandidateEvidence,
+    CandidateTriageResponse,
     ColumnSuggestionRequest,
     ColumnSuggestionResponse,
     CriticalMismatchEvidence,
@@ -52,9 +57,92 @@ from app.services.validation_service import normalize_column_name
 ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 ProviderFactory = Callable[[Settings], LLMProvider]
 
+DUPLICATE_DECISION_BASES = frozenset({
+    CandidateDecisionBasis.SEMANTIC_EQUIVALENCE,
+    CandidateDecisionBasis.ABBREVIATION_OR_ALIAS,
+    CandidateDecisionBasis.TYPO_OR_FORMAT_VARIATION,
+})
+NON_DUPLICATE_DECISION_BASES = frozenset({
+    CandidateDecisionBasis.PRODUCT_TYPE_CONFLICT,
+    CandidateDecisionBasis.PURPOSE_CONFLICT,
+    CandidateDecisionBasis.MODEL_CONFLICT,
+    CandidateDecisionBasis.MATERIAL_CONFLICT,
+    CandidateDecisionBasis.SIZE_OR_RATING_CONFLICT,
+    CandidateDecisionBasis.SIDE_OR_PLACEMENT_CONFLICT,
+    CandidateDecisionBasis.APPLICATION_CONFLICT,
+    CandidateDecisionBasis.TECHNICAL_ROLE_CONFLICT,
+})
+_WEAK_EVIDENCE_MARKERS = (
+    "part number differs",
+    "part numbers differ",
+    "description differs",
+    "descriptions differ",
+    "string differs",
+    "strings differ",
+    "contract matches",
+    "site matches",
+    "generic description matches",
+    "description matches",
+    "descriptions match",
+    "identical description",
+    "same description",
+)
+
 
 class LLMStructuredOutputError(Exception):
     """Safe public error for capability output that fails strict validation."""
+
+
+def validate_triage_decision(
+    response: CandidateTriageResponse,
+    request: CandidateAdvisoryRequest | None = None,
+) -> CandidateAdvisoryResponse:
+    bases = set(response.decision_basis)
+    duplicate_bases = bases & DUPLICATE_DECISION_BASES
+    non_duplicate_bases = bases & NON_DUPLICATE_DECISION_BASES
+    evidence = [item.lower().strip() for item in response.supporting_evidence]
+    meaningful_evidence = any(
+        text and not any(marker in text for marker in _WEAK_EVIDENCE_MARKERS)
+        for text in evidence
+    )
+    weak_generic_match = False
+    if request is not None and response.assessment == AdvisoryAssessment.SUPPORTS_DUPLICATE:
+        left_description = request.left.description or ""
+        right_description = request.right.description or ""
+        left_tokens = re.findall(r"[a-z0-9]+", left_description.lower())
+        right_tokens = re.findall(r"[a-z0-9]+", right_description.lower())
+        short_non_specific = (
+            0 < len(left_tokens) <= 3
+            and 0 < len(right_tokens) <= 3
+            and not any(character.isdigit() for character in left_description + right_description)
+        )
+        same_site = bool(
+            request.left.site_or_contract
+            and request.left.site_or_contract == request.right.site_or_contract
+        )
+        weak_generic_match = short_non_specific and same_site
+    contradictory = bool(duplicate_bases and non_duplicate_bases)
+    unsupported_duplicate = (
+        response.assessment == AdvisoryAssessment.SUPPORTS_DUPLICATE
+        and (not duplicate_bases or not meaningful_evidence or weak_generic_match)
+    )
+    unsupported_non_duplicate = (
+        response.assessment == AdvisoryAssessment.SUPPORTS_NON_DUPLICATE
+        and (not non_duplicate_bases or not meaningful_evidence)
+    )
+    assessment = response.assessment
+    recommended_action = response.recommended_action
+    if contradictory or unsupported_duplicate or unsupported_non_duplicate:
+        assessment = AdvisoryAssessment.INCONCLUSIVE
+        recommended_action = AdvisoryRecommendedAction.HUMAN_REVIEW
+    return CandidateAdvisoryResponse(
+        assessment=assessment,
+        confidence=response.confidence,
+        supporting_evidence=response.supporting_evidence,
+        conflicting_evidence=response.conflicting_evidence,
+        recommended_action=recommended_action,
+        deterministic_result_authoritative=True,
+    )
 
 
 def _bounded_values(values, *, limit: int = 10) -> list[str]:
@@ -576,12 +664,19 @@ class CandidateAdvisoryService(_CapabilityService):
             )
 
         request = build_candidate_request(candidate)
+        response_type = (
+            CandidateTriageResponse
+            if capability == LLMCapability.CANDIDATE_TRIAGE
+            else CandidateAdvisoryResponse
+        )
         response, metadata = await self._execute(
             capability=capability,
             payload=request,
-            response_type=CandidateAdvisoryResponse,
+            response_type=response_type,
             candidate_id=candidate.id,
         )
+        if capability == LLMCapability.CANDIDATE_TRIAGE:
+            response = validate_triage_decision(response, request)
         return CandidateAdvisoryResult(
             candidate_id=candidate.id,
             eligibility=eligibility,

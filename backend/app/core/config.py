@@ -94,6 +94,28 @@ class Settings(BaseModel):
         gt=0,
         le=1000,
     )
+    llm_triage_min_interval_ms: int = Field(
+        default_factory=lambda: os.getenv("LLM_TRIAGE_MIN_INTERVAL_MS", "1000"),
+        ge=0,
+        le=10000,
+    )
+    llm_triage_max_retries: int = Field(
+        default_factory=lambda: os.getenv("LLM_TRIAGE_MAX_RETRIES", "2"),
+        ge=0,
+        le=5,
+    )
+    llm_triage_retry_batch_size: int = Field(
+        default_factory=lambda: os.getenv("LLM_TRIAGE_RETRY_BATCH_SIZE", "20"),
+        gt=0,
+        le=100,
+    )
+    llm_triage_consecutive_failure_limit: int = Field(
+        default_factory=lambda: os.getenv(
+            "LLM_TRIAGE_CONSECUTIVE_FAILURE_LIMIT", "5"
+        ),
+        gt=0,
+        le=20,
+    )
 
 
 settings = Settings()

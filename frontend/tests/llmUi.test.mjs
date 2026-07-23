@@ -22,6 +22,7 @@ import {
   scanExportTargets,
   scanTriageTargets,
   shouldPollTriage,
+  triageFailureLabel,
 } from '../src/utils/llmUi.js'
 
 test('normalizes safe backend errors and rejects secret or raw payload text', () => {
@@ -109,18 +110,32 @@ test('normalizes safe triage counters and derives bounded progress', () => {
     state: 'RUNNING', total_eligible: 10, processed_count: 3, skipped_count: 2,
     likely_duplicate_count: 1, downgraded_count: 1, human_review_count: 1,
     failed_count: -2,
+    failure_categories: { rate_limited: 3, provider_timeout: 1, private_detail: 99 },
   })
   assert.equal(normalized.progress_percent, 50)
   assert.equal(normalized.failed_count, 0)
+  assert.deepEqual(normalized.failure_categories, { rate_limited: 3, provider_timeout: 1 })
   assert.throws(() => normalizeTriageStatus({ state: 'PRIVATE_PROVIDER_STATE' }), /Invalid/)
 })
 
 test('polling is limited to queued and running states', () => {
   assert.equal(shouldPollTriage('QUEUED'), true)
   assert.equal(shouldPollTriage('RUNNING'), true)
-  for (const state of ['COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED', null]) {
+  for (const state of ['PAUSED', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED', null]) {
     assert.equal(shouldPollTriage(state), false)
   }
+})
+
+test('paused triage and safe failure categories have clear labels', () => {
+  const paused = normalizeTriageStatus({
+    state: 'PAUSED', total_eligible: 5, processed_count: 2, skipped_count: 0,
+    failure_categories: { provider_5xx: 2, network_failure: 1 },
+  })
+  assert.equal(paused.state, 'PAUSED')
+  assert.equal(shouldPollTriage(paused.state), false)
+  assert.equal(triageFailureLabel('provider_5xx'), 'Provider unavailable')
+  assert.equal(triageFailureLabel('network_failure'), 'Network failure')
+  assert.equal(triageFailureLabel('unknown-private-value'), 'Provider failure')
 })
 
 test('effective status labels cover every filter option', () => {

@@ -18,10 +18,17 @@ from app.db.models import (
 )
 from app.llm.audit import LLMAuditStore
 from app.llm.cache import LLMCache
-from app.llm.exceptions import LLMProviderTimeoutError
+from app.llm.contracts import CandidateAdvisoryRequest, CandidateTriageResponse
+from app.llm.exceptions import (
+    LLMProviderHTTPError,
+    LLMProviderMalformedJSONError,
+    LLMProviderNetworkError,
+    LLMProviderTimeoutError,
+)
 from app.llm.provider import LLMProviderResult
 from app.llm.runtime import get_llm_settings
 from app.llm.service_contracts import LLMCapability
+from app.llm.services import validate_triage_decision
 from app.main import app
 from app.services.llm_triage_service import (
     LlmTriageRunner,
@@ -31,7 +38,9 @@ from app.services.llm_triage_service import (
     eligible_candidate_ids,
     get_llm_triage_scheduler,
     prepare_triage_run,
+    triage_failure_categories,
 )
+from app.services.llm_snapshot_service import safe_error_category
 
 
 def _settings(**overrides):
@@ -43,6 +52,10 @@ def _settings(**overrides):
         "llm_auto_triage_enabled": True,
         "llm_triage_concurrency": 1,
         "llm_triage_max_candidates_per_scan": 250,
+        "llm_triage_min_interval_ms": 0,
+        "llm_triage_max_retries": 0,
+        "llm_triage_retry_batch_size": 20,
+        "llm_triage_consecutive_failure_limit": 5,
     }
     values.update(overrides)
     return Settings(**values)
@@ -70,6 +83,11 @@ class FakeProvider:
 
 
 def _advisory(assessment="INCONCLUSIVE", confidence=0.6):
+    basis = {
+        "SUPPORTS_DUPLICATE": ["SEMANTIC_EQUIVALENCE"],
+        "SUPPORTS_NON_DUPLICATE": ["PRODUCT_TYPE_CONFLICT"],
+        "INCONCLUSIVE": [],
+    }[assessment]
     return {
         "assessment": assessment,
         "confidence": confidence,
@@ -77,6 +95,7 @@ def _advisory(assessment="INCONCLUSIVE", confidence=0.6):
         "conflicting_evidence": [],
         "recommended_action": "HUMAN_REVIEW",
         "deterministic_result_authoritative": True,
+        "decision_basis": basis,
     }
 
 
@@ -128,7 +147,9 @@ def _candidate(db, scan, **overrides):
     return candidate
 
 
-def _runner(db, provider, configuration=None, session_factory=None):
+def _runner(
+    db, provider, configuration=None, session_factory=None, **runner_overrides
+):
     factory = session_factory or sessionmaker(bind=db.get_bind())
     return LlmTriageRunner(
         session_factory=factory,
@@ -136,6 +157,7 @@ def _runner(db, provider, configuration=None, session_factory=None):
         cache=LLMCache(enabled=True, max_entries=50, ttl_seconds=60),
         audit=LLMAuditStore(enabled=True, max_entries=100),
         provider_factory=lambda _configuration: provider,
+        **runner_overrides,
     )
 
 
@@ -146,6 +168,14 @@ def test_triage_configuration_bounds_are_validated():
         {"llm_triage_concurrency": 9},
         {"llm_triage_max_candidates_per_scan": 0},
         {"llm_triage_max_candidates_per_scan": 1001},
+        {"llm_triage_min_interval_ms": -1},
+        {"llm_triage_min_interval_ms": 10001},
+        {"llm_triage_max_retries": -1},
+        {"llm_triage_max_retries": 6},
+        {"llm_triage_retry_batch_size": 0},
+        {"llm_triage_retry_batch_size": 101},
+        {"llm_triage_consecutive_failure_limit": 0},
+        {"llm_triage_consecutive_failure_limit": 21},
     ):
         with pytest.raises(ValidationError):
             _settings(**values)
@@ -212,7 +242,12 @@ def test_successful_triage_maps_status_and_preserves_every_deterministic_field(
     db, assessment, expected_status, counter
 ):
     scan = _scan(db, assessment)
-    candidate = _candidate(db, scan)
+    candidate = _candidate(
+        db,
+        scan,
+        description_a="Synthetic motor 10 kW model M100",
+        description_b="10 kW synthetic motor model M100",
+    )
     protected_names = (
         "similarity_score", "confidence_level", "business_status", "rule_decision",
         "rejection_reason", "critical_mismatches", "normalized_description_a",
@@ -274,7 +309,7 @@ def test_failure_continues_and_retry_only_replaces_failed_snapshot(db):
     failed = db.query(LlmAdvisorySnapshot).filter_by(candidate_id=first.id).one()
     succeeded = db.query(LlmAdvisorySnapshot).filter_by(candidate_id=second.id).one()
     run = db.query(LlmTriageRun).filter_by(scan_id=scan.id).one()
-    assert failed.state == "FAILED" and failed.safe_error_category == "timeout"
+    assert failed.state == "FAILED" and failed.safe_error_category == "provider_timeout"
     assert succeeded.state == "AVAILABLE"
     assert run.state == "COMPLETED_WITH_FAILURES" and run.failed_count == 1
     serialized = json.dumps(failed.__dict__, default=str)
@@ -413,6 +448,7 @@ def test_status_api_is_safe_and_candidate_api_batch_loads_triage_snapshots(clien
         "downgraded_count", "human_review_count", "failed_count", "skipped_count",
         "progress_percent", "started_at", "completed_at", "updated_at",
         "last_safe_error_category",
+        "failure_categories",
     }
     assert status.json()["updated_at"].endswith("Z")
     snapshot_selects = []
@@ -470,3 +506,276 @@ def test_enhanced_export_prefers_triage_and_never_calls_provider(client, db):
 def test_manual_candidate_advisory_endpoint_remains_bodyless(client):
     response = client.post("/api/llm/candidates/999/advisory")
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("exc", "category"),
+    [
+        (LLMProviderHTTPError(status_code=429), "rate_limited"),
+        (LLMProviderHTTPError(status_code=503), "provider_5xx"),
+        (LLMProviderTimeoutError(), "provider_timeout"),
+        (LLMProviderNetworkError(), "network_failure"),
+        (LLMProviderMalformedJSONError(), "invalid_provider_output"),
+        (LLMProviderHTTPError(status_code=400), "provider_failure"),
+        (RuntimeError("private detail"), "provider_failure"),
+    ],
+)
+def test_safe_provider_failure_classifications(exc, category):
+    assert safe_error_category(exc) == category
+
+
+class FakeTime:
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def clock(self):
+        return self.now
+
+    async def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def test_minimum_interval_is_enforced_with_injectable_clock_and_sleeper(db):
+    scan = _scan(db)
+    for index in range(3):
+        _candidate(db, scan, part_no_a=f"PACE-{index}")
+    configuration = _settings(llm_triage_min_interval_ms=1000)
+    prepare_triage_run(db, scan.id, configuration)
+    provider = FakeProvider([_advisory()] * 3)
+    fake_time = FakeTime()
+    asyncio.run(_runner(
+        db,
+        provider,
+        configuration,
+        clock=fake_time.clock,
+        sleeper=fake_time.sleep,
+        jitter=lambda _low, _high: 0,
+    ).run(scan.id))
+    assert len(provider.calls) == 3
+    assert fake_time.sleeps == [1.0, 1.0]
+
+
+def test_retryable_failures_use_bounded_backoff_and_typed_retry_after(db):
+    scan = _scan(db)
+    _candidate(db, scan)
+    configuration = _settings(
+        llm_triage_max_retries=2,
+        llm_triage_consecutive_failure_limit=10,
+    )
+    prepare_triage_run(db, scan.id, configuration)
+    provider = FakeProvider([
+        LLMProviderHTTPError(status_code=429, retry_after_seconds=2),
+        LLMProviderHTTPError(status_code=503),
+        _advisory("SUPPORTS_DUPLICATE"),
+    ])
+    fake_time = FakeTime()
+    asyncio.run(_runner(
+        db,
+        provider,
+        configuration,
+        clock=fake_time.clock,
+        sleeper=fake_time.sleep,
+        jitter=lambda _low, _high: 0,
+    ).run(scan.id))
+    assert len(provider.calls) == 3
+    assert fake_time.sleeps == [2.0, 1.0]
+    snapshot = db.query(LlmAdvisorySnapshot).one()
+    assert snapshot.state == "AVAILABLE"
+
+
+def test_invalid_provider_output_is_never_retried(db):
+    scan = _scan(db)
+    candidate = _candidate(db, scan)
+    configuration = _settings(llm_triage_max_retries=2)
+    prepare_triage_run(db, scan.id, configuration)
+    provider = FakeProvider([LLMProviderMalformedJSONError("private output")])
+    asyncio.run(_runner(db, provider, configuration).run(scan.id))
+    snapshot = db.query(LlmAdvisorySnapshot).filter_by(candidate_id=candidate.id).one()
+    assert len(provider.calls) == 1
+    assert snapshot.state == "FAILED"
+    assert snapshot.safe_error_category == "invalid_provider_output"
+
+
+def test_consecutive_retryable_failures_pause_and_resume_pending_only(db):
+    scan = _scan(db)
+    candidates = [
+        _candidate(db, scan, part_no_a=f"RESUME-{index}")
+        for index in range(6)
+    ]
+    protected = {
+        candidate.id: (
+            candidate.business_status,
+            candidate.similarity_score,
+            candidate.review_status,
+        )
+        for candidate in candidates
+    }
+    configuration = _settings(
+        llm_triage_max_retries=0,
+        llm_triage_consecutive_failure_limit=2,
+    )
+    prepare_triage_run(db, scan.id, configuration)
+    failing = FakeProvider([
+        LLMProviderTimeoutError("private one"),
+        LLMProviderNetworkError("private two"),
+    ])
+    asyncio.run(_runner(db, failing, configuration).run(scan.id))
+    run = db.query(LlmTriageRun).filter_by(scan_id=scan.id).one()
+    assert run.state == "PAUSED"
+    assert run.processed_count == 2
+    assert run.last_safe_error_category == "network_failure"
+    assert db.query(LlmAdvisorySnapshot).count() == 2
+    assert len(failing.calls) == 2
+
+    resumed, should_schedule = prepare_triage_run(db, scan.id, configuration)
+    assert resumed.state == "QUEUED" and should_schedule is True
+    successful = FakeProvider([_advisory()] * 4)
+    asyncio.run(_runner(db, successful, configuration).run(scan.id))
+    db.expire_all()
+    run = db.query(LlmTriageRun).filter_by(scan_id=scan.id).one()
+    assert run.state == "COMPLETED_WITH_FAILURES"
+    assert len(successful.calls) == 4
+    assert db.query(LlmAdvisorySnapshot).count() == 6
+    for candidate in candidates:
+        refreshed = db.get(DuplicateCandidate, candidate.id)
+        assert (
+            refreshed.business_status,
+            refreshed.similarity_score,
+            refreshed.review_status,
+        ) == protected[candidate.id]
+
+
+def test_retry_failed_respects_batch_and_never_resends_success(db):
+    scan = _scan(db)
+    candidates = [
+        _candidate(db, scan, part_no_a=f"RETRY-{index}")
+        for index in range(6)
+    ]
+    db.add(LlmTriageRun(scan_id=scan.id, state="COMPLETED_WITH_FAILURES", total_eligible=6))
+    for index, candidate in enumerate(candidates):
+        db.add(LlmAdvisorySnapshot(
+            candidate_id=candidate.id,
+            capability=LLMCapability.CANDIDATE_TRIAGE.value,
+            state="AVAILABLE" if index == 0 else "FAILED",
+            llm_used=True,
+            cache_hit=False,
+            assessment="INCONCLUSIVE" if index == 0 else None,
+            safe_error_category=None if index == 0 else "provider_5xx",
+            deterministic_result_authoritative=True,
+        ))
+    db.commit()
+    configuration = _settings(llm_triage_retry_batch_size=2)
+    provider = FakeProvider([_advisory()] * 2)
+    asyncio.run(_runner(db, provider, configuration).run(scan.id, retry_failed=True))
+    assert len(provider.calls) == 2
+    assert db.query(LlmAdvisorySnapshot).filter_by(state="AVAILABLE").count() == 3
+    assert db.query(LlmAdvisorySnapshot).filter_by(state="FAILED").count() == 3
+    assert db.get(LlmAdvisorySnapshot, 1).state == "AVAILABLE"
+
+
+def test_failure_category_aggregation_is_safe_and_scan_scoped(db):
+    scan = _scan(db)
+    candidates = [_candidate(db, scan) for _ in range(3)]
+    for candidate, category in zip(
+        candidates, ["rate_limited", "rate_limited", "provider_timeout"]
+    ):
+        db.add(LlmAdvisorySnapshot(
+            candidate_id=candidate.id,
+            capability=LLMCapability.CANDIDATE_TRIAGE.value,
+            state="FAILED",
+            llm_used=True,
+            cache_hit=False,
+            safe_error_category=category,
+            deterministic_result_authoritative=True,
+        ))
+    db.commit()
+    assert triage_failure_categories(db, scan.id) == {
+        "provider_timeout": 1,
+        "rate_limited": 2,
+    }
+
+
+def _triage_response(assessment, basis, evidence):
+    return CandidateTriageResponse(
+        assessment=assessment,
+        confidence=0.8,
+        supporting_evidence=evidence,
+        conflicting_evidence=[],
+        recommended_action="KEEP_DETERMINISTIC_RESULT",
+        deterministic_result_authoritative=True,
+        decision_basis=basis,
+    )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        _triage_response(
+            "SUPPORTS_DUPLICATE", ["SEMANTIC_EQUIVALENCE"], ["Contract matches."]
+        ),
+        _triage_response(
+            "SUPPORTS_NON_DUPLICATE", ["PRODUCT_TYPE_CONFLICT"], ["Part numbers differ."]
+        ),
+        _triage_response("SUPPORTS_DUPLICATE", [], ["Specific descriptions align."]),
+        _triage_response("SUPPORTS_NON_DUPLICATE", [], ["Models conflict."]),
+        _triage_response(
+            "SUPPORTS_DUPLICATE",
+            ["SEMANTIC_EQUIVALENCE", "MODEL_CONFLICT"],
+            ["Specific model evidence."],
+        ),
+    ],
+)
+def test_weak_missing_or_contradictory_decision_basis_is_inconclusive(response):
+    validated = validate_triage_decision(response)
+    assert validated.assessment.value == "INCONCLUSIVE"
+    assert validated.recommended_action.value == "HUMAN_REVIEW"
+
+
+@pytest.mark.parametrize(
+    ("assessment", "basis", "evidence"),
+    [
+        (
+            "SUPPORTS_DUPLICATE",
+            ["ABBREVIATION_OR_ALIAS"],
+            ["SS cent pump and stainless steel centrifugal pump identify the same model."],
+        ),
+        (
+            "SUPPORTS_NON_DUPLICATE",
+            ["TECHNICAL_ROLE_CONFLICT"],
+            ["Compressor-side bracket and top-side bracket have different technical roles."],
+        ),
+    ],
+)
+def test_valid_typed_decision_bases_pass(assessment, basis, evidence):
+    validated = validate_triage_decision(_triage_response(assessment, basis, evidence))
+    assert validated.assessment.value == assessment
+
+
+def test_generic_description_plus_site_cannot_promote_duplicate():
+    request = CandidateAdvisoryRequest(
+        left={
+            "part_number": "XJ-100",
+            "description": "Industrial coupling",
+            "site_or_contract": "SYN-W",
+        },
+        right={
+            "part_number": "QZ-900",
+            "description": "Industrial coupling",
+            "site_or_contract": "SYN-W",
+        },
+        deterministic_score=89,
+        deterministic_confidence="MEDIUM",
+        deterministic_status="POSSIBLE_DUPLICATE_REVIEW",
+        deterministic_rule_decision="ALLOW",
+        critical_mismatches=[],
+    )
+    response = _triage_response(
+        "SUPPORTS_DUPLICATE",
+        ["SEMANTIC_EQUIVALENCE"],
+        ["Both descriptions identify an industrial coupling."],
+    )
+    validated = validate_triage_decision(response, request)
+    assert validated.assessment.value == "INCONCLUSIVE"
+    assert validated.recommended_action.value == "HUMAN_REVIEW"

@@ -10,6 +10,7 @@ from app.llm.exceptions import (
     LLMProviderEmptyResponseError,
     LLMProviderHTTPError,
     LLMProviderMalformedJSONError,
+    LLMProviderNetworkError,
     LLMProviderResponseStructureError,
     LLMProviderTimeoutError,
 )
@@ -31,12 +32,18 @@ def safe_error_category(exc: Exception) -> str:
     if isinstance(exc, LLMProviderConfigurationError):
         return "configuration"
     if isinstance(exc, LLMProviderTimeoutError):
-        return "timeout"
+        return "provider_timeout"
+    if isinstance(exc, LLMProviderNetworkError):
+        return "network_failure"
     if isinstance(exc, LLMProviderHTTPError):
+        if exc.status_code == 429:
+            return "rate_limited"
+        if exc.status_code is not None and 500 <= exc.status_code <= 599:
+            return "provider_5xx"
         return "provider_failure"
     if isinstance(exc, (LLMProviderEmptyResponseError, LLMProviderMalformedJSONError, LLMProviderResponseStructureError, LLMStructuredOutputError)):
         return "invalid_provider_output"
-    return "llm_failure"
+    return "provider_failure"
 
 
 def _value(value):
@@ -116,7 +123,10 @@ def persist_candidate_advisory_failure(
     category = safe_error_category(exc)
     values = {
         "state": "FAILED",
-        "llm_used": category in {"timeout", "provider_failure", "invalid_provider_output"},
+        "llm_used": category in {
+            "rate_limited", "provider_5xx", "provider_timeout",
+            "network_failure", "provider_failure", "invalid_provider_output",
+        },
         "cache_hit": False,
         "provider": str(configuration.llm_provider)[:100],
         "model": str(configuration.groq_model)[:200],

@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from app.llm.contracts import (
     CandidateAdvisoryRequest,
     CandidateAdvisoryResponse,
+    CandidateTriageResponse,
     CandidateEvidence,
     ColumnSuggestionRequest,
     ColumnSuggestionResponse,
@@ -246,6 +247,22 @@ def test_candidate_advisory_values_and_authority_are_constrained():
         CandidateAdvisoryResponse(**_advisory_response(assessment="FINAL_DUPLICATE"))
     with pytest.raises(ValidationError):
         CandidateAdvisoryResponse(**_advisory_response(recommended_action="AUTO_MERGE"))
+
+
+def test_candidate_triage_decision_basis_is_strict_typed_and_unique():
+    response = CandidateTriageResponse(
+        **_advisory_response(), decision_basis=["SEMANTIC_EQUIVALENCE"]
+    )
+    assert response.decision_basis[0].value == "SEMANTIC_EQUIVALENCE"
+    with pytest.raises(ValidationError):
+        CandidateTriageResponse(
+            **_advisory_response(), decision_basis=["PART_NUMBERS_DIFFER"]
+        )
+    with pytest.raises(ValidationError):
+        CandidateTriageResponse(
+            **_advisory_response(),
+            decision_basis=["SEMANTIC_EQUIVALENCE", "SEMANTIC_EQUIVALENCE"],
+        )
 
 
 def test_candidate_critical_mismatch_evidence_is_bounded():

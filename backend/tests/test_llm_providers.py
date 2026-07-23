@@ -12,6 +12,7 @@ from app.llm.exceptions import (
     LLMProviderDisabledError,
     LLMProviderEmptyResponseError,
     LLMProviderHTTPError,
+    LLMProviderNetworkError,
     LLMProviderMalformedJSONError,
     LLMProviderResponseStructureError,
     LLMProviderTimeoutError,
@@ -175,6 +176,27 @@ def test_groq_maps_non_success_status_without_response_or_secret_text():
     assert "authorization" not in str(caught.value).lower()
 
 
+@pytest.mark.parametrize(
+    ("status_code", "retry_after", "expected_retry_after"),
+    [(429, "3", 3.0), (503, None, None), (429, "not-a-date", None)],
+)
+def test_groq_http_error_exposes_only_typed_status_and_retry_after(
+    status_code, retry_after, expected_retry_after
+):
+    headers = {"retry-after": retry_after} if retry_after is not None else {}
+    with pytest.raises(LLMProviderHTTPError) as caught:
+        _run_provider(
+            lambda request: httpx.Response(
+                status_code,
+                headers=headers,
+                text="private provider body",
+            )
+        )
+    assert caught.value.status_code == status_code
+    assert caught.value.retry_after_seconds == expected_retry_after
+    assert "private provider body" not in str(caught.value)
+
+
 def test_groq_transport_failure_discards_secret_bearing_exception_chain():
     sensitive_key = "highly-sensitive-test-key"
 
@@ -182,7 +204,7 @@ def test_groq_transport_failure_discards_secret_bearing_exception_chain():
         assert request.headers["Authorization"] == f"Bearer {sensitive_key}"
         raise httpx.ConnectError("connection failed", request=request)
 
-    with pytest.raises(LLMProviderHTTPError) as caught:
+    with pytest.raises(LLMProviderNetworkError) as caught:
         _run_provider(handler, api_key=sensitive_key)
 
     error = caught.value

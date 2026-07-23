@@ -21,6 +21,10 @@ LLM_ENVIRONMENT_VARIABLES = (
     "LLM_AUTO_TRIAGE_ENABLED",
     "LLM_TRIAGE_CONCURRENCY",
     "LLM_TRIAGE_MAX_CANDIDATES_PER_SCAN",
+    "LLM_TRIAGE_MIN_INTERVAL_MS",
+    "LLM_TRIAGE_MAX_RETRIES",
+    "LLM_TRIAGE_RETRY_BATCH_SIZE",
+    "LLM_TRIAGE_CONSECUTIVE_FAILURE_LIMIT",
 )
 LEGACY_ENVIRONMENT_VARIABLES = (
     "MODEL_VERSION",
@@ -56,6 +60,10 @@ def test_llm_settings_defaults_are_disabled_and_secret_safe():
     assert configuration.llm_auto_triage_enabled is True
     assert configuration.llm_triage_concurrency == 1
     assert configuration.llm_triage_max_candidates_per_scan == 250
+    assert configuration.llm_triage_min_interval_ms == 1000
+    assert configuration.llm_triage_max_retries == 2
+    assert configuration.llm_triage_retry_batch_size == 20
+    assert configuration.llm_triage_consecutive_failure_limit == 5
 
 
 def test_legacy_settings_defaults_remain_compatible():

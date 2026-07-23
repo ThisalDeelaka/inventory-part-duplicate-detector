@@ -1,10 +1,14 @@
 import asyncio
 import json
+import random
+import time
 from collections.abc import Callable
 from datetime import timezone
 from threading import RLock
+from typing import Awaitable
 
 from fastapi import BackgroundTasks
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
@@ -25,11 +29,38 @@ from app.services.llm_snapshot_service import (
     SnapshotPersistenceError,
     persist_candidate_advisory_failure,
     persist_candidate_advisory_result,
+    safe_error_category,
 )
 
 
 TRIAGE_CAPABILITY = LLMCapability.CANDIDATE_TRIAGE
 RUN_TERMINAL_STATES = frozenset({"COMPLETED", "COMPLETED_WITH_FAILURES"})
+RETRYABLE_FAILURE_CATEGORIES = frozenset({
+    "rate_limited", "provider_5xx", "provider_timeout", "network_failure",
+})
+SAFE_FAILURE_CATEGORIES = frozenset({
+    "rate_limited", "provider_5xx", "provider_timeout", "network_failure",
+    "invalid_provider_output", "provider_failure",
+})
+
+
+class _PauseBeforeAttempt(Exception):
+    pass
+
+
+class _AttemptFailure(Exception):
+    def __init__(self, cause: Exception) -> None:
+        self.cause = cause
+
+
+class _RunControl:
+    def __init__(self) -> None:
+        self.call_lock = asyncio.Lock()
+        self.state_lock = asyncio.Lock()
+        self.last_call_at: float | None = None
+        self.consecutive_retryable_failures = 0
+        self.paused = False
+        self.last_safe_error_category: str | None = None
 
 
 def format_utc_timestamp(value) -> str:
@@ -153,6 +184,36 @@ def get_triage_run(db: Session, scan_id: int) -> LlmTriageRun | None:
     return db.query(LlmTriageRun).filter(LlmTriageRun.scan_id == scan_id).first()
 
 
+def triage_failure_categories(db: Session, scan_id: int) -> dict[str, int]:
+    rows = (
+        db.query(
+            LlmAdvisorySnapshot.safe_error_category,
+            func.count(LlmAdvisorySnapshot.id),
+        )
+        .join(
+            DuplicateCandidate,
+            DuplicateCandidate.id == LlmAdvisorySnapshot.candidate_id,
+        )
+        .filter(
+            DuplicateCandidate.scan_id == scan_id,
+            LlmAdvisorySnapshot.capability == TRIAGE_CAPABILITY.value,
+            LlmAdvisorySnapshot.state == "FAILED",
+            LlmAdvisorySnapshot.safe_error_category.isnot(None),
+        )
+        .group_by(LlmAdvisorySnapshot.safe_error_category)
+        .all()
+    )
+    aggregated: dict[str, int] = {}
+    for category, count in rows:
+        safe_category = (
+            str(category)
+            if str(category) in SAFE_FAILURE_CATEGORIES
+            else "provider_failure"
+        )
+        aggregated[safe_category] = aggregated.get(safe_category, 0) + int(count)
+    return dict(sorted(aggregated.items()))
+
+
 def prepare_triage_run(
     db: Session,
     scan_id: int,
@@ -200,7 +261,9 @@ def prepare_triage_run(
     return run, should_schedule
 
 
-def triage_run_json(run: LlmTriageRun) -> dict:
+def triage_run_json(
+    run: LlmTriageRun, failure_categories: dict[str, int] | None = None
+) -> dict:
     completed_units = run.processed_count + run.skipped_count
     progress = (
         100.0
@@ -221,6 +284,7 @@ def triage_run_json(run: LlmTriageRun) -> dict:
         "completed_at": format_utc_timestamp(run.completed_at),
         "updated_at": format_utc_timestamp(run.updated_at),
         "last_safe_error_category": run.last_safe_error_category,
+        "failure_categories": failure_categories or {},
     }
 
 
@@ -233,12 +297,18 @@ class LlmTriageRunner:
         cache: LLMCache,
         audit: LLMAuditStore,
         provider_factory: Callable[[Settings], LLMProvider],
+        clock: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        jitter: Callable[[float, float], float] = random.uniform,
     ) -> None:
         self.session_factory = session_factory
         self.configuration = configuration
         self.cache = cache
         self.audit = audit
         self.provider_factory = provider_factory
+        self.clock = clock
+        self.sleeper = sleeper
+        self.jitter = jitter
 
     def _service(self) -> CandidateAdvisoryService:
         return CandidateAdvisoryService(
@@ -274,25 +344,103 @@ class LlmTriageRunner:
             ).all() if ids else []
             states = {snapshot.candidate_id: snapshot.state for snapshot in snapshots}
             if retry_failed:
-                return [candidate_id for candidate_id in ids if states.get(candidate_id) == "FAILED"]
+                return [
+                    candidate_id for candidate_id in ids
+                    if states.get(candidate_id) == "FAILED"
+                ][: self.configuration.llm_triage_retry_batch_size]
             return [candidate_id for candidate_id in ids if candidate_id not in states]
         finally:
             db.close()
 
-    async def _process_candidate(self, candidate_id: int) -> None:
+    async def _wait_for_provider_slot(self, control: _RunControl) -> None:
+        async with control.call_lock:
+            if control.paused:
+                raise _PauseBeforeAttempt()
+            interval = self.configuration.llm_triage_min_interval_ms / 1000
+            if control.last_call_at is not None:
+                remaining = interval - (self.clock() - control.last_call_at)
+                if remaining > 0:
+                    await self.sleeper(remaining)
+            if control.paused:
+                raise _PauseBeforeAttempt()
+            control.last_call_at = self.clock()
+
+    async def _record_retryable_failure(
+        self, control: _RunControl, category: str
+    ) -> bool:
+        async with control.state_lock:
+            control.consecutive_retryable_failures += 1
+            control.last_safe_error_category = category
+            if (
+                control.consecutive_retryable_failures
+                >= self.configuration.llm_triage_consecutive_failure_limit
+            ):
+                control.paused = True
+            return control.paused
+
+    async def _record_success(self, control: _RunControl) -> None:
+        async with control.state_lock:
+            control.consecutive_retryable_failures = 0
+
+    def _retry_delay(self, attempt: int, exc: Exception) -> float:
+        base = min(8.0, 0.5 * (2 ** attempt))
+        jitter = max(0.0, self.jitter(0.0, min(0.25, base / 2)))
+        retry_after = getattr(exc, "retry_after_seconds", None)
+        typed_retry_after = (
+            min(300.0, max(0.0, float(retry_after)))
+            if isinstance(retry_after, (int, float))
+            else 0.0
+        )
+        return min(300.0, max(base + jitter, typed_retry_after))
+
+    async def _advise_with_retries(
+        self, candidate, control: _RunControl
+    ):
+        for attempt in range(self.configuration.llm_triage_max_retries + 1):
+            await self._wait_for_provider_slot(control)
+            try:
+                result = await self._service().advise(
+                    candidate, capability=TRIAGE_CAPABILITY
+                )
+            except Exception as exc:
+                category = safe_error_category(exc)
+                if category not in RETRYABLE_FAILURE_CATEGORIES:
+                    async with control.state_lock:
+                        control.consecutive_retryable_failures = 0
+                    raise _AttemptFailure(exc) from None
+                paused = await self._record_retryable_failure(control, category)
+                if paused or attempt >= self.configuration.llm_triage_max_retries:
+                    raise _AttemptFailure(exc) from None
+                await self.sleeper(self._retry_delay(attempt, exc))
+                continue
+            await self._record_success(control)
+            return result
+        raise AssertionError("bounded retry loop exhausted unexpectedly")
+
+    async def _process_candidate(
+        self, candidate_id: int, control: _RunControl
+    ) -> bool:
         db = self.session_factory()
         try:
             candidate = db.query(DuplicateCandidate).filter(
                 DuplicateCandidate.id == candidate_id
             ).first()
             if candidate is None:
-                return
+                return False
             try:
-                result = await self._service().advise(
-                    candidate, capability=TRIAGE_CAPABILITY
-                )
+                result = await self._advise_with_retries(candidate, control)
                 persist_candidate_advisory_result(
                     db, candidate.id, result, capability=TRIAGE_CAPABILITY
+                )
+            except _PauseBeforeAttempt:
+                return False
+            except _AttemptFailure as failure:
+                persist_candidate_advisory_failure(
+                    db,
+                    candidate.id,
+                    failure.cause,
+                    self.configuration,
+                    capability=TRIAGE_CAPABILITY,
                 )
             except SnapshotPersistenceError:
                 raise
@@ -304,6 +452,7 @@ class LlmTriageRunner:
                     self.configuration,
                     capability=TRIAGE_CAPABILITY,
                 )
+            return True
         finally:
             db.close()
 
@@ -360,6 +509,27 @@ class LlmTriageRunner:
         finally:
             db.close()
 
+    def _pause(
+        self,
+        scan_id: int,
+        category: str | None,
+        *,
+        hard_failures: int = 0,
+    ) -> None:
+        self._refresh_run(scan_id, hard_failures=hard_failures)
+        db = self.session_factory()
+        try:
+            run = get_triage_run(db, scan_id)
+            if run is None:
+                return
+            run.state = "PAUSED"
+            run.last_safe_error_category = (category or "provider_failure")[:80]
+            run.completed_at = None
+            run.updated_at = utcnow()
+            db.commit()
+        finally:
+            db.close()
+
     def mark_failed(self, scan_id: int, category: str = "runner_failure") -> None:
         db = self.session_factory()
         try:
@@ -377,6 +547,7 @@ class LlmTriageRunner:
     async def run(self, scan_id: int, *, retry_failed: bool = False) -> None:
         self._set_running(scan_id)
         candidate_ids = self._candidate_ids(scan_id, retry_failed)
+        control = _RunControl()
         queue: asyncio.Queue[int] = asyncio.Queue()
         for candidate_id in candidate_ids:
             queue.put_nowait(candidate_id)
@@ -386,12 +557,14 @@ class LlmTriageRunner:
         async def worker() -> None:
             nonlocal hard_failures
             while True:
+                if control.paused:
+                    return
                 try:
                     candidate_id = queue.get_nowait()
                 except asyncio.QueueEmpty:
                     return
                 try:
-                    await self._process_candidate(candidate_id)
+                    await self._process_candidate(candidate_id, control)
                 except Exception:
                     hard_failures += 1
                 finally:
@@ -402,7 +575,14 @@ class LlmTriageRunner:
         workers = min(self.configuration.llm_triage_concurrency, len(candidate_ids))
         if workers:
             await asyncio.gather(*(worker() for _ in range(workers)))
-        self._finish(scan_id, hard_failures=hard_failures)
+        if control.paused:
+            self._pause(
+                scan_id,
+                control.last_safe_error_category,
+                hard_failures=hard_failures,
+            )
+        else:
+            self._finish(scan_id, hard_failures=hard_failures)
 
 
 class LlmTriageScheduler:

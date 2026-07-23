@@ -1,5 +1,7 @@
 import json
 import re
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -9,6 +11,7 @@ from app.llm.exceptions import (
     LLMProviderEmptyResponseError,
     LLMProviderHTTPError,
     LLMProviderMalformedJSONError,
+    LLMProviderNetworkError,
     LLMProviderResponseStructureError,
     LLMProviderTimeoutError,
 )
@@ -19,6 +22,24 @@ GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 _CODE_FENCE = re.compile(
     r"^```(?:json)?\s*\n?(.*?)\n?```$", re.IGNORECASE | re.DOTALL
 )
+
+
+def _safe_retry_after_seconds(value: str | None) -> float | None:
+    if not value or len(value) > 128:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+        except (TypeError, ValueError, OverflowError):
+            return None
+    if seconds < 0:
+        return 0.0
+    return min(seconds, 300.0)
 
 
 def _strip_surrounding_code_fence(content: str) -> str:
@@ -96,7 +117,7 @@ class GroqLLMProvider:
                 "LLM provider request timed out"
             )
         except httpx.RequestError:
-            transport_error = LLMProviderHTTPError(
+            transport_error = LLMProviderNetworkError(
                 "LLM provider transport failed"
             )
 
@@ -105,7 +126,11 @@ class GroqLLMProvider:
 
         if not 200 <= response.status_code < 300:
             raise LLMProviderHTTPError(
-                f"LLM provider returned HTTP status {response.status_code}"
+                f"LLM provider returned HTTP status {response.status_code}",
+                status_code=response.status_code,
+                retry_after_seconds=_safe_retry_after_seconds(
+                    response.headers.get("retry-after")
+                ),
             )
         try:
             payload = response.json()

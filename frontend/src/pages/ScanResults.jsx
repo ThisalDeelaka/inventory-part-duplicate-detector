@@ -10,6 +10,7 @@ import {
   filterAndPrioritizeCandidates,
   scanExportTargets,
   shouldPollTriage,
+  triageFailureLabel,
 } from '../utils/llmUi'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
@@ -126,6 +127,9 @@ function TriagePanel({ value, error, busy, start, retry }) {
       {error && <p className="llm-error" role="alert">{error}</p>}
       {value ? (
         <>
+          {value.state === 'PAUSED' && (
+            <p className="warning">LLM triage paused after repeated provider failures. Resume when the provider is available.</p>
+          )}
           <div className="triage-progress"><span style={{ width: `${value.progress_percent}%` }} /></div>
           <div className="metrics">
             <span>State: {value.state}</span>
@@ -136,6 +140,13 @@ function TriagePanel({ value, error, busy, start, retry }) {
             <span>Failed: {value.failed_count}</span>
             <span>Skipped: {value.skipped_count}</span>
           </div>
+          {!!Object.keys(value.failure_categories || {}).length && (
+            <div className="mismatch-list" aria-label="LLM failure categories">
+              {Object.entries(value.failure_categories).map(([category, count]) => (
+                <span key={category}>{triageFailureLabel(category)}: {count}</span>
+              ))}
+            </div>
+          )}
         </>
       ) : <p>No automatic triage run is available yet.</p>}
     </section>

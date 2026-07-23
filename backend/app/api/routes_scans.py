@@ -25,6 +25,7 @@ from app.services.llm_triage_service import (
     LlmTriageScheduler,
     prepare_triage_run,
     schedule_automatic_triage,
+    triage_failure_categories,
     triage_run_json,
 )
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
@@ -305,7 +306,7 @@ def start_llm_triage(
                     "message": "LLM triage could not be scheduled safely",
                 },
             ) from None
-    return triage_run_json(run)
+    return triage_run_json(run, triage_failure_categories(db, scan_id))
 
 
 @router.get("/{scan_id}/llm-triage")
@@ -315,7 +316,7 @@ def llm_triage_status(scan_id: int, db: Session = Depends(get_db)):
     run = get_triage_run(db, scan_id)
     if run is None:
         raise HTTPException(404, "LLM triage has not been started")
-    return triage_run_json(run)
+    return triage_run_json(run, triage_failure_categories(db, scan_id))
 
 
 @router.post("/{scan_id}/llm-triage/retry-failed")
@@ -352,4 +353,4 @@ def retry_failed_llm_triage(
                     "message": "Failed LLM triage items could not be scheduled safely",
                 },
             ) from None
-    return triage_run_json(run)
+    return triage_run_json(run, triage_failure_categories(db, scan_id))

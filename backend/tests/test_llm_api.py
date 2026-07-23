@@ -186,7 +186,7 @@ def test_difficult_value_api_maps_timeout_safely(client):
         json={"raw_value": "MTR", "field_context": "DESCRIPTION"},
     )
     assert response.status_code == 504
-    assert response.json()["detail"]["category"] == "timeout"
+    assert response.json()["detail"]["category"] == "provider_timeout"
 
 
 def test_difficult_value_api_rejects_invalid_context_and_blank_raw_before_provider(client):
@@ -338,7 +338,7 @@ def test_candidate_timeout_maps_safely_and_preserves_candidate(client, db):
 
     response = client.post(f"/api/llm/candidates/{candidate.id}/advisory")
     assert response.status_code == 504
-    assert response.json()["detail"]["category"] == "timeout"
+    assert response.json()["detail"]["category"] == "provider_timeout"
     assert "private timeout detail" not in response.text
     db.refresh(candidate)
     assert {name: getattr(candidate, name) for name in protected} == protected

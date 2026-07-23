@@ -4,6 +4,7 @@ import pytest
 
 from app.llm.contracts import (
     CandidateAdvisoryResponse,
+    CandidateTriageResponse,
     CandidateAdvisoryRequest,
     CandidateEvidence,
     ColumnSuggestionResponse,
@@ -88,6 +89,7 @@ def test_response_schemas_are_synchronized_deterministic_and_complete():
         LLMCapability.COLUMN_SUGGESTION: ColumnSuggestionResponse,
         LLMCapability.DIFFICULT_VALUE: DifficultValueResponse,
         LLMCapability.CANDIDATE_ADVISORY: CandidateAdvisoryResponse,
+        LLMCapability.CANDIDATE_TRIAGE: CandidateTriageResponse,
     }
     for capability, model in models.items():
         expected = model.model_json_schema(mode="validation")
@@ -141,17 +143,17 @@ def test_candidate_triage_prompt_defines_balanced_semantic_decisions():
     prompt = SYSTEM_PROMPTS[LLMCapability.CANDIDATE_TRIAGE]
 
     for guidance in (
-        "Abbreviations",
-        "spelling variation",
+        "Different part numbers are expected",
+        "Spelling, punctuation, spacing, prefixes, abbreviations, aliases",
         "punctuation",
-        "word ordering",
-        "equivalent terminology",
-        "generic word",
-        "product, purpose, model, type, material, size, rating, side, placement, or technical role",
-        "genuinely insufficient",
-        "do not use it as the default response",
+        "not non-duplicate evidence by themselves",
+        "generic description and contract or site is insufficient",
+        "specific semantic equivalence",
+        "product or type, purpose, model, material, size, rating, side, placement, application",
+        "Use INCONCLUSIVE whenever the evidence is insufficient",
         "rather than copying the deterministic score",
         "deterministic result must remain preserved and authoritative",
+        "decision_basis",
     ):
         assert guidance in prompt
     assert "SUPPORTS_DUPLICATE" in prompt

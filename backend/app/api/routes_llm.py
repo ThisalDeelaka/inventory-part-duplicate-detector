@@ -15,6 +15,7 @@ from app.llm.exceptions import (
     LLMProviderEmptyResponseError,
     LLMProviderHTTPError,
     LLMProviderMalformedJSONError,
+    LLMProviderNetworkError,
     LLMProviderResponseStructureError,
     LLMProviderTimeoutError,
 )
@@ -66,9 +67,24 @@ def _safe_http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, LLMProviderTimeoutError):
         return HTTPException(
             504,
-            {"category": "timeout", "message": "LLM provider request timed out"},
+            {"category": "provider_timeout", "message": "LLM provider request timed out"},
+        )
+    if isinstance(exc, LLMProviderNetworkError):
+        return HTTPException(
+            502,
+            {"category": "network_failure", "message": "LLM provider network request failed"},
         )
     if isinstance(exc, LLMProviderHTTPError):
+        if exc.status_code == 429:
+            return HTTPException(
+                429,
+                {"category": "rate_limited", "message": "LLM provider rate limit reached"},
+            )
+        if exc.status_code is not None and 500 <= exc.status_code <= 599:
+            return HTTPException(
+                502,
+                {"category": "provider_5xx", "message": "LLM provider is unavailable"},
+            )
         return HTTPException(
             502,
             {

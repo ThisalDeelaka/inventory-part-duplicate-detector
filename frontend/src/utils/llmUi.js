@@ -8,6 +8,10 @@ const SAFE_CATEGORIES = new Set([
   'disabled',
   'configuration',
   'timeout',
+  'rate_limited',
+  'provider_5xx',
+  'provider_timeout',
+  'network_failure',
   'provider_failure',
   'invalid_provider_output',
   'llm_failure',
@@ -24,7 +28,16 @@ export const EFFECTIVE_STATUS_OPTIONS = [
 ]
 
 const TRIAGE_STATES = new Set([
-  'QUEUED', 'RUNNING', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED',
+  'QUEUED', 'RUNNING', 'PAUSED', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED',
+])
+
+const TRIAGE_FAILURE_LABELS = new Map([
+  ['rate_limited', 'Rate limited'],
+  ['provider_5xx', 'Provider unavailable'],
+  ['provider_timeout', 'Provider timeout'],
+  ['network_failure', 'Network failure'],
+  ['invalid_provider_output', 'Invalid provider output'],
+  ['provider_failure', 'Other provider failure'],
 ])
 
 const STATUS_FALLBACKS = {
@@ -144,6 +157,14 @@ export function normalizeTriageStatus(value) {
   const total = numeric('total_eligible')
   const processed = numeric('processed_count')
   const skipped = numeric('skipped_count')
+  const rawCategories = value.failure_categories && typeof value.failure_categories === 'object'
+    ? value.failure_categories
+    : {}
+  const failureCategories = Object.fromEntries(
+    [...TRIAGE_FAILURE_LABELS.keys()]
+      .filter(key => Number(rawCategories[key]) > 0)
+      .map(key => [key, Math.max(0, Number(rawCategories[key]))]),
+  )
   return {
     ...value,
     total_eligible: total,
@@ -153,8 +174,13 @@ export function normalizeTriageStatus(value) {
     human_review_count: numeric('human_review_count'),
     failed_count: numeric('failed_count'),
     skipped_count: skipped,
+    failure_categories: failureCategories,
     progress_percent: total ? Math.min(100, Math.round((processed + skipped) * 10000 / total) / 100) : 100,
   }
+}
+
+export function triageFailureLabel(category) {
+  return TRIAGE_FAILURE_LABELS.get(category) || 'Provider failure'
 }
 
 export function shouldPollTriage(state) {

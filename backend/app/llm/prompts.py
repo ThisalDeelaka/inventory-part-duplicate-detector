@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from app.llm.contracts import (
     CandidateAdvisoryResponse,
+    CandidateTriageResponse,
     ColumnSuggestionResponse,
     DifficultValueResponse,
 )
@@ -13,7 +14,7 @@ from app.llm.service_contracts import LLMCapability
 COLUMN_SUGGESTION_PROMPT_VERSION = "column-suggestion-v1"
 DIFFICULT_VALUE_PROMPT_VERSION = "difficult-value-v1"
 CANDIDATE_ADVISORY_PROMPT_VERSION = "candidate-advisory-v1"
-CANDIDATE_TRIAGE_PROMPT_VERSION = "candidate-triage-v2"
+CANDIDATE_TRIAGE_PROMPT_VERSION = "candidate-triage-v3"
 
 PROMPT_VERSIONS = {
     LLMCapability.COLUMN_SUGGESTION: COLUMN_SUGGESTION_PROMPT_VERSION,
@@ -38,7 +39,7 @@ _RESPONSE_MODELS = {
     LLMCapability.COLUMN_SUGGESTION: ColumnSuggestionResponse,
     LLMCapability.DIFFICULT_VALUE: DifficultValueResponse,
     LLMCapability.CANDIDATE_ADVISORY: CandidateAdvisoryResponse,
-    LLMCapability.CANDIDATE_TRIAGE: CandidateAdvisoryResponse,
+    LLMCapability.CANDIDATE_TRIAGE: CandidateTriageResponse,
 }
 
 RESPONSE_SCHEMAS = {
@@ -72,12 +73,15 @@ _CAPABILITY_INSTRUCTIONS = {
     LLMCapability.CANDIDATE_TRIAGE: (
         "Narrow task: triage bounded evidence for one already-scored review candidate without changing its result. "
         "Evaluate the semantic evidence independently rather than copying the deterministic score. "
-        "Abbreviations, spelling variation, punctuation, word ordering, and equivalent terminology may support "
-        "SUPPORTS_DUPLICATE when the evidence identifies the same specific item. Matching only a generic word is "
-        "insufficient to support a duplicate. Meaningful differences in product, purpose, model, type, material, "
-        "size, rating, side, placement, or technical role support SUPPORTS_NON_DUPLICATE. Use INCONCLUSIVE only "
-        "when the supplied evidence is genuinely insufficient for either supported decision; do not use it as "
-        "the default response. The deterministic result must remain preserved and authoritative. "
+        "Different part numbers are expected in duplicate detection and are not non-duplicate evidence by themselves. "
+        "Spelling, punctuation, spacing, prefixes, abbreviations, aliases, suffix formatting, and numbering-format "
+        "differences are not non-duplicate evidence by themselves. SUPPORTS_NON_DUPLICATE requires a meaningful "
+        "conflict in product or type, purpose, model, material, size, rating, side, placement, application, or "
+        "technical role. Matching only a generic description and contract or site is insufficient for "
+        "SUPPORTS_DUPLICATE. SUPPORTS_DUPLICATE requires specific semantic equivalence or a credible abbreviation, "
+        "alias, typo, or formatting relationship with no meaningful conflict. Use INCONCLUSIVE whenever the evidence "
+        "is insufficient. The deterministic result must remain preserved and authoritative. decision_basis must be "
+        "an array containing only the exact schema enum values that directly justify the assessment. "
         "Return exactly the required fields and no additional fields. assessment must be one of "
         "SUPPORTS_DUPLICATE, SUPPORTS_NON_DUPLICATE, or INCONCLUSIVE. recommended_action must be one of "
         "KEEP_DETERMINISTIC_RESULT or HUMAN_REVIEW. supporting_evidence and conflicting_evidence must be "

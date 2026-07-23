@@ -169,6 +169,20 @@ class AdvisoryRecommendedAction(str, Enum):
     HUMAN_REVIEW = "HUMAN_REVIEW"
 
 
+class CandidateDecisionBasis(str, Enum):
+    SEMANTIC_EQUIVALENCE = "SEMANTIC_EQUIVALENCE"
+    ABBREVIATION_OR_ALIAS = "ABBREVIATION_OR_ALIAS"
+    TYPO_OR_FORMAT_VARIATION = "TYPO_OR_FORMAT_VARIATION"
+    PRODUCT_TYPE_CONFLICT = "PRODUCT_TYPE_CONFLICT"
+    PURPOSE_CONFLICT = "PURPOSE_CONFLICT"
+    MODEL_CONFLICT = "MODEL_CONFLICT"
+    MATERIAL_CONFLICT = "MATERIAL_CONFLICT"
+    SIZE_OR_RATING_CONFLICT = "SIZE_OR_RATING_CONFLICT"
+    SIDE_OR_PLACEMENT_CONFLICT = "SIDE_OR_PLACEMENT_CONFLICT"
+    APPLICATION_CONFLICT = "APPLICATION_CONFLICT"
+    TECHNICAL_ROLE_CONFLICT = "TECHNICAL_ROLE_CONFLICT"
+
+
 class CandidateAdvisoryResponse(StrictContract):
     assessment: AdvisoryAssessment
     confidence: float = Field(ge=0, le=1)
@@ -176,3 +190,16 @@ class CandidateAdvisoryResponse(StrictContract):
     conflicting_evidence: list[EvidenceText] = Field(max_length=10)
     recommended_action: AdvisoryRecommendedAction
     deterministic_result_authoritative: Literal[True]
+
+
+class CandidateTriageResponse(CandidateAdvisoryResponse):
+    decision_basis: list[CandidateDecisionBasis] = Field(max_length=8)
+
+    @field_validator("decision_basis")
+    @classmethod
+    def decision_basis_must_be_unique(
+        cls, values: list[CandidateDecisionBasis]
+    ) -> list[CandidateDecisionBasis]:
+        if len(values) != len(set(values)):
+            raise ValueError("decision_basis values must be unique")
+        return values
