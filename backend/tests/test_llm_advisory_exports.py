@@ -19,7 +19,7 @@ from app.llm.provider import LLMProviderResult
 from app.llm.runtime import get_llm_audit, get_llm_cache, get_llm_provider_factory, get_llm_settings
 from app.llm.service_contracts import LLMCapability
 from app.main import app
-from app.services.llm_export_service import format_utc_timestamp, sanitize_llm_csv_cell
+from app.services.llm_export_service import ASSISTED_FIELDS, format_utc_timestamp, sanitize_llm_csv_cell
 
 
 DETERMINISTIC_CANDIDATE_FIELDS = [
@@ -138,7 +138,7 @@ def test_legacy_exports_are_unchanged_after_snapshot_and_enhanced_columns_are_ap
     assert client.get(f"/api/scans/{scan.id}/export").content == candidate_before
     assert client.get(f"/api/scans/{scan.id}/rejections/export").content == rejection_before
     enhanced = client.get(f"/api/scans/{scan.id}/export-with-llm")
-    assert next(csv.reader(io.StringIO(enhanced.text))) == DETERMINISTIC_CANDIDATE_FIELDS + LLM_FIELDS
+    assert next(csv.reader(io.StringIO(enhanced.text))) == DETERMINISTIC_CANDIDATE_FIELDS + LLM_FIELDS + ASSISTED_FIELDS
     assert enhanced.headers["content-disposition"] == f'attachment; filename="scan-{scan.id}-candidates-with-llm.csv"'
 
 

@@ -13,11 +13,13 @@ from app.llm.service_contracts import LLMCapability
 COLUMN_SUGGESTION_PROMPT_VERSION = "column-suggestion-v1"
 DIFFICULT_VALUE_PROMPT_VERSION = "difficult-value-v1"
 CANDIDATE_ADVISORY_PROMPT_VERSION = "candidate-advisory-v1"
+CANDIDATE_TRIAGE_PROMPT_VERSION = "candidate-triage-v1"
 
 PROMPT_VERSIONS = {
     LLMCapability.COLUMN_SUGGESTION: COLUMN_SUGGESTION_PROMPT_VERSION,
     LLMCapability.DIFFICULT_VALUE: DIFFICULT_VALUE_PROMPT_VERSION,
     LLMCapability.CANDIDATE_ADVISORY: CANDIDATE_ADVISORY_PROMPT_VERSION,
+    LLMCapability.CANDIDATE_TRIAGE: CANDIDATE_TRIAGE_PROMPT_VERSION,
 }
 
 _COMMON_SAFETY = """
@@ -36,6 +38,7 @@ _RESPONSE_MODELS = {
     LLMCapability.COLUMN_SUGGESTION: ColumnSuggestionResponse,
     LLMCapability.DIFFICULT_VALUE: DifficultValueResponse,
     LLMCapability.CANDIDATE_ADVISORY: CandidateAdvisoryResponse,
+    LLMCapability.CANDIDATE_TRIAGE: CandidateAdvisoryResponse,
 }
 
 RESPONSE_SCHEMAS = {
@@ -60,6 +63,14 @@ _CAPABILITY_INSTRUCTIONS = {
     ),
     LLMCapability.CANDIDATE_ADVISORY: (
         "Narrow task: assess bounded evidence for one already-scored candidate pair without changing its result. "
+        "Return exactly the required fields and no additional fields. assessment must be one of "
+        "SUPPORTS_DUPLICATE, SUPPORTS_NON_DUPLICATE, or INCONCLUSIVE. recommended_action must be one of "
+        "KEEP_DETERMINISTIC_RESULT or HUMAN_REVIEW. supporting_evidence and conflicting_evidence must be "
+        "arrays of strings. confidence must be between 0 and 1. deterministic_result_authoritative must be "
+        "exactly true."
+    ),
+    LLMCapability.CANDIDATE_TRIAGE: (
+        "Narrow task: triage bounded evidence for one already-scored review candidate without changing its result. "
         "Return exactly the required fields and no additional fields. assessment must be one of "
         "SUPPORTS_DUPLICATE, SUPPORTS_NON_DUPLICATE, or INCONCLUSIVE. recommended_action must be one of "
         "KEEP_DETERMINISTIC_RESULT or HUMAN_REVIEW. supporting_evidence and conflicting_evidence must be "

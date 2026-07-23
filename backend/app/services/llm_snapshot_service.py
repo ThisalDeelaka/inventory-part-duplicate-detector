@@ -48,7 +48,9 @@ def _bounded_json(values) -> str:
     return json.dumps(bounded, ensure_ascii=False, separators=(",", ":"))
 
 
-def _upsert(db: Session, candidate_id: int, values: dict) -> LlmAdvisorySnapshot:
+def _upsert(
+    db: Session, candidate_id: int, values: dict, capability: LLMCapability
+) -> LlmAdvisorySnapshot:
     """Commit the route-owned session, which must have no unrelated pending mutations.
 
     The unique constraint protects durable correctness during simultaneous first inserts;
@@ -57,10 +59,12 @@ def _upsert(db: Session, candidate_id: int, values: dict) -> LlmAdvisorySnapshot
     try:
         snapshot = db.query(LlmAdvisorySnapshot).filter(
             LlmAdvisorySnapshot.candidate_id == candidate_id,
-            LlmAdvisorySnapshot.capability == CAPABILITY,
+            LlmAdvisorySnapshot.capability == capability.value,
         ).first()
         if snapshot is None:
-            snapshot = LlmAdvisorySnapshot(candidate_id=candidate_id, capability=CAPABILITY)
+            snapshot = LlmAdvisorySnapshot(
+                candidate_id=candidate_id, capability=capability.value
+            )
             db.add(snapshot)
         now = utcnow()
         values.update(generated_at=now, updated_at=now)
@@ -74,7 +78,12 @@ def _upsert(db: Session, candidate_id: int, values: dict) -> LlmAdvisorySnapshot
         raise SnapshotPersistenceError("advisory snapshot persistence failed") from exc
 
 
-def persist_candidate_advisory_result(db: Session, candidate_id: int, result: CandidateAdvisoryResult) -> LlmAdvisorySnapshot:
+def persist_candidate_advisory_result(
+    db: Session,
+    candidate_id: int,
+    result: CandidateAdvisoryResult,
+    capability: LLMCapability = LLMCapability.CANDIDATE_ADVISORY,
+) -> LlmAdvisorySnapshot:
     metadata = result.metadata
     advisory = result.advisory
     available = advisory is not None
@@ -94,10 +103,16 @@ def persist_candidate_advisory_result(db: Session, candidate_id: int, result: Ca
         "safe_error_category": None,
         "deterministic_result_authoritative": True,
     }
-    return _upsert(db, candidate_id, values)
+    return _upsert(db, candidate_id, values, capability)
 
 
-def persist_candidate_advisory_failure(db: Session, candidate_id: int, exc: Exception, configuration: Settings) -> LlmAdvisorySnapshot:
+def persist_candidate_advisory_failure(
+    db: Session,
+    candidate_id: int,
+    exc: Exception,
+    configuration: Settings,
+    capability: LLMCapability = LLMCapability.CANDIDATE_ADVISORY,
+) -> LlmAdvisorySnapshot:
     category = safe_error_category(exc)
     values = {
         "state": "FAILED",
@@ -105,7 +120,7 @@ def persist_candidate_advisory_failure(db: Session, candidate_id: int, exc: Exce
         "cache_hit": False,
         "provider": str(configuration.llm_provider)[:100],
         "model": str(configuration.groq_model)[:200],
-        "prompt_version": PROMPT_VERSIONS[LLMCapability.CANDIDATE_ADVISORY][:100],
+        "prompt_version": PROMPT_VERSIONS[capability][:100],
         "assessment": None,
         "confidence": None,
         "recommended_action": None,
@@ -115,4 +130,4 @@ def persist_candidate_advisory_failure(db: Session, candidate_id: int, exc: Exce
         "safe_error_category": category,
         "deterministic_result_authoritative": True,
     }
-    return _upsert(db, candidate_id, values)
+    return _upsert(db, candidate_id, values, capability)

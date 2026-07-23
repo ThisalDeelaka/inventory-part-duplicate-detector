@@ -527,8 +527,16 @@ def build_candidate_request(candidate) -> CandidateAdvisoryRequest:
 
 
 class CandidateAdvisoryService(_CapabilityService):
-    async def advise(self, candidate) -> CandidateAdvisoryResult:
-        capability = LLMCapability.CANDIDATE_ADVISORY
+    async def advise(
+        self,
+        candidate,
+        capability: LLMCapability = LLMCapability.CANDIDATE_ADVISORY,
+    ) -> CandidateAdvisoryResult:
+        if capability not in {
+            LLMCapability.CANDIDATE_ADVISORY,
+            LLMCapability.CANDIDATE_TRIAGE,
+        }:
+            raise ValueError("candidate service requires a candidate capability")
         prompt_version = PROMPT_VERSIONS[capability]
         eligibility = candidate_eligibility(candidate)
         if not eligibility.eligible:

@@ -4,6 +4,11 @@ from datetime import datetime, timezone
 
 from app.llm.service_contracts import LLMCapability
 from app.services.export_service import sanitize_csv_cell
+from app.services.llm_triage_service import (
+    candidate_is_triage_eligible,
+    effective_recommended_action,
+    effective_status,
+)
 
 
 CANDIDATE_FIELDS = [
@@ -28,6 +33,10 @@ LLM_FIELDS = [
     "llm_prompt_version", "llm_assessment", "llm_confidence", "llm_recommended_action",
     "llm_supporting_evidence", "llm_conflicting_evidence", "llm_bypass_reason",
     "llm_safe_error_category", "llm_generated_at", "deterministic_result_authoritative",
+]
+
+ASSISTED_FIELDS = [
+    "effective_status", "effective_recommended_action", "llm_triage_run_state",
 ]
 
 TERMINAL_RULE_DECISIONS = frozenset({"REJECT"})
@@ -94,20 +103,48 @@ def exclusion_export_columns(exclusion):
     return _blank_llm_row()
 
 
-def _write_rows(records, deterministic_fields, llm_rows):
+def _write_rows(records, deterministic_fields, llm_rows, extra_fields=None):
+    extra_fields = list(extra_fields or [])
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=deterministic_fields + LLM_FIELDS)
+    writer = csv.DictWriter(
+        output, fieldnames=deterministic_fields + LLM_FIELDS + extra_fields
+    )
     writer.writeheader()
     for record, llm_row in zip(records, llm_rows):
         row = {field: sanitize_csv_cell(getattr(record, field)) for field in deterministic_fields}
-        row.update({field: sanitize_llm_csv_cell(llm_row.get(field)) for field in LLM_FIELDS})
+        row.update({
+            field: sanitize_llm_csv_cell(llm_row.get(field))
+            for field in LLM_FIELDS + extra_fields
+        })
         writer.writerow(row)
     return output.getvalue()
 
 
-def candidates_with_llm_to_csv(candidates, snapshots_by_candidate):
-    rows = [snapshot_export_columns(snapshots_by_candidate.get(item.id)) for item in candidates]
-    return _write_rows(candidates, CANDIDATE_FIELDS, rows)
+def candidates_with_llm_to_csv(
+    candidates,
+    snapshots_by_candidate,
+    triage_snapshots_by_candidate=None,
+    triage_run_state="NOT_STARTED",
+):
+    triage_snapshots_by_candidate = triage_snapshots_by_candidate or {}
+    rows = []
+    for item in candidates:
+        triage_snapshot = triage_snapshots_by_candidate.get(item.id)
+        fallback_snapshot = snapshots_by_candidate.get(item.id)
+        selected_snapshot = triage_snapshot or fallback_snapshot
+        row = snapshot_export_columns(selected_snapshot)
+        status = effective_status(
+            triage_snapshot or fallback_snapshot,
+            eligible=candidate_is_triage_eligible(item),
+            queued=triage_run_state != "NOT_STARTED",
+        )
+        row.update(
+            effective_status=status,
+            effective_recommended_action=effective_recommended_action(status),
+            llm_triage_run_state=triage_run_state,
+        )
+        rows.append(row)
+    return _write_rows(candidates, CANDIDATE_FIELDS, rows, ASSISTED_FIELDS)
 
 
 def rejections_with_llm_to_csv(rejections):

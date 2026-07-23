@@ -22,7 +22,7 @@ GET /api/scans/{scan_id}/rejections/export-with-llm
 scan-{scan_id}-rule-exclusions-with-llm.csv
 ```
 
-They preserve every deterministic column first and append exactly:
+They preserve every deterministic column first and retain these existing LLM columns:
 
 ```text
 llm_state
@@ -42,15 +42,23 @@ llm_generated_at
 deterministic_result_authoritative
 ```
 
+The enhanced candidate export then appends:
+
+```text
+effective_status
+effective_recommended_action
+llm_triage_run_state
+```
+
 ## Persistence and state semantics
 
-Only an explicit bodyless `POST /api/llm/candidates/{candidate_id}/advisory` request persists an outcome. Column suggestions and difficult-value interpretations are not persisted. A later explicit request replaces the latest saved outcome instead of creating an unbounded history.
+Manual advisory remains an explicit bodyless `POST /api/llm/candidates/{candidate_id}/advisory`. Automatic scan triage persists the distinct `candidate_triage` capability after the deterministic scan commits. Column suggestions and difficult-value interpretations are not persisted. A later request replaces the current outcome for its candidate and capability instead of creating an unbounded history.
 
 Candidate exports use `NOT_REQUESTED`, `AVAILABLE`, `INELIGIBLE`, and `FAILED`. Rule exclusions use `NOT_APPLICABLE_HARD_RULE` for terminal deterministic rejection and `NOT_REQUESTED` for downgraded, reviewable, or unknown decisions. The deterministic result always remains authoritative.
 
 `generated_at` is the generation time of the latest saved outcome and is replaced by a repeated explicit request. `updated_at` is the time the current snapshot row was last updated. Exported `llm_generated_at` values are normalized to UTC ISO-8601 and end in `Z`, including timestamps loaded from SQLite without timezone information.
 
-To include an advisory, request it for one persisted candidate from the candidate tools, then choose **Export CSV with saved LLM advisories**. Export never generates advisories. Candidates without an explicit saved request remain `NOT_REQUESTED`.
+The enhanced candidate export prefers a saved automatic `candidate_triage` snapshot. For backward compatibility it uses the manual `candidate_advisory` snapshot only when no automatic snapshot exists. Export never generates advisories. Eligible automatic candidates without a completed snapshot are represented by the assisted `LLM_PENDING` status; ineligible candidates use `NOT_APPLICABLE`.
 
 ## Database lifecycle and bounded concurrency
 

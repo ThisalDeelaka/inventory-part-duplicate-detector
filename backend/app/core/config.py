@@ -79,6 +79,21 @@ class Settings(BaseModel):
         gt=0,
         le=10000,
     )
+    llm_auto_triage_enabled: bool = Field(
+        default_factory=lambda: os.getenv("LLM_AUTO_TRIAGE_ENABLED", "true")
+    )
+    llm_triage_concurrency: int = Field(
+        default_factory=lambda: os.getenv("LLM_TRIAGE_CONCURRENCY", "1"),
+        gt=0,
+        le=8,
+    )
+    llm_triage_max_candidates_per_scan: int = Field(
+        default_factory=lambda: os.getenv(
+            "LLM_TRIAGE_MAX_CANDIDATES_PER_SCAN", "250"
+        ),
+        gt=0,
+        le=1000,
+    )
 
 
 settings = Settings()

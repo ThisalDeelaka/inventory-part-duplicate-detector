@@ -18,6 +18,9 @@ LLM_ENVIRONMENT_VARIABLES = (
     "LLM_CACHE_TTL_SECONDS",
     "LLM_AUDIT_ENABLED",
     "LLM_AUDIT_MAX_ENTRIES",
+    "LLM_AUTO_TRIAGE_ENABLED",
+    "LLM_TRIAGE_CONCURRENCY",
+    "LLM_TRIAGE_MAX_CANDIDATES_PER_SCAN",
 )
 LEGACY_ENVIRONMENT_VARIABLES = (
     "MODEL_VERSION",
@@ -50,6 +53,9 @@ def test_llm_settings_defaults_are_disabled_and_secret_safe():
     assert configuration.llm_cache_ttl_seconds == 3600
     assert configuration.llm_audit_enabled is True
     assert configuration.llm_audit_max_entries == 1000
+    assert configuration.llm_auto_triage_enabled is True
+    assert configuration.llm_triage_concurrency == 1
+    assert configuration.llm_triage_max_candidates_per_scan == 250
 
 
 def test_legacy_settings_defaults_remain_compatible():

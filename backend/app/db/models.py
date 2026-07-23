@@ -29,6 +29,9 @@ class DuplicateScan(Base):
     candidates = relationship("DuplicateCandidate", cascade="all, delete-orphan")
     warnings = relationship("ScanWarning", cascade="all, delete-orphan")
     rejections = relationship("RuleExclusionAudit", cascade="all, delete-orphan")
+    llm_triage_run = relationship(
+        "LlmTriageRun", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class DuplicateCandidate(Base):
@@ -99,6 +102,27 @@ class LlmAdvisorySnapshot(Base):
     deterministic_result_authoritative = Column(Boolean, nullable=False, default=True)
     generated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class LlmTriageRun(Base):
+    __tablename__ = "llm_triage_run"
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(
+        Integer, ForeignKey("duplicate_scan.id"), nullable=False, unique=True, index=True
+    )
+    state = Column(String(40), nullable=False, default="QUEUED")
+    total_eligible = Column(Integer, nullable=False, default=0)
+    processed_count = Column(Integer, nullable=False, default=0)
+    likely_duplicate_count = Column(Integer, nullable=False, default=0)
+    downgraded_count = Column(Integer, nullable=False, default=0)
+    human_review_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    last_safe_error_category = Column(String(80))
 
 
 class DuplicateFeedback(Base):

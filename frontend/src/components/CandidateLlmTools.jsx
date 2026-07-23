@@ -133,7 +133,7 @@ export default function CandidateLlmTools({ candidate }) {
       <div className="llm-heading">
         <div><p className="eyebrow">Optional assistance</p><h3>LLM advisory</h3></div>
         <button type="button" onClick={requestAdvisory} disabled={advisory.phase === 'loading'} aria-busy={advisory.phase === 'loading'}>
-          {advisory.phase === 'loading' ? 'Requesting…' : advisory.phase === 'error' ? 'Retry advisory' : 'Request candidate advisory'}
+          {advisory.phase === 'loading' ? 'Requesting…' : advisory.phase === 'error' ? 'Retry advisory' : candidate.llm_triage_state === 'AVAILABLE' ? 'Re-evaluate candidate' : 'Request candidate advisory'}
         </button>
       </div>
       <p className="llm-authority">{ADVISORY_AUTHORITY_LABEL}</p>

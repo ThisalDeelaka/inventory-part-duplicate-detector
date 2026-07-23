@@ -97,6 +97,7 @@ def test_status_works_disabled_without_provider_or_secret_metadata(client):
     assert body["provider_configured"] is False
     assert set(body["prompt_versions"]) == {
         "column_suggestion", "difficult_value", "candidate_advisory"
+        , "candidate_triage"
     }
     serialized = json.dumps(body).lower()
     assert "api_key" not in serialized

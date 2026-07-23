@@ -13,6 +13,20 @@ const SAFE_CATEGORIES = new Set([
   'llm_failure',
 ])
 
+export const EFFECTIVE_STATUS_OPTIONS = [
+  ['', 'All'],
+  ['LLM_LIKELY_DUPLICATE', 'LLM likely duplicate'],
+  ['LLM_DOWNGRADED', 'LLM downgraded'],
+  ['HUMAN_REVIEW', 'Human review'],
+  ['LLM_PENDING', 'LLM pending'],
+  ['LLM_FAILED', 'LLM failed'],
+  ['NOT_APPLICABLE', 'Not applicable'],
+]
+
+const TRIAGE_STATES = new Set([
+  'QUEUED', 'RUNNING', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED',
+])
+
 const STATUS_FALLBACKS = {
   404: 'Candidate unavailable.',
   422: 'Invalid bounded input.',
@@ -110,6 +124,57 @@ export function scanExportTargets(scanId) {
       filename: `scan-${id}-rule-exclusions-with-llm.csv`,
     },
   }
+}
+
+export function scanTriageTargets(scanId) {
+  const id = assertPositiveCandidateId(scanId)
+  const base = `/api/scans/${id}/llm-triage`
+  return {
+    status: { path: base, options: {} },
+    start: { path: base, options: { method: 'POST' } },
+    retryFailed: { path: `${base}/retry-failed`, options: { method: 'POST' } },
+  }
+}
+
+export function normalizeTriageStatus(value) {
+  if (!value || typeof value !== 'object' || !TRIAGE_STATES.has(value.state)) {
+    throw new Error('Invalid LLM triage status.')
+  }
+  const numeric = key => Math.max(0, Number.isFinite(Number(value[key])) ? Number(value[key]) : 0)
+  const total = numeric('total_eligible')
+  const processed = numeric('processed_count')
+  const skipped = numeric('skipped_count')
+  return {
+    ...value,
+    total_eligible: total,
+    processed_count: processed,
+    likely_duplicate_count: numeric('likely_duplicate_count'),
+    downgraded_count: numeric('downgraded_count'),
+    human_review_count: numeric('human_review_count'),
+    failed_count: numeric('failed_count'),
+    skipped_count: skipped,
+    progress_percent: total ? Math.min(100, Math.round((processed + skipped) * 10000 / total) / 100) : 100,
+  }
+}
+
+export function shouldPollTriage(state) {
+  return state === 'QUEUED' || state === 'RUNNING'
+}
+
+export function effectiveStatusLabel(status) {
+  return new Map(EFFECTIVE_STATUS_OPTIONS).get(status) || 'Unknown'
+}
+
+export function filterAndPrioritizeCandidates(candidates, selectedStatus = '') {
+  if (!Array.isArray(candidates)) return []
+  const filtered = selectedStatus
+    ? candidates.filter(candidate => candidate.effective_status === selectedStatus)
+    : [...candidates]
+  return filtered.sort((left, right) => {
+    const leftPriority = left.effective_status === 'LLM_LIKELY_DUPLICATE' ? 0 : 1
+    const rightPriority = right.effective_status === 'LLM_LIKELY_DUPLICATE' ? 0 : 1
+    return leftPriority - rightPriority
+  })
 }
 
 export function columnSuggestionStateKey(sourceColumn) {

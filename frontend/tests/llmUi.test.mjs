@@ -4,18 +4,24 @@ import test from 'node:test'
 import {
   ADVISORY_AUTHORITY_LABEL,
   DETERMINISTIC_AUTHORITY_LABEL,
+  EFFECTIVE_STATUS_OPTIONS,
   assertDifficultContext,
   assertPositiveCandidateId,
   candidateAdvisoryRequest,
   cleanColumnSamples,
   columnSuggestionStateKey,
   deriveLlmStatus,
+  effectiveStatusLabel,
+  filterAndPrioritizeCandidates,
   difficultValueStateKey,
   isCurrentRequest,
   isCurrentValidationToken,
   nextValidationToken,
   normalizeLlmError,
+  normalizeTriageStatus,
   scanExportTargets,
+  scanTriageTargets,
+  shouldPollTriage,
 } from '../src/utils/llmUi.js'
 
 test('normalizes safe backend errors and rejects secret or raw payload text', () => {
@@ -78,6 +84,68 @@ test('scan export targets reject non-positive and invalid IDs', () => {
   for (const invalidId of [0, -1, 'invalid', 1.5, null]) {
     assert.throws(() => scanExportTargets(invalidId), /positive/)
   }
+})
+
+test('triage endpoint targets are scan-scoped, bodyless, and never point to manual advisory routes', () => {
+  assert.deepEqual(scanTriageTargets(12), {
+    status: { path: '/api/scans/12/llm-triage', options: {} },
+    start: { path: '/api/scans/12/llm-triage', options: { method: 'POST' } },
+    retryFailed: { path: '/api/scans/12/llm-triage/retry-failed', options: { method: 'POST' } },
+  })
+  for (const target of Object.values(scanTriageTargets(12))) {
+    assert.equal(target.path.includes('/api/llm/'), false); assert.equal(target.path.includes('advisory'), false); assert.equal(target.path.includes('provider'), false)
+    assert.equal(Object.hasOwn(target.options, 'body'), false)
+  }
+})
+
+test('triage targets reject invalid scan IDs', () => {
+  for (const invalid of [0, -1, 'bad', 1.5, null]) {
+    assert.throws(() => scanTriageTargets(invalid), /positive/)
+  }
+})
+
+test('normalizes safe triage counters and derives bounded progress', () => {
+  const normalized = normalizeTriageStatus({
+    state: 'RUNNING', total_eligible: 10, processed_count: 3, skipped_count: 2,
+    likely_duplicate_count: 1, downgraded_count: 1, human_review_count: 1,
+    failed_count: -2,
+  })
+  assert.equal(normalized.progress_percent, 50)
+  assert.equal(normalized.failed_count, 0)
+  assert.throws(() => normalizeTriageStatus({ state: 'PRIVATE_PROVIDER_STATE' }), /Invalid/)
+})
+
+test('polling is limited to queued and running states', () => {
+  assert.equal(shouldPollTriage('QUEUED'), true)
+  assert.equal(shouldPollTriage('RUNNING'), true)
+  for (const state of ['COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED', null]) {
+    assert.equal(shouldPollTriage(state), false)
+  }
+})
+
+test('effective status labels cover every filter option', () => {
+  assert.deepEqual(EFFECTIVE_STATUS_OPTIONS.map(([value]) => value), [
+    '', 'LLM_LIKELY_DUPLICATE', 'LLM_DOWNGRADED', 'HUMAN_REVIEW',
+    'LLM_PENDING', 'LLM_FAILED', 'NOT_APPLICABLE',
+  ])
+  assert.equal(effectiveStatusLabel('LLM_LIKELY_DUPLICATE'), 'LLM likely duplicate')
+  assert.equal(effectiveStatusLabel('unknown'), 'Unknown')
+})
+
+test('filters assisted statuses and surfaces likely duplicates first without changing scores', () => {
+  const input = [
+    { id: 1, effective_status: 'HUMAN_REVIEW', similarity_score: 90 },
+    { id: 2, effective_status: 'LLM_LIKELY_DUPLICATE', similarity_score: 70 },
+    { id: 3, effective_status: 'LLM_DOWNGRADED', similarity_score: 80 },
+  ]
+  const prioritized = filterAndPrioritizeCandidates(input)
+  assert.deepEqual(prioritized.map(item => item.id), [2, 1, 3])
+  assert.deepEqual(prioritized.map(item => item.similarity_score), [70, 90, 80])
+  assert.deepEqual(
+    filterAndPrioritizeCandidates(input, 'LLM_DOWNGRADED').map(item => item.id),
+    [3],
+  )
+  assert.deepEqual(input.map(item => item.id), [1, 2, 3])
 })
 
 test('state keys are stable and context-specific', () => {

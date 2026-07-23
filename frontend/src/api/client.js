@@ -4,6 +4,8 @@ import {
   candidateAdvisoryRequest,
   cleanColumnSamples,
   normalizeLlmError,
+  normalizeTriageStatus,
+  scanTriageTargets,
 } from '../utils/llmUi'
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
@@ -72,6 +74,15 @@ export function requestCandidateAdvisory(candidateId) {
   return llmJson(path, options)
 }
 
+async function triageRequest(scanId, action) {
+  const target = scanTriageTargets(scanId)[action]
+  return normalizeTriageStatus(await llmJson(target.path, target.options))
+}
+
+export const getLlmTriageStatus = scanId => triageRequest(scanId, 'status')
+export const startLlmTriage = scanId => triageRequest(scanId, 'start')
+export const retryFailedLlmTriage = scanId => triageRequest(scanId, 'retryFailed')
+
 export const api = {
   json: async (path, options) => (await request(path, options)).json(),
   get: (path) => api.json(path),
@@ -86,4 +97,7 @@ export const api = {
   requestColumnSuggestion,
   interpretDifficultValue,
   requestCandidateAdvisory,
+  getLlmTriageStatus,
+  startLlmTriage,
+  retryFailedLlmTriage,
 }

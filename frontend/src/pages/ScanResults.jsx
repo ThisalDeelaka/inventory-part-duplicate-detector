@@ -4,7 +4,13 @@ import { api } from '../api/client'
 import Score from '../components/Score'
 import CandidateLlmTools from '../components/CandidateLlmTools'
 import LlmStatus from '../components/LlmStatus'
-import { scanExportTargets } from '../utils/llmUi'
+import {
+  EFFECTIVE_STATUS_OPTIONS,
+  effectiveStatusLabel,
+  filterAndPrioritizeCandidates,
+  scanExportTargets,
+  shouldPollTriage,
+} from '../utils/llmUi'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
   if (!items.length) {
@@ -31,6 +37,7 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
             <td><b>{candidate.part_no_b}</b><small>{candidate.description_b}</small></td>
             <td><Score value={candidate.similarity_score} /></td>
             <td>
+              <b className="effective-status">{effectiveStatusLabel(candidate.effective_status)}</b>
               <span className={`badge ${candidate.business_status}`}>{candidate.business_status}</span>
               <small>{candidate.confidence_level}</small>
             </td>
@@ -76,6 +83,12 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   <b>Normalized part no A: {candidate.normalized_part_no_a || 'None'}</b>
                   <b>Normalized part no B: {candidate.normalized_part_no_b || 'None'}</b>
                   <p>{candidate.recommended_action}</p>
+                  <div className="triage-result-card">
+                    <b>Effective assisted status: {candidate.effective_status}</b>
+                    <span>Deterministic result: {candidate.business_status} / {candidate.confidence_level} / {candidate.similarity_score}</span>
+                    <span>LLM triage result: {candidate.llm_triage_assessment || candidate.llm_triage_state}{candidate.llm_triage_confidence == null ? '' : ` / ${candidate.llm_triage_confidence}`}</span>
+                    <small>The deterministic result remains authoritative.</small>
+                  </div>
                   <CandidateLlmTools candidate={candidate} />
                 </div>
               )}
@@ -97,6 +110,35 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
         ))}
       </tbody>
     </table>
+  )
+}
+
+function TriagePanel({ value, error, busy, start, retry }) {
+  return (
+    <section className="panel triage-panel" aria-label="LLM triage progress">
+      <div className="llm-heading">
+        <div><p className="eyebrow">Automatic assistance</p><h2>LLM triage</h2></div>
+        <div className="actions">
+          <button type="button" className="secondary" onClick={start} disabled={busy}>Start/Resume LLM triage</button>
+          <button type="button" onClick={retry} disabled={busy || !value?.failed_count}>Retry failed</button>
+        </div>
+      </div>
+      {error && <p className="llm-error" role="alert">{error}</p>}
+      {value ? (
+        <>
+          <div className="triage-progress"><span style={{ width: `${value.progress_percent}%` }} /></div>
+          <div className="metrics">
+            <span>State: {value.state}</span>
+            <span>Processed: {value.processed_count} / {value.total_eligible}</span>
+            <span>Likely duplicate: {value.likely_duplicate_count}</span>
+            <span>Downgraded: {value.downgraded_count}</span>
+            <span>Human review: {value.human_review_count}</span>
+            <span>Failed: {value.failed_count}</span>
+            <span>Skipped: {value.skipped_count}</span>
+          </div>
+        </>
+      ) : <p>No automatic triage run is available yet.</p>}
+    </section>
   )
 }
 
@@ -176,6 +218,10 @@ export default function ScanResults() {
   const [openGroup, setOpenGroup] = useState(null)
   const [comments, setComments] = useState({})
   const [error, setError] = useState('')
+  const [triage, setTriage] = useState(null)
+  const [triageError, setTriageError] = useState('')
+  const [triageBusy, setTriageBusy] = useState(false)
+  const [assistedFilter, setAssistedFilter] = useState('')
 
   const load = () => Promise.all([
     api.get(`/api/scans/${id}`),
@@ -190,6 +236,44 @@ export default function ScanResults() {
     .catch((err) => setError(err.message))
 
   useEffect(() => { load() }, [id])
+
+  const loadTriage = async () => {
+    try {
+      const response = await api.getLlmTriageStatus(id)
+      setTriage(response)
+      setTriageError('')
+      if (!shouldPollTriage(response.state)) {
+        const candidates = await api.get(`/api/scans/${id}/candidates`)
+        setItems(candidates)
+      }
+      return response
+    } catch (requestError) {
+      if (requestError.status === 404) setTriage(null)
+      else setTriageError(requestError.message)
+      return null
+    }
+  }
+
+  useEffect(() => { loadTriage() }, [id])
+  useEffect(() => {
+    if (!shouldPollTriage(triage?.state)) return undefined
+    const timer = window.setInterval(loadTriage, 3000)
+    return () => window.clearInterval(timer)
+  }, [id, triage?.state])
+
+  const triageAction = async action => {
+    setTriageBusy(true); setTriageError('')
+    try {
+      const response = await action(id)
+      setTriage(response)
+    } catch (requestError) {
+      setTriageError(requestError.message)
+    } finally {
+      setTriageBusy(false)
+    }
+  }
+
+  const visibleItems = filterAndPrioritizeCandidates(items, assistedFilter)
 
   const review = async (candidate, decision) => {
     try {
@@ -225,12 +309,28 @@ export default function ScanResults() {
 
       {error && <div className="error">{error}</div>}
 
+      <TriagePanel
+        value={triage}
+        error={triageError}
+        busy={triageBusy}
+        start={() => triageAction(api.startLlmTriage)}
+        retry={() => triageAction(api.retryFailedLlmTriage)}
+      />
+
+      <div className="assisted-filter">
+        <label>Assisted status
+          <select value={assistedFilter} onChange={event => setAssistedFilter(event.target.value)}>
+            {EFFECTIVE_STATUS_OPTIONS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}
+          </select>
+        </label>
+      </div>
+
       <div className="view-toggle">
         <button type="button" className={view === 'groups' ? '' : 'secondary'} onClick={() => setView('groups')}>
           Group View ({groups.length})
         </button>
         <button type="button" className={view === 'pairs' ? '' : 'secondary'} onClick={() => setView('pairs')}>
-          Pair View ({items.length})
+          Pair View ({visibleItems.length})
         </button>
       </div>
 
@@ -239,7 +339,7 @@ export default function ScanResults() {
           <GroupView groups={groups} openGroup={openGroup} setOpenGroup={setOpenGroup} />
         ) : (
           <PairTable
-            items={items}
+            items={visibleItems}
             open={open}
             setOpen={setOpen}
             comments={comments}

@@ -18,6 +18,7 @@ class LLMCapability(str, Enum):
     COLUMN_SUGGESTION = "column_suggestion"
     DIFFICULT_VALUE = "difficult_value"
     CANDIDATE_ADVISORY = "candidate_advisory"
+    CANDIDATE_TRIAGE = "candidate_triage"
 
 
 class LLMExecutionMetadata(StrictContract):
