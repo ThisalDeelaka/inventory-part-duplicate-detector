@@ -4,6 +4,8 @@ import pandas as pd
 import pytest
 
 from app.contracts.candidates import CandidatePair
+from app.contracts.evidence import ScoringEvidence
+from app.contracts import results as results_module
 from app.contracts.results import CandidateScoringResult
 from app.engine import engine_selection
 from app.engine.engine_selection import LegacyDeterministicScoringEngine
@@ -113,12 +115,42 @@ def test_complete_actual_result_snapshot_preserves_fields_order_and_unknown_keys
     assert result.scan_mode == source['scan_mode']
     assert result.explanation == source['explanation']
     assert result.recommended_action == source['recommended_action']
+    assert isinstance(result.evidence, ScoringEvidence)
     assert list(result.raw_result) == EXPECTED_RESULT_KEYS + [
         'CURRENT_EXTRA_RESULT'
     ]
     assert dict(result.raw_result) == source
     assert result.raw_result['CURRENT_EXTRA_RESULT'] == {'value': 'preserved'}
+    assert 'CURRENT_EXTRA_RESULT' not in result.evidence.to_legacy_fields()
+    assert 'evidence' not in result.raw_result
+    assert 'evidence' not in result.to_legacy_dict()
     assert source == before
+
+
+def test_constructs_evidence_once_from_the_same_result_snapshot(monkeypatch):
+    source = _allowed_result()
+    calls = []
+    original_factory = ScoringEvidence.from_legacy_result.__func__
+
+    def factory_spy(cls, result):
+        calls.append(result)
+        return original_factory(cls, result)
+
+    monkeypatch.setattr(
+        results_module.ScoringEvidence,
+        'from_legacy_result',
+        classmethod(factory_spy),
+    )
+
+    result = CandidateScoringResult.from_legacy_mapping(source)
+
+    assert len(calls) == 1
+    assert calls[0] == source
+    assert calls[0] is not source
+    assert result.evidence.to_legacy_fields() == {
+        key: source[key]
+        for key in result.evidence.to_legacy_fields()
+    }
 
 
 @pytest.mark.parametrize('invalid', [None, [], object(), 'not a mapping'])
@@ -160,6 +192,8 @@ def test_rejects_invalid_typed_field_types(field, invalid, expected_type):
 def test_snapshots_top_level_and_preserves_shallow_nested_values():
     source = _non_allow_result()
     nested_evidence = source['critical_mismatches']
+    matched_evidence = source['matched_fields']
+    variant_evidence = source['variant_attributes_a']
     original_score = source['final_score']
     original_rule = source['rule_decision']
     result = CandidateScoringResult.from_legacy_mapping(source)
@@ -179,10 +213,20 @@ def test_snapshots_top_level_and_preserves_shallow_nested_values():
         result.final_score = 1.0
 
     nested_evidence.append({'group': 'SHALLOW_REFERENCE'})
+    matched_evidence.append('SHALLOW_REFERENCE')
+    variant_evidence['SHALLOW_REFERENCE'] = []
     assert result.raw_result['critical_mismatches'] is nested_evidence
+    assert result.raw_result['matched_fields'] is matched_evidence
+    assert result.raw_result['variant_attributes_a'] is variant_evidence
     assert result.raw_result['critical_mismatches'][-1] == {
         'group': 'SHALLOW_REFERENCE'
     }
+    assert all(
+        mismatch.get('group') != 'SHALLOW_REFERENCE'
+        for mismatch in result.evidence.critical_mismatches
+    )
+    assert 'SHALLOW_REFERENCE' not in result.evidence.matched_fields
+    assert 'SHALLOW_REFERENCE' not in result.evidence.variant_attributes_a
 
 
 def test_legacy_conversion_is_complete_ordered_fresh_and_isolated():

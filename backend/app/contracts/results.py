@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from app.contracts.evidence import ScoringEvidence
+
 
 _TYPED_FIELD_TYPES = {
     'final_score': float,
@@ -20,8 +22,9 @@ _TYPED_FIELD_TYPES = {
 class CandidateScoringResult:
     '''Immutable wrapper around the complete current deterministic result.
 
-    This preserves the legacy boundary and is not the final production evidence
-    or decision model.
+    ``evidence`` owns immutable top-level evidence snapshots. ``raw_result``
+    preserves the existing shallow legacy compatibility boundary. Neither is a
+    recursively immutable final production evidence or decision model.
     '''
 
     final_score: float
@@ -32,6 +35,7 @@ class CandidateScoringResult:
     scan_mode: str
     explanation: str
     recommended_action: str
+    evidence: ScoringEvidence
     raw_result: Mapping[str, Any]
 
     def __init__(self, result: Mapping[str, Any]):
@@ -51,6 +55,11 @@ class CandidateScoringResult:
 
         for field in _TYPED_FIELD_TYPES:
             object.__setattr__(self, field, snapshot[field])
+        object.__setattr__(
+            self,
+            'evidence',
+            ScoringEvidence.from_legacy_result(snapshot),
+        )
         object.__setattr__(self, 'raw_result', MappingProxyType(snapshot))
 
     @classmethod
