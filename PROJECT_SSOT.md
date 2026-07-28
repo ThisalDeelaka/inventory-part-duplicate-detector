@@ -271,6 +271,28 @@ State that this decision does not activate target-status filtering in the curren
 
 State that runtime parsing for `REDESIGNED_RESULT_MODE` and override behavior for `REDESIGNED_INCLUDE_STATUSES` remain separate implementation decisions.
 
+### Legacy-to-Target Status Compatibility Mapping
+
+Translate current legacy deterministic business statuses to target business statuses exactly as follows:
+
+- `LIKELY_DUPLICATE` → `DUPLICATE_CANDIDATE`
+- `POSSIBLE_DUPLICATE_REVIEW` → `POSSIBLE_DUPLICATE_REVIEW`
+- `RELATED_BUT_NOT_DUPLICATE` → `RELATED_BUT_NOT_DUPLICATE`
+- `REJECTED_BY_BUSINESS_RULE` → `DATA_CONFLICT_REVIEW`
+- `DATA_CONFLICT_REVIEW` → `DATA_CONFLICT_REVIEW`
+- `CROSS_SITE_STANDARDIZATION_CANDIDATE` → `CROSS_SITE_STANDARDIZATION_CANDIDATE`
+- `INSUFFICIENT_DATA` → `INSUFFICIENT_DATA`
+
+Map `REJECTED_BY_BUSINESS_RULE` conservatively to `DATA_CONFLICT_REVIEW` regardless of the current legacy rejection reason. Preserve the original legacy `business_status`, `rule_decision`, and `rejection_reason` for compatibility and auditability.
+
+`UNIQUE_NO_MATCH` has no legacy deterministic source mapping. It may be produced only by a future redesigned engine through a separately reviewed implementation.
+
+Unknown, missing, malformed, or unsupported legacy statuses must not silently fall back to a target status. The compatibility adapter must fail explicitly for unsupported legacy statuses and must not mutate the original legacy result.
+
+State that this mapping does not activate target-status filtering or the target result policy in the current deterministic path and does not change current scores, thresholds, decisions, exclusions, warnings, counts, persistence, APIs, exports, frontend behavior, or legacy output.
+
+Reason-aware refinement of `REJECTED_BY_BUSINESS_RULE` remains deferred and requires a separate approved SSOT decision.
+
 ## 8. Human Review and Training Labels
 
 Physical identity labels:
