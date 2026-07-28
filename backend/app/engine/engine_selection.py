@@ -2,11 +2,22 @@ from typing import Protocol
 
 from app.contracts.candidates import CandidatePair
 from app.contracts.results import CandidateScoringResult
+from app.contracts.version_metadata import EngineVersionMetadata
 from app.core.config import settings
+from app.core.constants import MODEL_VERSION
 from app.engine.scoring import score_candidate
 
 
+_LEGACY_DETERMINISTIC_ENGINE_METADATA = EngineVersionMetadata(
+    engine_id='legacy-deterministic',
+    engine_version=MODEL_VERSION,
+)
+
+
 class CandidateScoringEngine(Protocol):
+    @property
+    def version_metadata(self) -> EngineVersionMetadata: ...
+
     def score_candidate(
         self,
         candidate: CandidatePair,
@@ -16,6 +27,10 @@ class CandidateScoringEngine(Protocol):
 
 
 class LegacyDeterministicScoringEngine:
+    @property
+    def version_metadata(self) -> EngineVersionMetadata:
+        return _LEGACY_DETERMINISTIC_ENGINE_METADATA
+
     def score_candidate(
         self,
         candidate: CandidatePair,

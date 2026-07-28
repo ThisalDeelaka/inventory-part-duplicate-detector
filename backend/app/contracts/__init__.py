@@ -9,11 +9,13 @@ from app.contracts.status_compatibility import (
     translate_legacy_business_status,
 )
 from app.contracts.statuses import TargetBusinessStatus
+from app.contracts.version_metadata import EngineVersionMetadata
 
 __all__ = [
     'CandidatePair',
     'CandidateScoringResult',
     'CanonicalRecord',
+    'EngineVersionMetadata',
     'LegacyBusinessStatus',
     'LegacyStatusTranslation',
     'RedesignedResultMode',
