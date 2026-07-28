@@ -451,6 +451,35 @@ Define these phases with objectives and exit gates.
 - legacy adapters;
 - version metadata.
 
+#### Phase 2 Engine Version Metadata Decision
+
+During Phase 2, version metadata is engine-owned.
+
+Define an immutable engine metadata contract containing exactly:
+
+- `engine_id`
+- `engine_version`
+
+For the current deterministic engine:
+
+- `engine_id` is `legacy-deterministic`;
+- `engine_version` is sourced from the existing `app.core.constants.MODEL_VERSION` production constant;
+- the currently verified `engine_version` value is `hybrid-nlp-v1`.
+
+Do not introduce another engine-version literal, environment variable, or application-level version source in this unit.
+
+Expose the metadata through the typed candidate-scoring engine seam and `LegacyDeterministicScoringEngine`.
+
+Do not insert engine metadata into `CandidateScoringResult`, `ScoringEvidence`, the 26-key legacy result dictionary, candidate rows, rejection rows, feedback rows, APIs, exports, or frontend output.
+
+State that this decision does not change `settings.model_version`, health output, diagnostics output, `DuplicateScan.model_version`, scan persistence, scan API payloads, deployment defaults, current API labels, exports, frontend display, scoring, thresholds, routing, warnings, counts, default engine selection, or redesigned-engine failure behavior.
+
+State that the current split between environment-backed health metadata and constant-backed persisted and diagnostic metadata remains an accepted current limitation for a later separately reviewed integration decision.
+
+Do not represent dataset, source-record, semantic-profile, normalizer, dictionary, feature-contract, learned-model artifact, threshold/policy, LLM provider/model/prompt, or reviewer/timestamp version linkage until an authoritative versioned artifact or later-phase contract exists.
+
+Completing this minimal engine metadata contract satisfies the Phase 2 contract-level version metadata requirement. It does not satisfy or claim completion of the full-system reproducibility requirements or review-event version snapshots.
+
 ### Phase 3 — PostgreSQL and Real Migrations
 
 - PostgreSQL;
