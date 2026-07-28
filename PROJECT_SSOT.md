@@ -241,6 +241,36 @@ Define:
 
 State that legacy statuses remain available through a compatibility adapter.
 
+### Target Result Policy
+
+Define exactly two target result modes:
+
+- `review`
+- `all`
+
+The default redesigned result mode is `review`.
+
+`review` includes exactly:
+
+- DUPLICATE_CANDIDATE
+- POSSIBLE_DUPLICATE_REVIEW
+- DATA_CONFLICT_REVIEW
+- CROSS_SITE_STANDARDIZATION_CANDIDATE
+- INSUFFICIENT_DATA
+
+`review` excludes exactly:
+
+- RELATED_BUT_NOT_DUPLICATE
+- UNIQUE_NO_MATCH
+
+`all` includes all seven target business statuses in the order defined above.
+
+State that this policy applies only to target business statuses. Legacy deterministic statuses must be translated through a separately reviewed compatibility adapter before this policy can be applied.
+
+State that this decision does not activate target-status filtering in the current deterministic path and does not change current scoring, thresholds, candidate or exclusion routing, persistence, APIs, exports, frontend behavior, or legacy statuses.
+
+State that runtime parsing for `REDESIGNED_RESULT_MODE` and override behavior for `REDESIGNED_INCLUDE_STATUSES` remain separate implementation decisions.
+
 ## 8. Human Review and Training Labels
 
 Physical identity labels:
