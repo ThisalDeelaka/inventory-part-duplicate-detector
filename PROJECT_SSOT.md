@@ -488,6 +488,68 @@ Completing this minimal engine metadata contract satisfies the Phase 2 contract-
 - audit/job-ready schema;
 - SQLite only where explicitly supported.
 
+#### Phase 3 Controlled Alembic Transition Decision
+
+Alembic will become the sole long-term schema authority for managed production databases. The transition is incremental: current startup schema creation and SQLite compatibility behavior remain temporarily unchanged until separately reviewed Alembic startup and legacy-bootstrap units are implemented and verified.
+
+The first Alembic revision will create the exact currently committed five-table schema for an empty database. The characterized fresh SQLAlchemy `create_all()` behavior is the canonical initial schema:
+
+- no new server defaults;
+- no silent schema corrections;
+- no change to SQLite foreign-key enforcement;
+- no unapproved column, constraint, index, or semantic change.
+
+The initial revision must be reviewed against the independent schema-characterization tests. Autogeneration output is not accepted without complete review.
+
+Existing SQLite databases must never be blindly stamped as current. A later, separately reviewed fingerprint/bootstrap unit must:
+
+- recognize explicitly supported legacy five-table variants;
+- preserve unknown extra tables and columns;
+- fail explicitly for incompatible managed columns or unsupported schemas;
+- avoid destructive deletion or silent repair;
+- avoid certifying an unknown schema as current;
+- provide a controlled upgrade or review path before stamping.
+
+Unknown schemas must be preserved and reported for review.
+
+`Base.metadata.create_all()` and `ensure_sqlite_demo_columns()` remain temporarily unchanged while the Alembic foundation and empty-database migration path are introduced and tested. They must not be removed from normal startup in the first Alembic-foundation unit. Their retirement or restriction requires a separate reviewed unit after:
+
+- Alembic upgrade behavior is verified;
+- recognized legacy SQLite bootstrap is verified;
+- startup failure behavior is defined;
+- compatibility with current deterministic operation is demonstrated.
+
+Before generating the first revision, SQLAlchemy and Alembic must use these deterministic constraint-naming conventions:
+
+```text
+pk_<table>
+fk_<table>_<column>_<referred_table>
+ix_<table>_<column>
+uq_<table>_<column>
+ck_<table>_<name>
+```
+
+Composite or multiple-column constraints must include the participating columns in a deterministic, unambiguous order. Introducing the naming convention must not silently alter current application behavior.
+
+Alembic downgrade must be tested on disposable test databases. For databases containing real production data, operational recovery is forward migration plus verified backup and restoration procedures; destructive production downgrade is not the primary recovery mechanism.
+
+PostgreSQL driver selection, engine configuration, service and deployment wiring, and PostgreSQL integration testing remain a separate Phase 3 unit after the Alembic empty-database baseline is established. The approved driver direction is Psycopg 3, with its pinned dependency selected in a separately reviewed unit. The first Alembic-foundation unit must not add Psycopg or PostgreSQL deployment.
+
+The next bounded unit is **Phase 3B — Alembic Migration Authority Foundation**. Its boundaries are:
+
+- add a pinned Alembic dependency;
+- add Alembic configuration and environment;
+- add deterministic constraint naming;
+- add an initial revision for the exact characterized empty five-table schema;
+- add migration upgrade, downgrade, and schema-parity tests using disposable SQLite databases;
+- keep `Base.metadata.create_all()` and `ensure_sqlite_demo_columns()` unchanged;
+- do not integrate Alembic into application startup yet;
+- do not add PostgreSQL driver, configuration, or deployment;
+- do not stamp or upgrade existing repository SQLite files;
+- do not introduce Phase 4 or later infrastructure.
+
+Completing Phase 3B establishes migration-authority foundations only. It does not complete PostgreSQL deployment, legacy SQLite bootstrap, startup migration integration, index redesign, or the audit/job-ready target schema.
+
 ### Phase 4 — Durable Dataset Ingestion
 
 - separate upload and scan;
