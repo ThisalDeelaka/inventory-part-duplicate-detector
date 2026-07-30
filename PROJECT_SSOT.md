@@ -37,13 +37,24 @@ Implemented:
 - grouping;
 - CSV export;
 - global 20,000 generated-pair cap;
-- one active deterministic engine path.
+- default-off redesigned-engine compatibility seam;
+- deterministic legacy engine adapter and typed engine-selection boundary;
+- Phase 2 canonical-record, candidate-pair, scoring-evidence, scoring-result, target-status, result-policy, legacy-status compatibility, and engine-version metadata contracts;
+- target result-policy and legacy-status compatibility contracts without activation of redesigned runtime filtering;
+- current five-table SQLite schema characterization tests;
+- Alembic 1.18.5 migration-authority foundation;
+- deterministic SQLAlchemy and Alembic constraint-naming convention;
+- initial Alembic revision `0001_current_schema`;
+- disposable SQLite upgrade, downgrade, repeatability, and schema-parity tests;
+- one active deterministic scoring engine path.
 
 Not implemented:
 
 - workers;
 - PostgreSQL production deployment;
-- Alembic;
+- Alembic startup integration;
+- existing SQLite fingerprint/bootstrap mutation or stamping;
+- read-only SQLite schema classifier implementation;
 - object storage;
 - Parquet;
 - scalable lexical/vector retrieval;
@@ -57,11 +68,17 @@ Not implemented:
 
 Verified baseline:
 
-- 48 backend tests passed with repository Python 3.11;
-- Vite production build passed;
-- sample smoke had 20 rows, 48 pairs, 10 candidates, 38 rule exclusions and completed;
-- `USE_REDESIGNED_ENGINE`, `REDESIGNED_RESULT_MODE`, and `REDESIGNED_INCLUDE_STATUSES` are currently absent;
-- deterministic engine must remain runnable throughout migration.
+- the latest verified executable implementation baseline is commit `5c9423559fd11a2ecb4581ffc3dc395062b58d69`;
+- the full backend suite passes with 294 tests and one known pytest configuration warning;
+- the Vite 8.0.16 production build passes with 34 modules transformed;
+- the Alembic graph is `<base> -> 0001_current_schema (head)`;
+- `USE_REDESIGNED_ENGINE` exists and defaults off;
+- `REDESIGNED_RESULT_MODE` and `REDESIGNED_INCLUDE_STATUSES` remain absent from runtime configuration;
+- the deterministic legacy engine remains the default and fallback;
+- the redesigned production engine is not implemented or runnable;
+- current startup still uses `Base.metadata.create_all()` and `ensure_sqlite_demo_columns()`;
+- the read-only SQLite schema classifier is approved but not yet implemented;
+- as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
 
 ## 3. Product Problem
 
@@ -535,7 +552,7 @@ Alembic downgrade must be tested on disposable test databases. For databases con
 
 PostgreSQL driver selection, engine configuration, service and deployment wiring, and PostgreSQL integration testing remain a separate Phase 3 unit after the Alembic empty-database baseline is established. The approved driver direction is Psycopg 3, with its pinned dependency selected in a separately reviewed unit. The first Alembic-foundation unit must not add Psycopg or PostgreSQL deployment.
 
-The next bounded unit is **Phase 3B — Alembic Migration Authority Foundation**. Its boundaries are:
+The completed **Phase 3B — Alembic Migration Authority Foundation** unit had these boundaries:
 
 - add a pinned Alembic dependency;
 - add Alembic configuration and environment;
@@ -548,7 +565,129 @@ The next bounded unit is **Phase 3B — Alembic Migration Authority Foundation**
 - do not stamp or upgrade existing repository SQLite files;
 - do not introduce Phase 4 or later infrastructure.
 
-Completing Phase 3B establishes migration-authority foundations only. It does not complete PostgreSQL deployment, legacy SQLite bootstrap, startup migration integration, index redesign, or the audit/job-ready target schema.
+Phase 3B established the migration-authority foundation only. It did not complete PostgreSQL deployment, legacy SQLite bootstrap, startup migration integration, index redesign, or the audit/job-ready target schema.
+
+#### Phase 3 Read-Only SQLite Schema Classifier Decision
+
+Before any legacy SQLite bootstrap or startup-migration policy is considered, Phase 3 must establish a completely read-only schema fingerprint classifier. The classifier may inspect and report schema state only. It must not:
+
+- create any table, including `alembic_version`;
+- alter any table or create or drop any index or constraint;
+- insert, update, or delete data;
+- stamp an Alembic revision or run an Alembic upgrade or downgrade;
+- repair, normalize, or reinterpret schema;
+- integrate with application startup;
+- open either ignored repository SQLite database during implementation or tests.
+
+Classification and profile recognition never authorize mutation or stamping.
+
+The classifier uses exactly these broad classifications:
+
+```text
+EMPTY
+CURRENT_ALEMBIC
+CURRENT_UNVERSIONED
+RECOGNIZED_LEGACY
+INCOMPLETE
+INCOMPATIBLE
+UNKNOWN
+```
+
+Their meanings are:
+
+- `EMPTY` — no managed application tables and no Alembic revision; the database is not corrupt, but it is not initialized.
+- `CURRENT_ALEMBIC` — the exact current managed schema at the approved Alembic head.
+- `CURRENT_UNVERSIONED` — an exact approved current-compatible managed schema without Alembic history.
+- `RECOGNIZED_LEGACY` — an exact approved historical five-table profile recognized for reporting only.
+- `INCOMPLETE` — one or more required managed tables or columns are missing.
+- `INCOMPATIBLE` — a managed table or column exists with an incompatible type, length, nullability, default, key, constraint, index, or meaning.
+- `UNKNOWN` — the schema or Alembic revision does not match an approved profile and is not safely classified as empty, incomplete, or incompatible.
+
+The initial exact profile whitelist is:
+
+```text
+current_alembic_0001
+current_named_unversioned
+protected_baseline_unnamed
+helper_from_07c9a6e
+helper_from_00204e1
+helper_from_fee3f3d_or_42fa7ba
+```
+
+These profiles mean:
+
+- `current_alembic_0001` is the exact application schema at Alembic revision `0001_current_schema` and has broad classification `CURRENT_ALEMBIC`.
+- `current_named_unversioned` is the exact current named five-table schema created from current SQLAlchemy metadata without `alembic_version` and has broad classification `CURRENT_UNVERSIONED`.
+- `protected_baseline_unnamed` is the exact protected-baseline five-table schema with equivalent managed semantics, historical unnamed primary-key and foreign-key constraints, and no Alembic history; it has broad classification `CURRENT_UNVERSIONED`.
+- `helper_from_07c9a6e` is the exact five-table schema produced from the known historical `07c9a6e` origin after the committed SQLite helper additions and has broad classification `RECOGNIZED_LEGACY`.
+- `helper_from_00204e1` is the exact five-table schema produced from the known historical `00204e1` origin after later helper additions and has broad classification `RECOGNIZED_LEGACY`.
+- `helper_from_fee3f3d_or_42fa7ba` is the exact five-table schema produced from the known `fee3f3d` or reverted `42fa7ba` origin after later helper additions and has broad classification `RECOGNIZED_LEGACY`.
+
+Recognition of any profile is read-only and does not establish that the database is safe to stamp, upgrade, or mutate. Profiles derived only from ignored local databases, unrelated branches, manual edits, transient or reverted extra tables, or unsupported incomplete historical schemas must not be added to the automatic whitelist without a separate approved SSOT decision.
+
+For managed application schema, classification must compare all of:
+
+- managed table presence;
+- column names and strict column order;
+- SQLite type affinity, with normalization permitted only while declared string lengths and other relevant type semantics remain strict;
+- nullability and server defaults;
+- primary-key membership and structure;
+- foreign-key columns, targets, and `ON DELETE` behavior;
+- index names, columns, order, and uniqueness;
+- unique constraints and check constraints;
+- Alembic revision state.
+
+Server defaults and index names are strict. Named and unnamed constraint profiles are recognized separately and are not universally interchangeable. An unknown Alembic revision is `UNKNOWN`. The classifier must not silently ignore any mismatch category.
+
+An empty database is `EMPTY`, not corrupt or incompatible. Whether it may later run `alembic upgrade head` is a separate bootstrap and startup decision. A database missing any required managed table or managed column is `INCOMPLETE`; Phase 3C1 must not add or repair the missing schema.
+
+Extra unknown tables must be preserved and reported separately. They do not change an otherwise exact recognized managed-schema profile, but they block any future automatic mutation or stamping until separately approved. Extra columns on managed tables are not allowed in a recognized current or legacy profile; they make the schema `UNKNOWN` or `INCOMPATIBLE` according to the observed conflict and block mutation and stamping. Classifier results must expose both extra tables and managed-schema conflicts rather than hide them behind a successful profile match.
+
+A managed schema is `INCOMPATIBLE` whenever a required managed element exists but conflicts with the approved meaning, including a wrong type affinity or declared length, nullability, server default, primary or foreign key, index or constraint definition, `ON DELETE` behavior, or semantic use of a managed column. The classifier must not repair, reinterpret, or normalize an incompatible managed schema.
+
+The initial automatic mutation whitelist contains only:
+
+```text
+CURRENT_ALEMBIC
+```
+
+That classification requires no mutation because it is already managed. No `CURRENT_UNVERSIONED` or `RECOGNIZED_LEGACY` profile is authorized for Alembic stamping, additive upgrade, schema normalization, startup migration, or automatic repair. Any later mutation policy requires a separate SSOT decision and bounded implementation unit.
+
+The next bounded unit is **Phase 3C1 — Read-Only SQLite Schema Fingerprint Classifier**. Its expected implementation scope is:
+
+```text
+backend/app/db/schema_fingerprint.py
+backend/tests/test_schema_fingerprint.py
+```
+
+A package export or one additional existing file may be modified only if current source proves it is required; otherwise implementation remains exactly those two files.
+
+Phase 3C1 must cover:
+
+- `EMPTY`;
+- `current_alembic_0001`;
+- `current_named_unversioned`;
+- `protected_baseline_unnamed`;
+- all three approved helper-derived profiles;
+- missing tables and columns;
+- incompatible type, length, nullability, defaults, keys, indexes, and constraints;
+- extra unknown tables and extra managed-table columns;
+- unknown Alembic revisions;
+- deterministic repeatability;
+- complete read-only behavior;
+- absence of repository-database access.
+
+Phase 3C1 has these explicit non-goals:
+
+- no Alembic stamp, upgrade, or downgrade;
+- no schema repair or mutation policy;
+- no startup integration;
+- no compatibility-helper change;
+- no PostgreSQL or Psycopg work;
+- no repository SQLite access;
+- no Phase 4 or later infrastructure.
+
+Completing Phase 3C1 establishes read-only recognition only. It does not authorize database mutation or complete legacy bootstrap.
 
 ### Phase 4 — Durable Dataset Ingestion
 
@@ -734,16 +873,21 @@ State that unrelated implementation units must not share a commit.
 
 Define:
 
-**Phase 1A — Compatibility-seam foundation**
+**Phase 3C1 — Read-Only SQLite Schema Fingerprint Classifier**
 
 It must:
 
-- add `USE_REDESIGNED_ENGINE=false`;
-- add minimal engine-selection interface;
-- false/default path delegates unchanged to `score_candidate`;
-- add parity tests;
-- not implement production engine;
-- not change candidate generation, scoring, statuses, thresholds, persistence, API or frontend;
+- implement the exact seven-value classification vocabulary and six profile IDs approved in the Phase 3 read-only classifier decision;
+- remain completely read-only, deterministic, and side-effect-free;
+- create `backend/app/db/schema_fingerprint.py`;
+- create `backend/tests/test_schema_fingerprint.py`;
+- modify one package export only if current source proves it is required;
+- classify empty, current Alembic, current unversioned, recognized legacy, incomplete, incompatible, and unknown schemas;
+- report extra tables and managed-schema conflicts;
+- not create `alembic_version`;
+- not stamp, upgrade, downgrade, repair, mutate, or integrate with startup;
+- not access ignored repository SQLite files;
+- not add PostgreSQL, Psycopg, or later-phase infrastructure;
 - not commit until reviewed.
 
 ## 18. Decision Log
@@ -784,21 +928,3 @@ Require:
 - controlled CSV and approved IFS workflows;
 - no automatic merging;
 - no uncontrolled source-system writes.
-
-Formatting requirements:
-
-- valid Markdown;
-- no placeholder text;
-- no claim that future capabilities are implemented;
-- all 19 sections must be complete;
-- the file must end with:
-  `- no uncontrolled source-system writes.`
-
-After creating the file:
-
-1. Confirm it contains all section headings from 1 through 19.
-2. Confirm the final line exactly matches the required final line.
-3. Report line count and byte count.
-4. Show `git diff -- PROJECT_SSOT.md`.
-5. Report Git status.
-6. Do not stage or commit.
