@@ -46,6 +46,10 @@ Implemented:
 - deterministic SQLAlchemy and Alembic constraint-naming convention;
 - initial Alembic revision `0001_current_schema`;
 - disposable SQLite upgrade, downgrade, repeatability, and schema-parity tests;
+- read-only SQLite schema fingerprint classifier;
+- exact current and approved historical SQLite profile recognition;
+- structured deterministic SQLite managed-schema conflicts;
+- read-only caller-supplied SQLAlchemy `Engine` and `Connection` classification;
 - one active deterministic scoring engine path.
 
 Not implemented:
@@ -53,8 +57,8 @@ Not implemented:
 - workers;
 - PostgreSQL production deployment;
 - Alembic startup integration;
-- existing SQLite fingerprint/bootstrap mutation or stamping;
-- read-only SQLite schema classifier implementation;
+- existing SQLite database mutation or stamping;
+- explicit empty-database Alembic bootstrap;
 - object storage;
 - Parquet;
 - scalable lexical/vector retrieval;
@@ -68,8 +72,10 @@ Not implemented:
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `5c9423559fd11a2ecb4581ffc3dc395062b58d69`;
-- the full backend suite passes with 294 tests and one known pytest configuration warning;
+- the latest verified executable implementation baseline is commit `bc1f6a9dec4c9f8954af1e6d1ae19cd3afe97beb`;
+- the full backend suite passes with 339 tests and one known pytest configuration warning;
+- the focused SQLite schema classifier suite passes with 45 tests;
+- the combined schema, migration and classifier regression suite passes with 63 tests;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
 - the Alembic graph is `<base> -> 0001_current_schema (head)`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
@@ -77,7 +83,8 @@ Verified baseline:
 - the deterministic legacy engine remains the default and fallback;
 - the redesigned production engine is not implemented or runnable;
 - current startup still uses `Base.metadata.create_all()` and `ensure_sqlite_demo_columns()`;
-- the read-only SQLite schema classifier is approved but not yet implemented;
+- the Phase 3C1 read-only SQLite schema classifier is implemented;
+- no explicit Alembic bootstrap service or Alembic startup integration exists;
 - as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
 
 ## 3. Product Problem
@@ -653,16 +660,16 @@ CURRENT_ALEMBIC
 
 That classification requires no mutation because it is already managed. No `CURRENT_UNVERSIONED` or `RECOGNIZED_LEGACY` profile is authorized for Alembic stamping, additive upgrade, schema normalization, startup migration, or automatic repair. Any later mutation policy requires a separate SSOT decision and bounded implementation unit.
 
-The next bounded unit is **Phase 3C1 — Read-Only SQLite Schema Fingerprint Classifier**. Its expected implementation scope is:
+The completed **Phase 3C1 — Read-Only SQLite Schema Fingerprint Classifier** unit had this implementation scope:
 
 ```text
 backend/app/db/schema_fingerprint.py
 backend/tests/test_schema_fingerprint.py
 ```
 
-A package export or one additional existing file may be modified only if current source proves it is required; otherwise implementation remains exactly those two files.
+No package export or existing production file was required.
 
-Phase 3C1 must cover:
+Phase 3C1 covered:
 
 - `EMPTY`;
 - `current_alembic_0001`;
@@ -687,7 +694,95 @@ Phase 3C1 has these explicit non-goals:
 - no repository SQLite access;
 - no Phase 4 or later infrastructure.
 
-Completing Phase 3C1 establishes read-only recognition only. It does not authorize database mutation or complete legacy bootstrap.
+Phase 3C1 established read-only recognition only. It did not authorize database mutation or complete legacy bootstrap.
+
+#### Phase 3 Explicit Pristine SQLite Alembic Bootstrap Decision
+
+This decision approves **Option A — Explicit Empty SQLite Alembic Bootstrap Only** for the next bounded unit. It supersedes only the earlier classifier decision's initial mutation whitelist. It does not weaken or replace any classifier recognition, conflict, profile, preservation or read-only rule.
+
+Mutation authorization is deliberately narrow:
+
+- exact `CURRENT_ALEMBIC` at profile `current_alembic_0001` is already managed, so no migration command or schema or data mutation is required or performed;
+- exact `EMPTY` may run Alembic `upgrade head` only when the stricter pristine-empty precondition below is also satisfied;
+- `CURRENT_UNVERSIONED`, `RECOGNIZED_LEGACY`, `INCOMPLETE`, `INCOMPATIBLE` and `UNKNOWN` are always refused before mutation;
+- `EMPTY` with any extra or user-defined schema object is refused before mutation.
+
+Recognition remains separate from mutation authorization. No current-unversioned or recognized-legacy profile is authorized for stamping, additive upgrade, normalization, repair or any other mutation.
+
+A SQLite database is pristine empty only when all of these conditions hold immediately before migration:
+
+- classifier result is exactly `EMPTY`;
+- `profile_id` is `None`;
+- `alembic_revision` is `None`;
+- `extra_tables` and `conflicts` are empty;
+- no `alembic_version` table or managed application table exists;
+- no unknown user-defined table, view, trigger or index exists;
+- no other unsupported user-defined schema object exists.
+
+SQLite internal objects whose names begin with `sqlite_` are not user-defined objects. A database containing an unknown table, view, trigger, index, malformed Alembic table or other user-defined schema object is not pristine and must be refused without mutation. An empty database is not corrupt; refusal means only that this initial mutation policy is intentionally conservative.
+
+The bootstrap service must be separately and explicitly invoked. It must not run during FastAPI startup, module import, `Base.metadata.create_all()`, `ensure_sqlite_demo_columns()`, or application connection opening. It must not infer a database path or URL from application settings and must not inspect or modify either ignored repository SQLite database. Startup integration requires a later separately approved SSOT decision and implementation unit.
+
+The initial service accepts only a caller-supplied SQLite SQLAlchemy `Engine`. It opens and owns the connection used for classification and migration, closes that connection when finished, and does not dispose the caller-owned engine. Caller-supplied `Connection` support is deferred because transaction ownership and rollback semantics require a separate decision.
+
+For a pristine empty database, the only permitted Alembic action is:
+
+```text
+alembic upgrade head
+```
+
+The resolved target head must be exactly `0001_current_schema`. The service must use the committed Alembic configuration and migration environment and programmatically supply the service-opened connection from the caller-owned `Engine`. It must not use the placeholder URL in `alembic.ini`, construct or infer a repository database URL, run `stamp` or `downgrade`, generate or autogenerate a revision, call `Base.metadata.create_all()` or `ensure_sqlite_demo_columns()`, add seed data, or normalize or repair an existing schema.
+
+Preflight and postcondition behavior is exact:
+
+- exact `CURRENT_ALEMBIC` at `current_alembic_0001` returns an already-current success without invoking a migration command or mutating schema or data;
+- exact pristine `EMPTY` runs `upgrade head`, then classifies again;
+- bootstrap success requires the post-migration result to be exactly `CURRENT_ALEMBIC`, profile `current_alembic_0001`, revision `0001_current_schema`, with no managed-schema conflicts or unexpected extra tables;
+- every other state is refused explicitly before mutation.
+
+Alembic command completion alone is not proof of successful bootstrap. Exact post-migration classification is the success condition.
+
+The service returns an immutable typed result with exactly two successful outcomes:
+
+```text
+ALREADY_CURRENT
+BOOTSTRAPPED
+```
+
+The result preserves the outcome, pre-bootstrap classifier result and post-bootstrap classifier result. For `ALREADY_CURRENT`, the immutable pre- and post-results may be the same object. The result does not authorize future schema mutation.
+
+Unsupported preflight state, migration execution failure and postcondition failure must be distinguishable. A preflight refusal must expose the classifier result and diagnostic reason for ineligibility. The service must not silently fall back, stamp after failure, invoke the compatibility helper or `create_all()`, suppress Alembic or SQLAlchemy errors, retry through another schema path, reinterpret an unversioned or legacy schema as empty, restore from backup automatically, or delete partially created objects.
+
+SQLite DDL rollback is not assumed to provide complete recovery in every failure mode. If migration starts and fails, the service must surface the failure and the observable post-failure classifier state when that state can be obtained safely. It must perform no destructive cleanup.
+
+Phase 3C2 promises sequential repeatability, not safe concurrent bootstrap by multiple processes. The explicit caller must serialize attempts for a database. The first invocation against a pristine empty database returns `BOOTSTRAPPED`; a later sequential invocation returns `ALREADY_CURRENT`. Cross-process locking and distributed migration ownership are not claimed. A later startup or deployment decision must define single-owner execution and concurrency controls.
+
+Every refused or already-current database must preserve schema, data, Alembic revision, tables, views, triggers and indexes exactly and must prove that neither the compatibility helper nor a repository database was accessed. For pristine empty bootstrap, the only permitted persistent change is the exact committed Alembic upgrade to `0001_current_schema`. No customer data transformation occurs because an eligible database contains no managed or user-defined schema objects.
+
+The next bounded unit is **Phase 3C2 — Explicit Pristine SQLite Alembic Bootstrap** with expected scope:
+
+```text
+backend/app/db/alembic_bootstrap.py
+backend/tests/test_alembic_bootstrap.py
+```
+
+No package export or existing production-file modification is expected. A third existing file may be modified only if current source proves it is strictly required; otherwise implementation must stop and report the conflict before scope expands.
+
+Phase 3C2 tests must use disposable SQLite databases only and cover pristine bootstrap, already-current no-op, sequential repeat invocation, user-defined tables/views/triggers/indexes, every refused classifier state and profile, malformed and unknown Alembic state, prohibited-command boundaries, caller-owned engine behavior, exact postcondition, migration failure, postcondition failure, no destructive cleanup, no repository database access, no startup integration, and preservation of deterministic legacy behavior.
+
+Phase 3C2 has these explicit non-goals:
+
+- no startup integration;
+- no stamping of current-unversioned schemas;
+- no legacy additive upgrade, schema normalization or repair;
+- no caller-supplied `Connection` support;
+- no concurrent multi-process guarantee;
+- no PostgreSQL or Psycopg;
+- no migration revision, dependency or compatibility-helper change;
+- no repository database access;
+- no Phase 4 or later infrastructure.
+
+Completing Phase 3C2 will establish only an explicit new-database bootstrap path. It will not complete existing-database migration, startup migration integration, PostgreSQL deployment or legacy SQLite retirement.
 
 ### Phase 4 — Durable Dataset Ingestion
 
@@ -873,19 +968,19 @@ State that unrelated implementation units must not share a commit.
 
 Define:
 
-**Phase 3C1 — Read-Only SQLite Schema Fingerprint Classifier**
+**Phase 3C2 — Explicit Pristine SQLite Alembic Bootstrap**
 
 It must:
 
-- implement the exact seven-value classification vocabulary and six profile IDs approved in the Phase 3 read-only classifier decision;
-- remain completely read-only, deterministic, and side-effect-free;
-- create `backend/app/db/schema_fingerprint.py`;
-- create `backend/tests/test_schema_fingerprint.py`;
-- modify one package export only if current source proves it is required;
-- classify empty, current Alembic, current unversioned, recognized legacy, incomplete, incompatible, and unknown schemas;
-- report extra tables and managed-schema conflicts;
-- not create `alembic_version`;
-- not stamp, upgrade, downgrade, repair, mutate, or integrate with startup;
+- follow the complete Phase 3 explicit pristine SQLite Alembic bootstrap decision above;
+- create `backend/app/db/alembic_bootstrap.py`;
+- create `backend/tests/test_alembic_bootstrap.py`;
+- accept an explicitly supplied SQLite `Engine`;
+- return `ALREADY_CURRENT` for exact current Alembic state without mutation;
+- bootstrap only an exact pristine `EMPTY` database through Alembic `upgrade head`;
+- reclassify and require exact `current_alembic_0001`;
+- refuse every other classifier state and any user-defined schema object;
+- never stamp, downgrade, call `Base.metadata.create_all()`, call `ensure_sqlite_demo_columns()`, or integrate with startup;
 - not access ignored repository SQLite files;
 - not add PostgreSQL, Psycopg, or later-phase infrastructure;
 - not commit until reviewed.
