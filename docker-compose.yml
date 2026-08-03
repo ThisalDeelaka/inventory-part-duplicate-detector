@@ -23,5 +23,26 @@ services:
     ports: ["5173:80"]
     depends_on:
       backend: {condition: service_healthy}
+  postgres-test-db:
+    profiles:
+      - postgres-test
+    image: postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296
+    restart: "no"
+    environment:
+      POSTGRES_DB: inventory_test
+      POSTGRES_USER: inventory_test
+      POSTGRES_PASSWORD: inventory_test_only
+    ports:
+      - "127.0.0.1:${POSTGRES_TEST_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
 volumes:
   detector-data:
