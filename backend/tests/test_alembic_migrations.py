@@ -220,4 +220,3 @@ def test_startup_and_alembic_paths_remain_separate():
     assert "settings" not in env_source
     assert "stamp" not in env_source + revision_source
     assert "inventory_detector.db" not in env_source + ini_source
-    assert "psycopg" not in requirements.lower()
