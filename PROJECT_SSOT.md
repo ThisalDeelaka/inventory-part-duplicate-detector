@@ -54,14 +54,21 @@ Implemented:
 - exact current-Alembic no-op and strict pristine-empty preflight;
 - programmatic supplied-connection Alembic `upgrade head` with exact postcondition verification;
 - explicit bootstrap refusal, configuration, migration and postcondition failure boundaries;
+- pinned Psycopg 3 binary dependency `psycopg[binary]==3.3.4`;
+- synchronous SQLite/PostgreSQL engine-construction boundary;
+- PostgreSQL URL canonicalization to `postgresql+psycopg`;
+- explicit unsupported database driver and dialect rejection;
+- credential-safe diagnostic database-URL handling;
+- lazy PostgreSQL engine construction without a connection attempt;
+- preserved SQLite default, application-global engine and session behavior;
 - one active deterministic scoring engine path.
 
 Not implemented:
 
 - workers;
-- PostgreSQL/Psycopg driver and engine foundation;
+- disposable PostgreSQL Compose test harness and real connectivity baseline;
+- PostgreSQL migration execution and schema-parity verification;
 - PostgreSQL production deployment;
-- live PostgreSQL migration verification;
 - Alembic startup integration;
 - existing SQLite database mutation or stamping beyond explicit pristine-empty bootstrap;
 - object storage;
@@ -77,10 +84,10 @@ Not implemented:
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `e0dd495155b91219ff575f5cc154b97a1f33d136`;
-- the full backend suite passes with 372 tests and one known pytest configuration warning;
-- the focused Phase 3C2 bootstrap suite passes with 33 tests;
-- the combined Phase 3 schema, migration, classifier and bootstrap regression suite passes with 96 tests;
+- the latest verified executable implementation baseline is commit `75271fcd84b177cc7fcb5d471cffac67e228c7f8`;
+- the full backend suite passes with 405 tests and one known pytest configuration warning;
+- the focused Phase 3D1 engine-configuration suite passes with 39 tests;
+- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
 - the Alembic graph is `<base> -> 0001_current_schema (head)`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
@@ -90,7 +97,10 @@ Verified baseline:
 - current startup still uses `Base.metadata.create_all()` and `ensure_sqlite_demo_columns()`;
 - the Phase 3C1 read-only SQLite schema classifier is implemented;
 - the Phase 3C2 explicit pristine SQLite Alembic bootstrap is implemented;
-- no PostgreSQL/Psycopg driver and engine foundation, PostgreSQL deployment or live PostgreSQL migration verification exists;
+- Phase 3D1 is implemented and establishes only the Psycopg dependency and lazy synchronous SQLite/PostgreSQL engine-construction foundation;
+- no real PostgreSQL connection has yet been verified and no PostgreSQL Compose service exists;
+- no PostgreSQL migration execution or PostgreSQL schema-parity verification exists;
+- no PostgreSQL production deployment exists;
 - no Alembic startup integration exists;
 - as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
 
@@ -793,9 +803,9 @@ Phase 3C2 established only an explicit pristine-new-database SQLite bootstrap pa
 
 #### Phase 3 PostgreSQL/Psycopg 3 Engine Foundation Decision
 
-The user approved **Option A — PostgreSQL/Psycopg 3 Foundation**. The next bounded implementation unit is **Phase 3D1 — PostgreSQL Driver and Engine Configuration Foundation**. It establishes only a pinned Psycopg 3 dependency, explicit supported database-URL parsing and canonicalization, a tested synchronous SQLAlchemy engine-construction boundary for SQLite and PostgreSQL, preservation of the current SQLite default and behavior, and non-network PostgreSQL engine-construction verification. It does not establish a deployed PostgreSQL service or prove production PostgreSQL migration or runtime readiness.
+The user approved **Option A — PostgreSQL/Psycopg 3 Foundation**. The completed **Phase 3D1 — PostgreSQL Driver and Engine Configuration Foundation** unit established only the pinned `psycopg[binary]==3.3.4` dependency, explicit supported database-URL parsing and canonicalization, a tested synchronous SQLAlchemy engine-construction boundary for SQLite and PostgreSQL, preservation of the current SQLite default and behavior, and non-network PostgreSQL engine-construction verification. It did not establish a live or deployed PostgreSQL service or prove PostgreSQL connectivity, migration, schema parity, startup integration, operational readiness or production deployment.
 
-Phase 3D1 must use Psycopg 3 through `psycopg[binary]` and pin one exact version in `backend/requirements.txt`. Before editing, implementation must report the selected exact version and evidence that it supports the verified Python 3.11 runtime and SQLAlchemy 2.0.41. This SSOT deliberately does not prescribe an exact Psycopg patch version. The unit must not add Psycopg 2, add both binary and source/C variants, add an ORM or asynchronous database dependency, or change the SQLAlchemy or Alembic version. The binary distribution is approved for the Phase 3D1 local, development and verification foundation; production container packaging and whether a later deployment uses a system-linked Psycopg build require a separate deployment decision.
+Phase 3D1 uses Psycopg 3 through the exact implemented dependency `psycopg[binary]==3.3.4` in `backend/requirements.txt`, verified with Python 3.11 and SQLAlchemy 2.0.41. The unit did not add Psycopg 2, add both binary and source/C variants, add an ORM or asynchronous database dependency, or change the SQLAlchemy or Alembic version. The binary distribution is approved for the Phase 3D1 local, development and verification foundation; production container packaging and whether a later deployment uses a system-linked Psycopg build require a separate deployment decision.
 
 SQLite remains the current default. Phase 3D1 must preserve the existing configured SQLite URL, database location, synchronous SQLAlchemy engine, `check_same_thread=False` connection argument, startup calls, tables, models, persistence, APIs, exports, deterministic scan behavior, compatibility helper and repository SQLite-file handling. It must not silently convert or migrate the current default database.
 
@@ -828,7 +838,7 @@ The existing Alembic environment's caller-supplied connection path remains uncha
 
 Phase 3D1 tests must not require a live PostgreSQL server. They must cover exact dependency and import availability; unchanged SQLite engine behavior; all three accepted URL schemes and canonicalization; preservation of credentials, percent-encoding, host, port, database and query parameters; Psycopg 3 dialect and driver selection; PostgreSQL `pool_pre_ping=True`; absence of SQLite `check_same_thread` on PostgreSQL; no network connection during engine construction; explicit rejection of Psycopg 2, asynchronous drivers, other unsupported PostgreSQL drivers and unsupported dialects; redacted errors without password leakage; the application-global engine continuing to use existing settings and default to SQLite; no startup migration, helper, model, API or frontend change; and no repository database access beyond existing baseline behavior. Mocks or SQLAlchemy engine inspection may be used. Existing database, migration, classifier and bootstrap tests must not be weakened.
 
-The expected Phase 3D1 implementation scope is exactly:
+The completed Phase 3D1 implementation scope was:
 
 ```text
 backend/requirements.txt
@@ -836,7 +846,7 @@ backend/app/db/database.py
 backend/tests/test_database_engine_configuration.py
 ```
 
-A small change to `backend/app/core/config.py` is permitted only if current source proves URL typing or validation cannot be implemented safely in the database boundary alone. No other existing file is expected. If `config.py` or any other file is required, implementation must report the reason before editing and stop if scope would exceed one small compatibility change.
+Current source proved that no `backend/app/core/config.py` change was required. One source-proven compatibility update removed the obsolete pre-Psycopg assertion from `backend/tests/test_alembic_migrations.py`; no other production source or test scope was required.
 
 Phase 3D1 has these explicit non-goals:
 
@@ -853,9 +863,225 @@ Phase 3D1 has these explicit non-goals:
 - no authentication, authorization or tenancy;
 - no Phase 4 or later infrastructure.
 
-Completing Phase 3D1 will establish only a PostgreSQL-capable driver and engine-construction seam. It will not complete PostgreSQL deployment, migration verification, operational readiness or production database cutover.
+Phase 3D1 established only a PostgreSQL-capable driver and engine-construction seam. It did not complete a live PostgreSQL server, PostgreSQL connectivity, migration verification, schema parity, startup integration, operational readiness, deployment or production database cutover.
 
-After Phase 3D1 is implemented, reviewed, committed and verified, a separate bounded unit must use a disposable real PostgreSQL instance to verify actual Psycopg connectivity, Alembic upgrade to head, exact schema and constraint parity where PostgreSQL semantics permit, transaction and rollback/forward-recovery behavior, clean-database repeatability, failure diagnostics, and no SQLite regression. That later unit is not the immediate next step yet.
+After completed Phase 3D1, Phase 3D2A must first establish the separately bounded disposable PostgreSQL Compose connectivity harness defined below. PostgreSQL Alembic migration, exact schema and constraint parity, transaction and forward-recovery behavior, and related failure verification remain a later separately reviewed unit after Phase 3D2A is implemented, reviewed, committed and verified.
+
+#### Phase 3 Disposable PostgreSQL Compose Test Harness Decision
+
+The user approved **Option A — Docker Compose Test Profile**. The next bounded implementation unit is **Phase 3D2A — Disposable PostgreSQL Compose Test Harness and Connectivity Baseline**.
+
+Phase 3D2A establishes only:
+
+- an explicit opt-in PostgreSQL service in the existing Compose file;
+- deterministic image and version ownership;
+- an isolated disposable test database;
+- health-gated startup;
+- one real Psycopg/SQLAlchemy connectivity baseline;
+- one explicitly registered PostgreSQL integration-test marker;
+- repeatable startup and teardown commands;
+- preservation of the normal SQLite Compose and runtime path.
+
+It does not run Alembic migrations and does not prove schema parity, operational readiness, production deployment or production cutover.
+
+Use the Docker Official Image tag:
+
+```text
+postgres:18.4-bookworm
+```
+
+PostgreSQL 18.4 is the approved supported stable baseline, is supported by the pinned Psycopg 3 generation, and the Bookworm variant supplies a conventional glibc-based test environment. `latest`, floating major-only tags, beta tags, Alpine variants and third-party PostgreSQL images are not approved for this unit.
+
+During implementation, resolve the official tag through Docker tooling or the official registry and pin the tracked Compose reference in this form:
+
+```text
+postgres:18.4-bookworm@sha256:<verified-manifest-digest>
+```
+
+Before editing, report the exact resolved digest, verify that it is the official multi-platform manifest digest rather than an architecture-specific child digest when the manifest is available, confirm it contains the platform required by the current developer environment, and report `linux/amd64` and `linux/arm64` support when present. Stop if the official tag no longer resolves to PostgreSQL 18.4. This SSOT intentionally does not hard-code the digest. A later PostgreSQL major or minor change requires a separately reviewed decision.
+
+Add the service to the existing `docker-compose.yml` with exactly:
+
+```text
+profile: postgres-test
+service: postgres-test-db
+```
+
+The service must declare:
+
+```yaml
+profiles:
+  - postgres-test
+```
+
+Normal `docker compose up` without the profile must not create or start this service. The current backend and frontend remain outside the profile, must not depend on `postgres-test-db`, and must not receive a PostgreSQL URL in this unit. Do not set `container_name` or rename or remove an existing service, port, volume, network or health behavior. Use only the isolated Compose project's default network and no external network.
+
+Every approved lifecycle command must use this explicit isolated Compose project name:
+
+```text
+inventory-part-duplicate-postgres-test
+```
+
+The test database uses only these public, non-production fixtures:
+
+```text
+database: inventory_test
+user: inventory_test
+password: inventory_test_only
+```
+
+They must never be reused for deployment, Kubernetes, staging or production. Password authentication remains enabled; do not use `POSTGRES_HOST_AUTH_METHOD=trust`, add another superuser, use application or IFS credentials, add a secret-bearing `.env` file, or introduce secret-management infrastructure. Failures and reports must not print the password or complete unredacted database URL.
+
+Publish PostgreSQL only on loopback:
+
+```text
+127.0.0.1:${POSTGRES_TEST_PORT:-55432}:5432
+```
+
+The default host port is `55432` and may be overridden only by `POSTGRES_TEST_PORT`. Never bind to `0.0.0.0` or an unspecified host interface, and do not expose the service through Kubernetes, Ingress or a public network. The host Python environment connects through this loopback mapping.
+
+PostgreSQL test data is disposable. For PostgreSQL 18, mount tmpfs at:
+
+```text
+/var/lib/postgresql
+```
+
+Do not use a named volume, anonymous persistent volume, bind mount, existing SQLite volume, host database directory, seed or initialization script, customer data or repository data. Use `restart: "no"`. The harness makes no crash-recovery or durable-storage promise.
+
+Use the image-provided `pg_isready` health check with bounded timing:
+
+```yaml
+healthcheck:
+  test:
+    - CMD-SHELL
+    - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+  interval: 2s
+  timeout: 5s
+  retries: 30
+  start_period: 5s
+```
+
+Startup must use Compose `--wait` with a finite initial `--wait-timeout 90`. Running status alone is not readiness; tests start only after Compose reports the service healthy, and timeout or unhealthy status is a hard failure. Do not add an unbounded Python retry loop.
+
+Approved validation commands are:
+
+```powershell
+docker compose config --quiet
+docker compose --profile postgres-test config
+docker compose config --profiles
+```
+
+Pull and start only the isolated test service:
+
+```powershell
+docker compose `
+  -p inventory-part-duplicate-postgres-test `
+  --profile postgres-test `
+  pull postgres-test-db
+
+docker compose `
+  -p inventory-part-duplicate-postgres-test `
+  --profile postgres-test `
+  up -d --wait --wait-timeout 90 postgres-test-db
+```
+
+For the focused integration test, set `POSTGRES_TEST_DATABASE_URL` conceptually to:
+
+```text
+postgresql+psycopg://inventory_test:inventory_test_only@127.0.0.1:${POSTGRES_TEST_PORT:-55432}/inventory_test
+```
+
+Then run only the registered PostgreSQL integration marker or exact test module. This URL must not become an application setting.
+
+Always tear down after success and failure with:
+
+```powershell
+docker compose `
+  -p inventory-part-duplicate-postgres-test `
+  --profile postgres-test `
+  down --volumes --remove-orphans
+```
+
+The implementation report must prove that no container, isolated project network, named or anonymous volume, or test database remains. Image removal is not required. Normal development services must not be stopped or removed, and no destructive Docker cleanup outside the isolated project is authorized.
+
+Add one focused integration module:
+
+```text
+backend/tests/test_postgresql_connectivity.py
+```
+
+Register exactly one marker:
+
+```text
+postgres_integration
+```
+
+The test must:
+
+- be marked `postgres_integration`;
+- require `POSTGRES_TEST_DATABASE_URL`;
+- skip with one clear reason when the variable is absent during the ordinary full backend suite;
+- fail rather than skip when the supplied value is malformed or unreachable;
+- construct the engine through the committed `create_database_engine()` seam;
+- require the canonical `postgresql+psycopg` driver;
+- open one real connection and execute read-only statements only;
+- verify `SELECT 1`, current database `inventory_test`, current user `inventory_test`, and PostgreSQL server major/minor `18.4`;
+- close the connection and dispose the engine;
+- avoid printing raw credentials;
+- not call Alembic, `Base.metadata.create_all()` or `ensure_sqlite_demo_columns()`;
+- not import or run FastAPI startup;
+- not create application tables or otherwise mutate the database.
+
+A failed connection, wrong driver, database, user or server version is a hard failure whenever the URL is supplied.
+
+The ordinary backend suite must remain runnable without Docker. Register the marker in the existing pytest configuration so no unknown-marker warning is introduced. When `POSTGRES_TEST_DATABASE_URL` is absent, the integration test skips clearly and the full suite may report one additional intentional skip. Ordinary pytest collection or execution must not invoke Docker, start a container or connect to PostgreSQL. Existing unit, SQLite, Alembic, classifier and bootstrap behavior remains unchanged, and the known `asyncio_default_fixture_loop_scope` warning is not addressed in this unit.
+
+Phase 3D2A verification must include:
+
+- current Docker Engine and Docker Compose versions;
+- successful Compose schema validation and a profile list containing `postgres-test`;
+- unchanged normal profile behavior;
+- exact resolved image digest and required platform support;
+- healthy service startup within the timeout;
+- loopback-only published port;
+- tmpfs mounted at `/var/lib/postgresql` with no persistent volume;
+- a passing focused integration test;
+- a passing ordinary backend suite without the service and proof it did not connect to PostgreSQL;
+- service logs containing no application or customer data;
+- teardown removing all isolated project resources;
+- a second complete start, test and down cycle.
+
+The second cycle proves harness repeatability, not database-data persistence.
+
+Expected Phase 3D2A implementation scope is:
+
+```text
+docker-compose.yml
+backend/pytest.ini
+backend/tests/test_postgresql_connectivity.py
+```
+
+If pytest configuration resides in another existing file, modify that file instead of creating `backend/pytest.ini`. A small `backend/tests/conftest.py` change is permitted only if source proves module-local environment gating cannot safely satisfy the policy; report that need before editing and stop if it exceeds one small compatibility change. No script, dependency, Dockerfile, application source or migration file is expected.
+
+Phase 3D2A must not add or perform:
+
+- Alembic upgrade, downgrade, stamp or revision generation;
+- PostgreSQL schema creation beyond the official image's initial database;
+- application tables, indexes, constraints or PostgreSQL schema-parity assertions;
+- model or metadata changes;
+- `Base.metadata.create_all()` or startup migration integration;
+- application startup against PostgreSQL or backend/frontend dependency on PostgreSQL;
+- persistent PostgreSQL storage;
+- production credentials or secret-management infrastructure;
+- Dockerfile, Kubernetes, production-deployment or CI-pipeline changes;
+- Testcontainers or another Python dependency;
+- transaction-write, rollback, recovery, concurrency or load testing;
+- existing SQLite adoption or legacy migration;
+- Phase 4 or later infrastructure.
+
+Completing Phase 3D2A establishes only a disposable, opt-in real-PostgreSQL connectivity harness. It does not complete PostgreSQL migration verification, schema parity, operational readiness or production cutover.
+
+After Phase 3D2A is implemented, reviewed, committed and verified, a separate bounded PostgreSQL migration unit must use the same disposable harness to verify Alembic upgrade from empty PostgreSQL to head, exact managed schema, constraints and indexes under PostgreSQL semantics, migration transaction behavior, failure diagnostics, clean-database repeatability, forward-recovery policy and no SQLite regression. Do not begin or make that migration/parity unit the immediate next step until Phase 3D2A is complete and committed.
 
 ### Phase 4 — Durable Dataset Ingestion
 
@@ -1039,26 +1265,24 @@ State that unrelated implementation units must not share a commit.
 
 ## 17. Immediate Next Step
 
-Define:
-
-**Phase 3D1 — PostgreSQL Driver and Engine Configuration Foundation**
+**Phase 3D2A — Disposable PostgreSQL Compose Test Harness and Connectivity Baseline**
 
 It must:
 
-- follow the complete Phase 3 PostgreSQL/Psycopg 3 engine foundation decision above;
-- pin one exact compatible `psycopg[binary]` version with compatibility evidence;
-- preserve SQLite as the default and preserve all current SQLite behavior;
-- add one focused synchronous engine-construction boundary;
-- canonicalize `postgresql://`, `postgresql+psycopg://` and `postgres://` to the canonical `postgresql+psycopg` driver;
-- reject unsupported PostgreSQL drivers and unsupported dialects explicitly, safely and without fallback;
-- redact credentials from errors and diagnostics;
-- apply SQLite-only and PostgreSQL-only engine options correctly;
-- construct a PostgreSQL engine without connecting;
-- preserve current application-global engine, import and startup behavior;
-- add focused non-network tests;
-- not run PostgreSQL migrations or add a live PostgreSQL service;
-- not modify Alembic revisions or add startup migration integration;
-- not change models, schemas, persistence, APIs, frontend, Docker, Kubernetes or later-phase infrastructure;
+- follow the complete Phase 3 disposable PostgreSQL Compose test-harness decision above;
+- add only the opt-in `postgres-test` profile and `postgres-test-db` service;
+- pin `postgres:18.4-bookworm` by its exact verified official manifest digest;
+- use only the approved test database, user and password;
+- publish PostgreSQL only to loopback with default host port `55432`;
+- use tmpfs at `/var/lib/postgresql` and no persistent PostgreSQL volume;
+- use `pg_isready`, Compose `--wait` and a bounded timeout;
+- register exactly the `postgres_integration` marker;
+- add one real read-only Psycopg/SQLAlchemy connectivity test;
+- preserve normal SQLite Compose and runtime behavior;
+- pass two complete isolated start, test and down cycles;
+- leave no test container, project network or volume;
+- not run Alembic or create application schema;
+- not change startup, Dockerfiles, Kubernetes, models, APIs or frontend;
 - not commit until reviewed.
 
 ## 18. Decision Log
