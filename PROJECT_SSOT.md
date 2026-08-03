@@ -50,15 +50,20 @@ Implemented:
 - exact current and approved historical SQLite profile recognition;
 - structured deterministic SQLite managed-schema conflicts;
 - read-only caller-supplied SQLAlchemy `Engine` and `Connection` classification;
+- explicit pristine SQLite Alembic bootstrap service;
+- exact current-Alembic no-op and strict pristine-empty preflight;
+- programmatic supplied-connection Alembic `upgrade head` with exact postcondition verification;
+- explicit bootstrap refusal, configuration, migration and postcondition failure boundaries;
 - one active deterministic scoring engine path.
 
 Not implemented:
 
 - workers;
+- PostgreSQL/Psycopg driver and engine foundation;
 - PostgreSQL production deployment;
+- live PostgreSQL migration verification;
 - Alembic startup integration;
-- existing SQLite database mutation or stamping;
-- explicit empty-database Alembic bootstrap;
+- existing SQLite database mutation or stamping beyond explicit pristine-empty bootstrap;
 - object storage;
 - Parquet;
 - scalable lexical/vector retrieval;
@@ -72,10 +77,10 @@ Not implemented:
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `bc1f6a9dec4c9f8954af1e6d1ae19cd3afe97beb`;
-- the full backend suite passes with 339 tests and one known pytest configuration warning;
-- the focused SQLite schema classifier suite passes with 45 tests;
-- the combined schema, migration and classifier regression suite passes with 63 tests;
+- the latest verified executable implementation baseline is commit `e0dd495155b91219ff575f5cc154b97a1f33d136`;
+- the full backend suite passes with 372 tests and one known pytest configuration warning;
+- the focused Phase 3C2 bootstrap suite passes with 33 tests;
+- the combined Phase 3 schema, migration, classifier and bootstrap regression suite passes with 96 tests;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
 - the Alembic graph is `<base> -> 0001_current_schema (head)`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
@@ -84,7 +89,9 @@ Verified baseline:
 - the redesigned production engine is not implemented or runnable;
 - current startup still uses `Base.metadata.create_all()` and `ensure_sqlite_demo_columns()`;
 - the Phase 3C1 read-only SQLite schema classifier is implemented;
-- no explicit Alembic bootstrap service or Alembic startup integration exists;
+- the Phase 3C2 explicit pristine SQLite Alembic bootstrap is implemented;
+- no PostgreSQL/Psycopg driver and engine foundation, PostgreSQL deployment or live PostgreSQL migration verification exists;
+- no Alembic startup integration exists;
 - as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
 
 ## 3. Product Problem
@@ -698,7 +705,7 @@ Phase 3C1 established read-only recognition only. It did not authorize database 
 
 #### Phase 3 Explicit Pristine SQLite Alembic Bootstrap Decision
 
-This decision approves **Option A — Explicit Empty SQLite Alembic Bootstrap Only** for the next bounded unit. It supersedes only the earlier classifier decision's initial mutation whitelist. It does not weaken or replace any classifier recognition, conflict, profile, preservation or read-only rule.
+This decision approved **Option A — Explicit Empty SQLite Alembic Bootstrap Only**, implemented by the completed Phase 3C2 unit. It supersedes only the earlier classifier decision's initial mutation whitelist. It does not weaken or replace any classifier recognition, conflict, profile, preservation or read-only rule.
 
 Mutation authorization is deliberately narrow:
 
@@ -759,16 +766,16 @@ Phase 3C2 promises sequential repeatability, not safe concurrent bootstrap by mu
 
 Every refused or already-current database must preserve schema, data, Alembic revision, tables, views, triggers and indexes exactly and must prove that neither the compatibility helper nor a repository database was accessed. For pristine empty bootstrap, the only permitted persistent change is the exact committed Alembic upgrade to `0001_current_schema`. No customer data transformation occurs because an eligible database contains no managed or user-defined schema objects.
 
-The next bounded unit is **Phase 3C2 — Explicit Pristine SQLite Alembic Bootstrap** with expected scope:
+The completed **Phase 3C2 — Explicit Pristine SQLite Alembic Bootstrap** unit had this implementation scope:
 
 ```text
 backend/app/db/alembic_bootstrap.py
 backend/tests/test_alembic_bootstrap.py
 ```
 
-No package export or existing production-file modification is expected. A third existing file may be modified only if current source proves it is strictly required; otherwise implementation must stop and report the conflict before scope expands.
+No package export or existing production-file modification was required.
 
-Phase 3C2 tests must use disposable SQLite databases only and cover pristine bootstrap, already-current no-op, sequential repeat invocation, user-defined tables/views/triggers/indexes, every refused classifier state and profile, malformed and unknown Alembic state, prohibited-command boundaries, caller-owned engine behavior, exact postcondition, migration failure, postcondition failure, no destructive cleanup, no repository database access, no startup integration, and preservation of deterministic legacy behavior.
+Phase 3C2 tests use disposable SQLite databases only and cover pristine bootstrap, already-current no-op, sequential repeat invocation, user-defined tables/views/triggers/indexes, every refused classifier state and profile, malformed and unknown Alembic state, prohibited-command boundaries, caller-owned engine behavior, exact postcondition, migration failure, postcondition failure, no destructive cleanup, no repository database access, no startup integration, and preservation of deterministic legacy behavior.
 
 Phase 3C2 has these explicit non-goals:
 
@@ -782,7 +789,73 @@ Phase 3C2 has these explicit non-goals:
 - no repository database access;
 - no Phase 4 or later infrastructure.
 
-Completing Phase 3C2 will establish only an explicit new-database bootstrap path. It will not complete existing-database migration, startup migration integration, PostgreSQL deployment or legacy SQLite retirement.
+Phase 3C2 established only an explicit pristine-new-database SQLite bootstrap path. It did not complete existing SQLite migration, startup migration integration, PostgreSQL support or deployment, or legacy SQLite retirement.
+
+#### Phase 3 PostgreSQL/Psycopg 3 Engine Foundation Decision
+
+The user approved **Option A — PostgreSQL/Psycopg 3 Foundation**. The next bounded implementation unit is **Phase 3D1 — PostgreSQL Driver and Engine Configuration Foundation**. It establishes only a pinned Psycopg 3 dependency, explicit supported database-URL parsing and canonicalization, a tested synchronous SQLAlchemy engine-construction boundary for SQLite and PostgreSQL, preservation of the current SQLite default and behavior, and non-network PostgreSQL engine-construction verification. It does not establish a deployed PostgreSQL service or prove production PostgreSQL migration or runtime readiness.
+
+Phase 3D1 must use Psycopg 3 through `psycopg[binary]` and pin one exact version in `backend/requirements.txt`. Before editing, implementation must report the selected exact version and evidence that it supports the verified Python 3.11 runtime and SQLAlchemy 2.0.41. This SSOT deliberately does not prescribe an exact Psycopg patch version. The unit must not add Psycopg 2, add both binary and source/C variants, add an ORM or asynchronous database dependency, or change the SQLAlchemy or Alembic version. The binary distribution is approved for the Phase 3D1 local, development and verification foundation; production container packaging and whether a later deployment uses a system-linked Psycopg build require a separate deployment decision.
+
+SQLite remains the current default. Phase 3D1 must preserve the existing configured SQLite URL, database location, synchronous SQLAlchemy engine, `check_same_thread=False` connection argument, startup calls, tables, models, persistence, APIs, exports, deterministic scan behavior, compatibility helper and repository SQLite-file handling. It must not silently convert or migrate the current default database.
+
+The engine-construction boundary accepts exactly these PostgreSQL URL schemes:
+
+```text
+postgresql://
+postgresql+psycopg://
+postgres://
+```
+
+Both `postgresql://` and `postgres://` must canonicalize to `postgresql+psycopg://`; `postgresql+psycopg://` remains unchanged. Canonicalization must use SQLAlchemy URL parsing rather than ad hoc splitting and must preserve username, password, host, port, database name, percent-encoding and query parameters. The canonical dialect and driver is `postgresql+psycopg`.
+
+The boundary must explicitly reject `postgresql+psycopg2://`, every other PostgreSQL driver, asynchronous PostgreSQL drivers, and unsupported non-SQLite/non-PostgreSQL dialects. There is no silent fallback to SQLite, Psycopg 2 or another driver.
+
+Database URLs may contain credentials. Raw passwords and complete unredacted URLs must not appear in exceptions, logs, test failures, health output, diagnostics or reports. Diagnostics must use SQLAlchemy's redacted URL rendering, while credentials remain available internally for engine construction. Unsupported-URL errors must identify the dialect or driver safely without revealing secrets. Phase 3D1 does not add secret storage, environment-file loading or deployment-secret management.
+
+Phase 3D1 must introduce or extract one focused, testable, synchronous engine-construction function in the existing database module, conceptually:
+
+```python
+def create_database_engine(database_url: str) -> Engine:
+    ...
+```
+
+The exact name may follow an existing module convention if source inspection proves a better seam. For SQLite, it must preserve the currently supported URLs, use the current SQLite connection arguments exactly, retain the current `pool_pre_ping=True`, add no PostgreSQL-only options and leave default engine semantics unchanged. For PostgreSQL, it must use `postgresql+psycopg`, omit SQLite connection arguments, enable `pool_pre_ping=True`, and otherwise retain SQLAlchemy defaults. Constructing either engine must not establish a database connection. Phase 3D1 must not add pool size, overflow, timeout, recycle, isolation level, SSL, application name, retry or failover policy; those require deployment measurements and a separate decision.
+
+The application-global engine may be constructed through this boundary using the existing configured `DATABASE_URL`. Current import and startup behavior must remain functionally unchanged, SQLite must remain the default, and engine construction must add neither a migration command nor an import-time connectivity check. Invalid or unavailable PostgreSQL configuration must not trigger automatic fallback, and invalid supported-URL configuration must fail explicitly. Sessions, ORM metadata, models, repositories, routes and deterministic behavior remain unchanged.
+
+The existing Alembic environment's caller-supplied connection path remains unchanged. Phase 3D1 may verify structurally that a PostgreSQL/Psycopg engine can be constructed, that it exposes the expected PostgreSQL dialect and Psycopg driver, and that the existing Alembic environment has no SQLite-only execution branch for a supplied connection. It must not claim PostgreSQL migration success without a real PostgreSQL server. It must not run PostgreSQL migrations, add a PostgreSQL test container, change `migrations/env.py`, change revision `0001_current_schema`, add startup migration integration, stamp a database or add legacy migration.
+
+Phase 3D1 tests must not require a live PostgreSQL server. They must cover exact dependency and import availability; unchanged SQLite engine behavior; all three accepted URL schemes and canonicalization; preservation of credentials, percent-encoding, host, port, database and query parameters; Psycopg 3 dialect and driver selection; PostgreSQL `pool_pre_ping=True`; absence of SQLite `check_same_thread` on PostgreSQL; no network connection during engine construction; explicit rejection of Psycopg 2, asynchronous drivers, other unsupported PostgreSQL drivers and unsupported dialects; redacted errors without password leakage; the application-global engine continuing to use existing settings and default to SQLite; no startup migration, helper, model, API or frontend change; and no repository database access beyond existing baseline behavior. Mocks or SQLAlchemy engine inspection may be used. Existing database, migration, classifier and bootstrap tests must not be weakened.
+
+The expected Phase 3D1 implementation scope is exactly:
+
+```text
+backend/requirements.txt
+backend/app/db/database.py
+backend/tests/test_database_engine_configuration.py
+```
+
+A small change to `backend/app/core/config.py` is permitted only if current source proves URL typing or validation cannot be implemented safely in the database boundary alone. No other existing file is expected. If `config.py` or any other file is required, implementation must report the reason before editing and stop if scope would exceed one small compatibility change.
+
+Phase 3D1 has these explicit non-goals:
+
+- no live PostgreSQL server, Docker Compose PostgreSQL or Kubernetes PostgreSQL;
+- no PostgreSQL migration execution or schema-parity claim;
+- no startup migration integration or startup connectivity check;
+- no existing SQLite adoption, stamping or recognized legacy SQLite migration;
+- no asynchronous SQLAlchemy or Psycopg;
+- no pool sizing, retry, SSL/TLS or broader operational connection policy;
+- no credential or secret-management infrastructure;
+- no model, schema, index, audit-table or Alembic revision change;
+- no unrelated dependency upgrade;
+- no API or frontend change;
+- no authentication, authorization or tenancy;
+- no Phase 4 or later infrastructure.
+
+Completing Phase 3D1 will establish only a PostgreSQL-capable driver and engine-construction seam. It will not complete PostgreSQL deployment, migration verification, operational readiness or production database cutover.
+
+After Phase 3D1 is implemented, reviewed, committed and verified, a separate bounded unit must use a disposable real PostgreSQL instance to verify actual Psycopg connectivity, Alembic upgrade to head, exact schema and constraint parity where PostgreSQL semantics permit, transaction and rollback/forward-recovery behavior, clean-database repeatability, failure diagnostics, and no SQLite regression. That later unit is not the immediate next step yet.
 
 ### Phase 4 — Durable Dataset Ingestion
 
@@ -968,21 +1041,24 @@ State that unrelated implementation units must not share a commit.
 
 Define:
 
-**Phase 3C2 — Explicit Pristine SQLite Alembic Bootstrap**
+**Phase 3D1 — PostgreSQL Driver and Engine Configuration Foundation**
 
 It must:
 
-- follow the complete Phase 3 explicit pristine SQLite Alembic bootstrap decision above;
-- create `backend/app/db/alembic_bootstrap.py`;
-- create `backend/tests/test_alembic_bootstrap.py`;
-- accept an explicitly supplied SQLite `Engine`;
-- return `ALREADY_CURRENT` for exact current Alembic state without mutation;
-- bootstrap only an exact pristine `EMPTY` database through Alembic `upgrade head`;
-- reclassify and require exact `current_alembic_0001`;
-- refuse every other classifier state and any user-defined schema object;
-- never stamp, downgrade, call `Base.metadata.create_all()`, call `ensure_sqlite_demo_columns()`, or integrate with startup;
-- not access ignored repository SQLite files;
-- not add PostgreSQL, Psycopg, or later-phase infrastructure;
+- follow the complete Phase 3 PostgreSQL/Psycopg 3 engine foundation decision above;
+- pin one exact compatible `psycopg[binary]` version with compatibility evidence;
+- preserve SQLite as the default and preserve all current SQLite behavior;
+- add one focused synchronous engine-construction boundary;
+- canonicalize `postgresql://`, `postgresql+psycopg://` and `postgres://` to the canonical `postgresql+psycopg` driver;
+- reject unsupported PostgreSQL drivers and unsupported dialects explicitly, safely and without fallback;
+- redact credentials from errors and diagnostics;
+- apply SQLite-only and PostgreSQL-only engine options correctly;
+- construct a PostgreSQL engine without connecting;
+- preserve current application-global engine, import and startup behavior;
+- add focused non-network tests;
+- not run PostgreSQL migrations or add a live PostgreSQL service;
+- not modify Alembic revisions or add startup migration integration;
+- not change models, schemas, persistence, APIs, frontend, Docker, Kubernetes or later-phase infrastructure;
 - not commit until reviewed.
 
 ## 18. Decision Log
