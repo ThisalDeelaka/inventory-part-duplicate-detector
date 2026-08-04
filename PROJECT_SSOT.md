@@ -61,13 +61,19 @@ Implemented:
 - credential-safe diagnostic database-URL handling;
 - lazy PostgreSQL engine construction without a connection attempt;
 - preserved SQLite default, application-global engine and session behavior;
+- digest-pinned disposable PostgreSQL 18.4 Compose test service;
+- explicit `postgres-test` profile with isolated project lifecycle;
+- loopback-only PostgreSQL test exposure and tmpfs-only test storage;
+- registered `postgres_integration` marker;
+- real read-only SQLAlchemy/Psycopg PostgreSQL connectivity verification;
+- repeatable PostgreSQL service start, test and teardown with no remaining isolated-project resources;
 - one active deterministic scoring engine path.
 
 Not implemented:
 
 - workers;
-- disposable PostgreSQL Compose test harness and real connectivity baseline;
-- PostgreSQL migration execution and schema-parity verification;
+- Phase 3D2B1 PostgreSQL Alembic upgrade and schema-parity verification;
+- Phase 3D2B2 PostgreSQL migration failure, transaction and forward-recovery verification;
 - PostgreSQL production deployment;
 - Alembic startup integration;
 - existing SQLite database mutation or stamping beyond explicit pristine-empty bootstrap;
@@ -84,10 +90,11 @@ Not implemented:
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `75271fcd84b177cc7fcb5d471cffac67e228c7f8`;
-- the full backend suite passes with 405 tests and one known pytest configuration warning;
+- the latest verified executable implementation baseline is commit `62db2b49196d7cdd70adeb464ce84bcdc822d931`;
+- the ordinary full backend suite passes with 405 tests, one intentional PostgreSQL skip and one known pytest configuration warning;
 - the focused Phase 3D1 engine-configuration suite passes with 39 tests;
-- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests;
+- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests, one intentional PostgreSQL skip and one known pytest configuration warning;
+- live read-only PostgreSQL connectivity passes with one test against PostgreSQL 18.4;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
 - the Alembic graph is `<base> -> 0001_current_schema (head)`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
@@ -98,8 +105,12 @@ Verified baseline:
 - the Phase 3C1 read-only SQLite schema classifier is implemented;
 - the Phase 3C2 explicit pristine SQLite Alembic bootstrap is implemented;
 - Phase 3D1 is implemented and establishes only the Psycopg dependency and lazy synchronous SQLite/PostgreSQL engine-construction foundation;
-- no real PostgreSQL connection has yet been verified and no PostgreSQL Compose service exists;
+- Phase 3D2A is implemented at commit `62db2b49196d7cdd70adeb464ce84bcdc822d931` with the exact committed image `postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296`;
+- two complete fresh live PostgreSQL harness cycles passed during Phase 3D2A implementation review and left no isolated-project resources;
+- the Phase 3D2A base integration database remains intentionally schema-empty;
+- no Alembic migration has run against PostgreSQL;
 - no PostgreSQL migration execution or PostgreSQL schema-parity verification exists;
+- no PostgreSQL migration failure, transactional rollback or forward-recovery evidence exists;
 - no PostgreSQL production deployment exists;
 - no Alembic startup integration exists;
 - as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
@@ -865,11 +876,11 @@ Phase 3D1 has these explicit non-goals:
 
 Phase 3D1 established only a PostgreSQL-capable driver and engine-construction seam. It did not complete a live PostgreSQL server, PostgreSQL connectivity, migration verification, schema parity, startup integration, operational readiness, deployment or production database cutover.
 
-After completed Phase 3D1, Phase 3D2A must first establish the separately bounded disposable PostgreSQL Compose connectivity harness defined below. PostgreSQL Alembic migration, exact schema and constraint parity, transaction and forward-recovery behavior, and related failure verification remain a later separately reviewed unit after Phase 3D2A is implemented, reviewed, committed and verified.
+Phase 3D1 was completed at `75271fcd84b177cc7fcb5d471cffac67e228c7f8`. Phase 3D2A then established the separately bounded disposable PostgreSQL Compose connectivity harness defined below. PostgreSQL Alembic migration, exact schema and constraint parity, transaction and forward-recovery behavior, and related failure verification remain separately bounded work under the migration-verification split decision below.
 
 #### Phase 3 Disposable PostgreSQL Compose Test Harness Decision
 
-The user approved **Option A — Docker Compose Test Profile**. The next bounded implementation unit is **Phase 3D2A — Disposable PostgreSQL Compose Test Harness and Connectivity Baseline**.
+The user approved **Option A — Docker Compose Test Profile**. **Phase 3D2A — Disposable PostgreSQL Compose Test Harness and Connectivity Baseline** was completed at commit `62db2b49196d7cdd70adeb464ce84bcdc822d931`.
 
 Phase 3D2A establishes only:
 
@@ -1061,6 +1072,14 @@ backend/pytest.ini
 backend/tests/test_postgresql_connectivity.py
 ```
 
+The committed Phase 3D2A implementation uses exactly that scope and the exact image reference:
+
+```text
+postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296
+```
+
+Two fresh connectivity cycles passed. The ordinary suite behavior is 405 passed, one intentional PostgreSQL skip and one known warning. Phase 3D2A did not run Alembic or establish PostgreSQL schema parity, migration failure recovery, startup integration, operational readiness or deployment.
+
 If pytest configuration resides in another existing file, modify that file instead of creating `backend/pytest.ini`. A small `backend/tests/conftest.py` change is permitted only if source proves module-local environment gating cannot safely satisfy the policy; report that need before editing and stop if it exceeds one small compatibility change. No script, dependency, Dockerfile, application source or migration file is expected.
 
 Phase 3D2A must not add or perform:
@@ -1081,7 +1100,69 @@ Phase 3D2A must not add or perform:
 
 Completing Phase 3D2A establishes only a disposable, opt-in real-PostgreSQL connectivity harness. It does not complete PostgreSQL migration verification, schema parity, operational readiness or production cutover.
 
-After Phase 3D2A is implemented, reviewed, committed and verified, a separate bounded PostgreSQL migration unit must use the same disposable harness to verify Alembic upgrade from empty PostgreSQL to head, exact managed schema, constraints and indexes under PostgreSQL semantics, migration transaction behavior, failure diagnostics, clean-database repeatability, forward-recovery policy and no SQLite regression. Do not begin or make that migration/parity unit the immediate next step until Phase 3D2A is complete and committed.
+After completed Phase 3D2A, PostgreSQL migration verification is governed by the separately approved split decision below.
+
+#### Phase 3 PostgreSQL Migration Verification Split Decision
+
+The user approved **Option A — Split into two bounded units** so basic PostgreSQL migration correctness remains independently reviewable from intentional migration failure injection and recovery behavior.
+
+##### Phase 3D2B1 — PostgreSQL Empty-Database Alembic Upgrade and Independent Schema Parity
+
+Phase 3D2B1 is the current bounded implementation unit. It establishes only:
+
+- Alembic `upgrade head` against a genuinely empty disposable PostgreSQL database;
+- exact resolved and migrated revision `0001_current_schema`;
+- a hard-coded, independently reviewed PostgreSQL expectation for the exact committed five-table application schema;
+- exact PostgreSQL schemas, tables, columns in ordinal order, types, declared lengths, numeric precision/scale, timestamp/date/time semantics, nullability, normalized server defaults, primary-key defaults, primary keys, foreign keys and `ON DELETE` behavior, unique and check constraints, named indexes including ordered columns, uniqueness, expressions and predicates, owned sequences and ownership relationships, and managed object names;
+- absence of unexpected user tables, views, materialized views, foreign tables, sequences, custom types and triggers;
+- a second `upgrade head` that leaves the exact deterministic schema fingerprint and revision unchanged and emits no schema-creating, altering or dropping DDL beyond Alembic's required read/version checks;
+- repeatability across two fresh disposable PostgreSQL harness cycles;
+- preservation of the schema-empty base connectivity database and all SQLite migration and application behavior.
+
+Phase 3D2B1 does not intentionally fail a migration and does not establish failure-recovery policy.
+
+The committed Phase 3D2A base database and role remain exactly:
+
+```text
+database: inventory_test
+user: inventory_test
+```
+
+Phase 3D2B1 must keep `inventory_test` free of non-system relations before and after every test. Its migration test must create and own exactly one separate temporary database:
+
+```text
+inventory_migration_test
+```
+
+The test must use the existing test-only `inventory_test` role and accept the existing `POSTGRES_TEST_DATABASE_URL` only as its trusted base connection input. It must require that supplied URL to identify the approved PostgreSQL driver, user, server, version and base database. It must derive the migration URL through SQLAlchemy `URL` operations rather than string splitting, preserving host, port, username, password, percent-encoding and query parameters internally while never printing a password, complete URL or query values. The fixed database identifier must not be environment controlled.
+
+Preflight must require that `inventory_migration_test` does not exist and must fail rather than adopt, drop or overwrite a pre-existing database. Creation must use an explicit autocommit administrative connection because PostgreSQL forbids `CREATE DATABASE` inside a transaction. Every connection and engine must be closed or disposed. Only `inventory_migration_test` may be dropped, in a `finally` path after all test-owned connections close. The test must not drop or mutate `inventory_test`, `postgres`, `template0`, `template1` or an unrelated database, terminate unrelated sessions or perform broad cleanup. After cleanup it must prove that `inventory_migration_test` no longer exists and `inventory_test` remains schema-empty. The full isolated Compose project must still be torn down after each verification cycle under the existing Phase 3D2A policy.
+
+Alembic must run programmatically through the committed `backend/alembic.ini`, migration script location and caller-supplied connection path. The test must open a live SQLAlchemy connection from the derived migration-database engine and supply it through Alembic configuration. It must not use the placeholder `alembic.ini` URL, mutate settings or `DATABASE_URL`, invoke FastAPI startup, call `Base.metadata.create_all()`, `ensure_sqlite_demo_columns()` or the SQLite bootstrap service, or use an Alembic subprocess while the supported supplied-connection path exists. It may run only `alembic upgrade head`; downgrade, stamp, revision generation and autogeneration are prohibited. Command completion alone is not success: the resolved head before execution and database revision afterward must both be exactly `0001_current_schema`.
+
+If the committed migration cannot upgrade a fresh PostgreSQL database, implementation must stop and report the exact credential-safe failure, preserve any uncommitted focused test work already added, and leave the committed migration, models, Alembic environment and production source unchanged. It must not add a fallback schema path or reinterpret failure as parity success. Any required migration or model correction is a separate reviewed decision and bounded correction unit.
+
+The focused module must contain an explicit independent schema contract. It must not generate or import that expectation from `Base.metadata`, ORM models, the Alembic revision implementation, Alembic autogeneration, the SQLite classifier or the observed PostgreSQL schema. Approved PostgreSQL dialect differences must be stated explicitly rather than requiring textual SQLite/PostgreSQL type or default equality. The target remains the exact committed five-table schema; no audit/job-ready tables, redesigned indexes, new constraints or Phase 4 schema are authorized.
+
+The expected Phase 3D2B1 implementation scope is exactly:
+
+```text
+backend/tests/test_postgresql_migrations.py
+```
+
+That module must contain one focused `postgres_integration` migration/parity test and module-private helpers only. It must require `POSTGRES_TEST_DATABASE_URL`, skip clearly only when it is absent, and fail rather than skip for an empty, malformed, unsupported, unreachable or incorrectly targeted supplied URL. It must use `create_database_engine()`, create, migrate, inspect and drop only `inventory_migration_test`, run no API or startup code, insert no application rows, leave `inventory_test` schema-empty and dispose every engine. No existing production, migration, model, Compose, pytest configuration, dependency or connectivity-test file is expected to change. If source inspection disproves that one-file scope, implementation must stop and report before editing.
+
+After Phase 3D2B1, with no PostgreSQL URL supplied, the ordinary backend suite is expected to report 405 passed, two intentional PostgreSQL skips and one known warning. With the harness and URL supplied, marker selection must run both tests independently: connectivity uses only schema-empty `inventory_test`, while migration/parity uses and cleans only `inventory_migration_test`. Correctness must not depend on pytest file or function order.
+
+Phase 3D2B1 runtime verification must use isolated Compose project `inventory-part-duplicate-postgres-test` for two fresh cycles. Each cycle must prove no prior project resources; start only `postgres-test-db` with `--wait --wait-timeout 90`; verify PostgreSQL 18.4, health, loopback exposure, tmpfs and zero persistent volumes; pass the original connectivity test, the migration/parity test and the complete marker selection; prove the base database remains schema-empty and the temporary database is absent; inspect logs for credentials, customer/application data, unexpected SQL errors and Alembic failure; tear down with `down --volumes --remove-orphans` in a `finally` path; and prove no project container, network or volume remains, port 55432 is released and test environment variables are absent. This proves clean-database sequential repeatability, not concurrent migration ownership or production recovery.
+
+Phase 3D2B1 must not add or perform intentional failure injection; rollback or forward-recovery testing; PostgreSQL downgrade; changes to `0001_current_schema`, Alembic environment, models, naming convention, Compose, pytest configuration, dependencies or production source; new migrations or schemas; PostgreSQL classifier/bootstrap production code; startup migration integration; production database creation, persistence or deployment; or API, frontend, Dockerfile, Kubernetes, CI, authentication, authorization, tenancy, Phase 4 or later work. Success does not authorize PostgreSQL application startup, production deployment, existing-database adoption or production cutover. The implementation must not be committed until reviewed.
+
+##### Phase 3D2B2 — PostgreSQL Migration Failure, Transaction and Forward-Recovery Verification
+
+Phase 3D2B2 is deferred until Phase 3D2B1 is implemented, reviewed, committed and verified. It will later establish controlled test-only migration failure injection, PostgreSQL DDL/Alembic transaction-boundary evidence, exact post-failure schema and Alembic-revision state, credential-safe failure diagnostics, no destructive automatic cleanup or stamp-after-failure behavior, forward recovery from the verified failed state to committed head, repeatability on a fresh disposable database and unchanged SQLite migration behavior.
+
+The later Phase 3D2B2 decision and implementation must use an isolated synthetic migration failure without altering committed production revision history. It must define a temporary Alembic script location or equivalent isolated test migration outside tracked production migration files, fail deterministically after at least one transactional DDL operation, define the exact expected rollback or residual state under PostgreSQL and current Alembic transaction configuration, verify unchanged or correctly advanced Alembic revision state, surface safe wrapped diagnostics, prohibit stamp-after-failure, SQLite fallback, `create_all()`, compatibility helpers and destructive cleanup, and explicitly recover forward to committed head from the verified failure state. It must also prove fresh-database repeatability and no SQLite regression. Production backup tooling, distributed migration locking, deployment ownership and startup integration remain separate decisions and must not be introduced prematurely.
 
 ### Phase 4 — Durable Dataset Ingestion
 
@@ -1265,24 +1346,22 @@ State that unrelated implementation units must not share a commit.
 
 ## 17. Immediate Next Step
 
-**Phase 3D2A — Disposable PostgreSQL Compose Test Harness and Connectivity Baseline**
+**Phase 3D2B1 — PostgreSQL Empty-Database Alembic Upgrade and Independent Schema Parity**
 
 It must:
 
-- follow the complete Phase 3 disposable PostgreSQL Compose test-harness decision above;
-- add only the opt-in `postgres-test` profile and `postgres-test-db` service;
-- pin `postgres:18.4-bookworm` by its exact verified official manifest digest;
-- use only the approved test database, user and password;
-- publish PostgreSQL only to loopback with default host port `55432`;
-- use tmpfs at `/var/lib/postgresql` and no persistent PostgreSQL volume;
-- use `pg_isready`, Compose `--wait` and a bounded timeout;
-- register exactly the `postgres_integration` marker;
-- add one real read-only Psycopg/SQLAlchemy connectivity test;
-- preserve normal SQLite Compose and runtime behavior;
-- pass two complete isolated start, test and down cycles;
-- leave no test container, project network or volume;
-- not run Alembic or create application schema;
-- not change startup, Dockerfiles, Kubernetes, models, APIs or frontend;
+- follow the complete Phase 3 PostgreSQL migration-verification split decision above;
+- use the committed disposable PostgreSQL harness and keep `inventory_test` schema-empty;
+- create and own only the temporary `inventory_migration_test` database;
+- run programmatic supplied-connection Alembic `upgrade head`;
+- verify the exact `0001_current_schema` revision;
+- compare the migrated schema against a hard-coded independent PostgreSQL expectation;
+- verify that a second upgrade is an exact schema no-op;
+- clean up the temporary database and pass two fresh isolated Compose cycles;
+- preserve all SQLite tests and application behavior;
+- change only `backend/tests/test_postgresql_migrations.py` unless source inspection disproves that scope and requires stopping for review;
+- not change migrations, models, production source, Compose, dependencies, startup, APIs, frontend, Dockerfiles, Kubernetes or Phase 4 infrastructure;
+- not intentionally inject a migration failure or begin Phase 3D2B2;
 - not commit until reviewed.
 
 ## 18. Decision Log
