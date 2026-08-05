@@ -71,15 +71,19 @@ Implemented:
 - an independent literal PostgreSQL parity contract for the committed five-table schema, covering exact tables, ordered columns, types, nullability, normalized defaults, keys, constraints, indexes, owned sequences and ownership, triggers, custom types, zero rows and absence of unexpected user objects;
 - a second PostgreSQL `upgrade head` no-op proof with an identical deterministic fingerprint and an upgrade-only SQL capture containing two `SELECT` statements;
 - preservation of schema-empty `inventory_test`, cleanup of test-owned `inventory_migration_test` and repeatable isolated PostgreSQL migration/parity verification;
+- controlled test-only PostgreSQL initial-migration failure, exact transactional rollback, unchanged database identity and real same-database forward recovery to the Phase 3D2B1 fingerprint;
 - one active deterministic scoring engine path.
 
 Not implemented:
 
 - workers;
-- Phase 3D2B2 PostgreSQL migration failure, transaction and forward-recovery verification;
 - PostgreSQL production deployment;
+- production migration runner;
 - Alembic startup integration;
+- distributed migration locking or ownership;
+- backup and restore tooling;
 - existing SQLite database mutation or stamping beyond explicit pristine-empty bootstrap;
+- Phase 4 executable work, including the dataset registry and revision `0002_dataset_registry`;
 - object storage;
 - Parquet;
 - scalable lexical/vector retrieval;
@@ -93,11 +97,11 @@ Not implemented:
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `4bda2efecafca819bcdea1af69b58d564f43e04b`;
-- the ordinary full backend suite passes with 405 tests, two intentional PostgreSQL skips and one known pytest configuration warning;
+- the latest verified executable implementation baseline is commit `10a14b5d4279e294c07b654ba571d68070a22071`;
+- the ordinary full backend suite passes with 405 tests, three intentional PostgreSQL skips and one known pytest configuration warning;
 - the focused Phase 3D1 engine-configuration suite passes with 39 tests;
-- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests, two intentional PostgreSQL skips and one known pytest configuration warning;
-- live PostgreSQL marker selection passes with two tests and 405 deselected against PostgreSQL 18.4;
+- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests, three intentional PostgreSQL skips and one known pytest configuration warning;
+- live PostgreSQL marker selection passes with three tests and 405 deselected against PostgreSQL 18.4 / `server_version_num` `180004`;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
 - the Alembic graph is `<base> -> 0001_current_schema (head)`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
@@ -113,7 +117,9 @@ Verified baseline:
 - the Phase 3D2A base integration database remains intentionally schema-empty;
 - Phase 3D2B1 is implemented at commit `4bda2efecafca819bcdea1af69b58d564f43e04b` with the exact tracked file `backend/tests/test_postgresql_migrations.py`;
 - Phase 3D2B1 verifies real PostgreSQL Alembic migration execution, exact independent schema parity, exact revision, second-upgrade no-op behavior, schema-empty base-database preservation and owned temporary-database cleanup;
-- no PostgreSQL migration failure, transactional rollback or forward-recovery evidence exists;
+- Phase 3D2B2 is implemented and verified at commit `10a14b5d4279e294c07b654ba571d68070a22071` in the same focused PostgreSQL migration-test module;
+- Phase 3D2B2 proves that a synthetic initial migration attempted transactional probe DDL and raised the exact deterministic test failure; PostgreSQL restored the same database to a pristine user schema with no Alembic revision or synthetic/application object; the database OID remained unchanged through failure, rollback and recovery; and the real committed migration restored revision `0001_current_schema` and the exact Phase 3D2B1 fingerprint;
+- Phase 3D2B2 verification removed both test-owned databases and every isolated Docker project resource after each cycle;
 - no PostgreSQL production deployment exists;
 - no Alembic startup integration exists;
 - as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
@@ -756,18 +762,18 @@ The bootstrap service must be separately and explicitly invoked. It must not run
 
 The initial service accepts only a caller-supplied SQLite SQLAlchemy `Engine`. It opens and owns the connection used for classification and migration, closes that connection when finished, and does not dispose the caller-owned engine. Caller-supplied `Connection` support is deferred because transaction ownership and rollback semantics require a separate decision.
 
-For a pristine empty database, the only permitted Alembic action is:
+At Phase 3C2 completion, the only permitted Alembic action for a pristine empty database was:
 
 ```text
 alembic upgrade head
 ```
 
-The resolved target head must be exactly `0001_current_schema`. The service must use the committed Alembic configuration and migration environment and programmatically supply the service-opened connection from the caller-owned `Engine`. It must not use the placeholder URL in `alembic.ini`, construct or infer a repository database URL, run `stamp` or `downgrade`, generate or autogenerate a revision, call `Base.metadata.create_all()` or `ensure_sqlite_demo_columns()`, add seed data, or normalize or repair an existing schema.
+At that completion point, resolved head was exactly `0001_current_schema`. The Phase 4 pinning decision supersedes reliance on moving `head`: Phase 4A1 must change the service to invoke the explicit immutable target `0001_current_schema` before `0002_dataset_registry` exists. The service must continue using the committed Alembic configuration and migration environment and programmatically supply the service-opened connection from the caller-owned `Engine`. It must not use the placeholder URL in `alembic.ini`, construct or infer a repository database URL, run `stamp` or `downgrade`, generate or autogenerate a revision, call `Base.metadata.create_all()` or `ensure_sqlite_demo_columns()`, add seed data, or normalize or repair an existing schema.
 
 Preflight and postcondition behavior is exact:
 
 - exact `CURRENT_ALEMBIC` at `current_alembic_0001` returns an already-current success without invoking a migration command or mutating schema or data;
-- exact pristine `EMPTY` runs `upgrade head`, then classifies again;
+- exact pristine `EMPTY` runs the explicit `0001_current_schema` upgrade target after Phase 4A1, then classifies again;
 - bootstrap success requires the post-migration result to be exactly `CURRENT_ALEMBIC`, profile `current_alembic_0001`, revision `0001_current_schema`, with no managed-schema conflicts or unexpected extra tables;
 - every other state is refused explicitly before mutation.
 
@@ -1143,7 +1149,7 @@ The test must use the existing test-only `inventory_test` role and accept the ex
 
 Preflight must require that `inventory_migration_test` does not exist and must fail rather than adopt, drop or overwrite a pre-existing database. Creation must use an explicit autocommit administrative connection because PostgreSQL forbids `CREATE DATABASE` inside a transaction. Every connection and engine must be closed or disposed. Only `inventory_migration_test` may be dropped, in a `finally` path after all test-owned connections close. The test must not drop or mutate `inventory_test`, `postgres`, `template0`, `template1` or an unrelated database, terminate unrelated sessions or perform broad cleanup. After cleanup it must prove that `inventory_migration_test` no longer exists and `inventory_test` remains schema-empty. The full isolated Compose project must still be torn down after each verification cycle under the existing Phase 3D2A policy.
 
-Alembic must run programmatically through the committed `backend/alembic.ini`, migration script location and caller-supplied connection path. The test must open a live SQLAlchemy connection from the derived migration-database engine and supply it through Alembic configuration. It must not use the placeholder `alembic.ini` URL, mutate settings or `DATABASE_URL`, invoke FastAPI startup, call `Base.metadata.create_all()`, `ensure_sqlite_demo_columns()` or the SQLite bootstrap service, or use an Alembic subprocess while the supported supplied-connection path exists. It may run only `alembic upgrade head`; downgrade, stamp, revision generation and autogeneration are prohibited. Command completion alone is not success: the resolved head before execution and database revision afterward must both be exactly `0001_current_schema`.
+Phase 3D2B1 ran Alembic programmatically through the committed `backend/alembic.ini`, migration script location and caller-supplied connection path. The test opened a live SQLAlchemy connection from the derived migration-database engine and supplied it through Alembic configuration. It did not use the placeholder `alembic.ini` URL, mutate settings or `DATABASE_URL`, invoke FastAPI startup, call `Base.metadata.create_all()`, `ensure_sqlite_demo_columns()` or the SQLite bootstrap service, or use an Alembic subprocess. At Phase 3D2B1 completion it ran `alembic upgrade head`, and both resolved head and the database revision were exactly `0001_current_schema`. Under the Phase 4 pinning decision, Phase 4A1 must replace that moving-target invocation with explicit `0001_current_schema`; downgrade, stamp, revision generation and autogeneration remain prohibited.
 
 If the committed migration cannot upgrade a fresh PostgreSQL database, implementation must stop and report the exact credential-safe failure, preserve any uncommitted focused test work already added, and leave the committed migration, models, Alembic environment and production source unchanged. It must not add a fallback schema path or reinterpret failure as parity success. Any required migration or model correction is a separate reviewed decision and bounded correction unit.
 
@@ -1165,9 +1171,9 @@ Phase 3D2B1 must not add or perform intentional failure injection; rollback or f
 
 ##### Phase 3D2B2 — PostgreSQL Initial-Migration Failure, Transaction Rollback and Real Forward Recovery
 
-Phase 3D2B2 is the current bounded implementation unit. The user approved **Option A — Failure during initial migration, followed by real forward recovery**. This unit follows the accelerated risk-based strategy: migration, rollback and recovery safety receive complete verification ceremony, while unrelated policy and infrastructure expansion remain deferred.
+Phase 3D2B2 was completed and verified at commit `10a14b5d4279e294c07b654ba571d68070a22071`. The user approved **Option A — Failure during initial migration, followed by real forward recovery**. The completed unit followed the accelerated risk-based strategy: migration, rollback and recovery safety received complete verification ceremony, while unrelated policy and infrastructure expansion remained deferred.
 
-Phase 3D2B2 establishes only:
+Phase 3D2B2 established only:
 
 - a controlled test-only synthetic initial-migration failure;
 - evidence of PostgreSQL/Alembic transactional rollback after at least one DDL statement is attempted;
@@ -1178,15 +1184,15 @@ Phase 3D2B2 establishes only:
 - repeatability through two fresh disposable PostgreSQL Compose cycles;
 - unchanged SQLite and deterministic behavior.
 
-It does not add production migration-recovery code or startup migration ownership.
+It did not add production migration-recovery code or startup migration ownership.
 
-The expected tracked implementation scope is exactly:
+The committed tracked implementation scope is exactly:
 
 ```text
 backend/tests/test_postgresql_migrations.py
 ```
 
-The implementation must add one additional `postgres_integration` test to that existing module. The module must then contain exactly two focused PostgreSQL migration tests: the existing empty-database migration/parity test and the new synthetic-failure and real-forward-recovery test. Module-private helper refactoring is permitted only in the same file when needed to avoid unsafe duplication. No production source, migration, Alembic environment, Compose file, pytest configuration, dependency, model, API, frontend, Dockerfile, Kubernetes or CI file is expected to change. If implementation inspection disproves this one-file scope, Codex must stop before editing and report the conflict.
+The implementation added one additional `postgres_integration` test to that existing module. The module contains exactly two focused PostgreSQL migration tests: the existing empty-database migration/parity test and the synthetic-failure and real-forward-recovery test. Module-private helper refactoring remained in the same file. No production source, migration, Alembic environment, Compose file, pytest configuration, dependency, model, API, frontend, Dockerfile, Kubernetes or CI file changed.
 
 The new test must own exactly one additional fixed database:
 
@@ -1222,7 +1228,7 @@ After the controlled failure, the failed connection must be closed or safely res
 
 If PostgreSQL or Alembic leaves any different state, the test must fail and report it. It must not silently change this expectation, manually clean residual state, stamp a revision or reinterpret residual state as success.
 
-After proving the exact failed state, and without dropping or recreating the database, the test must switch to the real committed `backend/alembic.ini` and production script location, open a new SQLAlchemy connection to the same `inventory_migration_recovery_test`, and supply that live connection through the committed Alembic caller-supplied connection path. Production head must resolve exactly to `0001_current_schema`; the test may run only the real committed `alembic upgrade head`; and the resulting database revision and independent schema contract must exactly equal the Phase 3D2B1 revision and fingerprint. No synthetic probe or temporary object may remain.
+After proving the exact failed state, and without dropping or recreating the database, the test switched to the real committed `backend/alembic.ini` and production script location, opened a new SQLAlchemy connection to the same `inventory_migration_recovery_test`, and supplied that live connection through the committed Alembic caller-supplied connection path. At Phase 3D2B2 completion, production head resolved exactly to `0001_current_schema`; the test ran only the real committed `alembic upgrade head`; and the resulting database revision and independent schema contract exactly equalled the Phase 3D2B1 revision and fingerprint. No synthetic probe or temporary object remained.
 
 Forward recovery must not use a fallback schema path, stamp, `create_all()`, SQLite helper, bootstrap service, manual DDL repair, drop/recreate, downgrade or application startup. Recovery succeeds only when the same database that experienced the verified rollback reaches the exact committed Phase 3D2B1 schema.
 
@@ -1230,9 +1236,9 @@ The test must skip clearly only when `POSTGRES_TEST_DATABASE_URL` is absent. Emp
 
 Runtime verification must use the existing isolated Compose project `inventory-part-duplicate-postgres-test` for two fresh complete cycles. Each cycle must prove no prior project resources; start only `postgres-test-db` with `--wait --wait-timeout 90`; verify PostgreSQL 18.4, health, loopback exposure, tmpfs and zero persistent volumes; run the original connectivity test, the Phase 3D2B1 parity test, the new Phase 3D2B2 failure/recovery test and complete marker selection; prove schema-empty `inventory_test`; prove both `inventory_migration_test` and `inventory_migration_recovery_test` absent; inspect sanitized logs; tear down in `finally` with `down --volumes --remove-orphans`; and prove zero project containers, networks and volumes with port 55432 released. The second cycle must use the opposite focused-test order to prove order independence.
 
-After implementation, the ordinary service-down backend suite is expected to report 405 passed, three intentional PostgreSQL skips and one known warning. The focused Phase 3 regression is expected to report 129 passed, three intentional PostgreSQL skips and one known warning. Live marker selection is expected to report three passed and 405 deselected. The known `asyncio_default_fixture_loop_scope` warning remains outside this unit.
+The verified ordinary service-down backend suite reported 405 passed, three intentional PostgreSQL skips and one known warning. The focused Phase 3 regression reported 129 passed, three intentional PostgreSQL skips and one known warning. Live marker selection reported three passed and 405 deselected against PostgreSQL 18.4 / `180004`. The known `asyncio_default_fixture_loop_scope` warning remains outside this unit.
 
-Phase 3D2B2 must not add or perform a production migration runner or recovery service; FastAPI startup migration integration; a distributed lock or concurrent migration ownership; changes to `backend/migrations/env.py` or `0001_current_schema`; tracked synthetic revisions or a new production revision; Alembic stamp or downgrade; backup/restore tooling; destructive residual-state cleanup; PostgreSQL classifier/bootstrap production code; application model or schema changes; existing PostgreSQL database adoption; PostgreSQL production service, storage, deployment or cutover; dependency, Compose, Dockerfile, Kubernetes, CI, API, frontend, authentication, authorization, tenancy, Phase 4 or later work.
+Phase 3D2B2 did not add or perform a production migration runner or recovery service; FastAPI startup migration integration; a distributed lock or concurrent migration ownership; changes to `backend/migrations/env.py` or `0001_current_schema`; tracked synthetic revisions or a new production revision; Alembic stamp or downgrade; backup/restore tooling; destructive residual-state cleanup; PostgreSQL classifier/bootstrap production code; application model or schema changes; existing PostgreSQL database adoption; PostgreSQL production service, storage, deployment or cutover; dependency, Compose, Dockerfile, Kubernetes, CI, API, frontend, authentication, authorization, tenancy, Phase 4 executable work or later-phase work.
 
 Completion proves only controlled transactional initial-migration failure behavior and real forward recovery in a disposable test database. Production backup tooling, distributed migration locking, deployment ownership and startup integration remain separately deferred.
 
@@ -1246,6 +1252,190 @@ Completion proves only controlled transactional initial-migration failure behavi
 - dataset/profile versions;
 - first-class MASTER_PART_DESCRIPTION;
 - idempotency/retry.
+
+#### Phase 4 Legacy SQLite `0001` Pinning and Dataset Registry Migration Decision
+
+The user approved **Option 1 — Keep legacy deterministic SQLite pinned to `0001_current_schema`**. Durable dataset registry ownership is the selected first Phase 4 capability, but no Phase 4 executable work is implemented by this decision.
+
+Alembic revision ownership is fixed as follows:
+
+- `0001_current_schema` remains the immutable protected five-table deterministic schema;
+- the future dataset registry revision is exactly `0002_dataset_registry`;
+- `0002_dataset_registry` will declare `down_revision = "0001_current_schema"`;
+- once `0002_dataset_registry` is committed, the overall production Alembic head becomes `0002_dataset_registry`;
+- moving production head must not reinterpret the legacy SQLite schema as outdated, incomplete or automatically mutable;
+- explicitly Alembic-managed production databases may advance from `0001_current_schema` to `0002_dataset_registry`;
+- normal deterministic SQLite startup must not advance to `0002_dataset_registry`;
+- no existing repository SQLite database may be opened, stamped or upgraded during implementation or tests.
+
+Legacy deterministic SQLite startup retains the existing SQLAlchemy `Base` as the preferred shared model metadata. A separate registry declarative base must not be introduced merely to avoid startup activation. Before registry models enter shared metadata, normal startup must restrict `Base.metadata.create_all()` to actual SQLAlchemy table objects for exactly these original committed tables:
+
+```text
+duplicate_scan
+duplicate_candidate
+duplicate_feedback
+scan_warning
+rule_exclusion_audit
+```
+
+The committed names are singular; older pluralized conceptual spellings do not match current source. The allowlist must use trusted table objects rather than runtime reflection or untrusted strings. Registry tables must not be created by normal legacy startup. `ensure_sqlite_demo_columns()` remains limited to its existing legacy compatibility responsibility. Startup must not call Alembic, connect to PostgreSQL or silently fall back. Deterministic scoring, persistence, API output, exports, warnings, exclusions and existing SQLite behavior remain unchanged.
+
+The Phase 3C2 explicit pristine SQLite bootstrap is permanently pinned to the exact target `0001_current_schema` and must no longer depend on moving `head` semantics once `0002_dataset_registry` exists. An eligible pristine SQLite database bootstrapped through this legacy service receives only the original five-table schema. Success remains exact classifier profile `current_alembic_0001` at revision `0001_current_schema`. The bootstrap must not create registry tables, stamp or advance an existing database, and remains explicit and outside application startup.
+
+The Phase 3C1 classifier remains a classifier for the protected legacy five-table SQLite family. `CURRENT_ALEMBIC` and `current_alembic_0001` continue to mean exact revision `0001_current_schema`. The initial registry foundation does not expand the classifier or authorize `0002_dataset_registry` mutation. Registry services must not treat classifier success as proof that registry tables exist. A future production-startup or managed-database classifier may be designed separately.
+
+Every Phase 3 test whose purpose is the protected five-table baseline must target `0001_current_schema` explicitly rather than moving `head`. This includes PostgreSQL B1 parity/no-op and B2 rollback/recovery verification, plus SQLite migration, classifier and bootstrap paths whose contract is the protected legacy schema. They must continue proving the original five-table fingerprint and must not be weakened to accept registry tables. New Phase 4 migration tests will separately verify `0001_current_schema` to `0002_dataset_registry`, exact `0002` schema parity and repeatability.
+
+#### Phase 4A — Durable Dataset Registry and Versioned Artifact Metadata Foundation
+
+Phase 4A is the selected first durable-ingestion capability. It establishes database ownership and immutable version identity before MinIO/S3 upload APIs or object processing are added.
+
+The schema adds exactly three tables without modifying any original five-table object:
+
+```text
+datasets
+dataset_versions
+dataset_artifacts
+```
+
+New registry primary keys are immutable application-generated UUID values. Models must use SQLAlchemy's supported portable UUID type with native PostgreSQL UUID behavior and SQLite test portability. This unit adds no UUID package, database-generated random-UUID extension or public sequential dataset identifier.
+
+`datasets` contains conceptually:
+
+```text
+id
+name
+description
+status
+created_at
+updated_at
+```
+
+Its exact policy is:
+
+- `id` is a UUID primary key;
+- `name` is required, trimmed, non-empty and at most 255 characters;
+- `description` is optional text;
+- `status` is required and constrained to exactly `ACTIVE` or `ARCHIVED`;
+- a new dataset starts as `ACTIVE`;
+- `created_at` and `updated_at` are required application-supplied UTC timestamps, with no server timestamp default or trigger;
+- names are not globally unique because tenant ownership is not implemented;
+- no delete cascade or automatic deletion is introduced.
+
+`dataset_versions` contains conceptually:
+
+```text
+id
+dataset_id
+version_number
+status
+source_filename
+source_media_type
+source_sha256
+source_size_bytes
+source_record_count
+created_at
+updated_at
+```
+
+Its exact policy is:
+
+- `id` is a UUID primary key;
+- `dataset_id` is a required foreign key to `datasets.id`; deletion is restricted and versions are not cascade-deleted;
+- `version_number` is a required positive integer, unique with `dataset_id`;
+- `status` is constrained to exactly `REGISTERED`, `STAGED`, `PROFILED`, `READY` or `REJECTED`;
+- allowed forward transitions are exactly `REGISTERED -> STAGED`, `REGISTERED -> REJECTED`, `STAGED -> PROFILED`, `STAGED -> REJECTED`, `PROFILED -> READY` and `PROFILED -> REJECTED`;
+- `READY` and `REJECTED` are terminal in this foundation;
+- transient worker failure is not a version status; Phase 5 job-attempt records own retryable operational failure;
+- `source_filename` is required display-basename metadata of at most 512 characters and is never trusted as an object key or filesystem path;
+- `source_media_type` is required and at most 255 characters;
+- `source_sha256` is required lowercase hexadecimal SHA-256 text of exactly 64 characters;
+- `source_size_bytes` is a required non-negative big integer;
+- `source_record_count` is an optional non-negative big integer;
+- `created_at` and `updated_at` are required application-supplied UTC timestamps;
+- source identity fields and `version_number` are immutable after creation;
+- dataset-scoped idempotency is enforced by uniqueness of `dataset_id + source_sha256 + source_size_bytes`;
+- the same dataset and source identity returns the existing version instead of creating another; identical content in different datasets remains permitted; no global checksum uniqueness exists.
+
+`dataset_artifacts` contains conceptually:
+
+```text
+id
+dataset_version_id
+artifact_kind
+artifact_ordinal
+object_uri
+content_sha256
+size_bytes
+media_type
+created_at
+```
+
+Its exact policy is:
+
+- `id` is a UUID primary key;
+- `dataset_version_id` is a required foreign key to `dataset_versions.id`; deletion is restricted and artifacts are not cascade-deleted;
+- `artifact_kind` is constrained initially to exactly `SOURCE_CSV`, `SCHEMA_PROFILE_JSON` or `CANONICAL_PARQUET`;
+- `artifact_ordinal` is a required non-negative integer;
+- `object_uri` is a required provider-independent opaque URI of at most 2048 characters;
+- `content_sha256` is required lowercase hexadecimal SHA-256 text of exactly 64 characters;
+- `size_bytes` is a required non-negative big integer;
+- `media_type` is required and at most 255 characters;
+- `created_at` is a required application-supplied UTC timestamp;
+- artifact rows are immutable;
+- the unique artifact slot is `dataset_version_id + artifact_kind + artifact_ordinal`;
+- `object_uri` is globally unique in the registry so one durable object cannot be silently owned by multiple artifact rows;
+- repeated registration of the same slot with identical immutable metadata is idempotent, while conflicting metadata fails explicitly;
+- checksum equality alone never collapses artifacts across datasets or versions;
+- `CANONICAL_PARQUET` may use multiple ordinals for future shards.
+
+All registry primary keys, foreign keys, unique constraints, checks and indexes use deterministic names under the established naming convention. Required indexes support dataset status, version lookup by dataset, version lifecycle status, artifact lookup by dataset version and artifact-kind lookup within a version. No speculative full-text, vector, tenant, job, scan or profile index is authorized.
+
+The future typed repository/service boundary supports only:
+
+- creating an active dataset and reading it by ID;
+- registering a source version and idempotently returning an existing version for the same dataset/source identity;
+- deterministically assigning the next positive dataset-local version number;
+- recording immutable artifact metadata;
+- advancing lifecycle status only through the approved transitions;
+- explicit not-found, duplicate/conflict, invalid-transition and invalid-metadata failures.
+
+No HTTP route is introduced. The initial guarantee is deterministic sequential version allocation inside one database transaction, with database uniqueness authoritative. Cross-process concurrent allocation, retry orchestration and distributed ownership remain deferred to Phase 5.
+
+Registry models use the existing shared `Base`, but legacy startup must first be restricted to the original-five-table table-object allowlist. Alembic alone creates registry tables. Registry repositories/services fail explicitly when registry tables are absent and must not call `create_all()`, Alembic, the SQLite helper or SQLite bootstrap. No automatic startup activation is introduced.
+
+The future manually reviewed `0002_dataset_registry` migration must:
+
+- add only the three approved registry tables, constraints and indexes;
+- upgrade an exact `0001_current_schema` database to `0002_dataset_registry` on disposable SQLite and real PostgreSQL;
+- preserve every original five-table object and row during upgrade;
+- downgrade a disposable `0002` database to exact `0001` by dropping only registry-owned objects in dependency-safe order;
+- support exact schema-parity verification and a second `upgrade head` no-op proof;
+- fail explicitly without fallback or `create_all()`.
+
+Production downgrade remains non-primary recovery; forward migration plus verified backup/restore policy remains the operational direction.
+
+Phase 4A explicitly does not add MinIO or other object storage, an S3 client, multipart/streaming upload, CSV parsing, pandas replacement, schema-profile execution, PyArrow, Polars, Parquet writes, `MASTER_PART_DESCRIPTION` activation, a scan-to-dataset-version foreign key, asynchronous jobs, Redis, Celery, tenancy, authentication, authorization, object deletion/retention, production Alembic startup integration, PostgreSQL deployment/cutover, frontend work or Phase 5 infrastructure. Metadata-only test URIs do not prove object existence.
+
+##### Phase 4A1 — Fixed Legacy Migration Target Compatibility Seam
+
+Phase 4A1 is the sole immediate implementation unit. It must:
+
+- pin the explicit pristine SQLite bootstrap to `0001_current_schema`;
+- pin every Phase 3 SQLite baseline path whose contract is the original schema to `0001_current_schema`;
+- pin PostgreSQL B1 and B2 migration verification to `0001_current_schema`;
+- preserve the exact B1 five-table fingerprint and B2 recovery behavior;
+- prove unchanged current behavior while overall `head` is still `0001_current_schema`;
+- introduce no `0002` revision, dataset model/table, repository, service, API, dependency or object-storage code;
+- change only the smallest source/test set proved necessary;
+- preserve normal legacy startup unchanged in this first seam;
+- remain uncommitted until reviewed.
+
+Expected files are limited conceptually to the bootstrap target and directly affected migration tests. Any additional focused file must be source-proven and reported before editing.
+
+##### Phase 4A2 — Dataset Registry Schema and Persistence Foundation
+
+Phase 4A2 remains future until Phase 4A1 is committed and verified. It will restrict legacy startup `create_all()` to the original-five-table table-object allowlist, add shared-Base registry models and `0002_dataset_registry`, add typed repository/service contracts and focused tests, add SQLite and live PostgreSQL migration verification, preserve all Phase 3 tests pinned to `0001_current_schema`, and add no object-store or HTTP upload behavior.
 
 ### Phase 5 — Asynchronous Jobs and Progress
 
@@ -1418,22 +1608,18 @@ State that unrelated implementation units must not share a commit.
 
 ## 17. Immediate Next Step
 
-**Phase 3D2B2 — PostgreSQL Initial-Migration Failure, Transaction Rollback and Real Forward Recovery**
+**Phase 4A1 — Fixed Legacy Migration Target Compatibility Seam**
 
 It must:
 
-- follow the complete Option A decision above;
-- change only `backend/tests/test_postgresql_migrations.py` unless source inspection disproves that scope and requires stopping before editing;
-- add one additional `postgres_integration` test;
-- own only the fixed `inventory_migration_recovery_test` database;
-- create a temporary isolated synthetic Alembic tree under pytest temporary storage;
-- attempt `phase3d2b2_failure_probe` transactional DDL and fail deterministically;
-- verify exact rollback to a pristine empty user-schema and revision state without drop/recreate or manual cleanup;
-- run the real committed migration tree against that same database through the supplied live-connection path;
-- recover exactly to revision `0001_current_schema` and the Phase 3D2B1 fingerprint;
-- pass two fresh isolated Compose cycles with opposite focused-test order;
-- preserve schema-empty `inventory_test` and all SQLite and deterministic behavior;
-- not add production migration recovery, startup integration, deployment, locking, backup tooling or Phase 4 work;
+- pin the explicit pristine SQLite bootstrap to the immutable `0001_current_schema` target rather than moving `head`;
+- pin every directly affected Phase 3 SQLite baseline test to `0001_current_schema` where its contract is the original five-table schema;
+- pin PostgreSQL B1 parity/no-op and B2 failure/rollback/recovery verification to `0001_current_schema`;
+- preserve the exact B1 fingerprint, B2 recovery behavior, classifier meaning and existing deterministic/SQLite behavior;
+- prove behavior is unchanged while the overall Alembic head remains `0001_current_schema`;
+- change only the smallest source and test set established by inspection;
+- preserve normal legacy startup unchanged in this unit;
+- introduce no `0002_dataset_registry`, registry model/table, repository, service, API, dependency, object-storage code, startup Alembic integration, deployment, locking, backup tooling or Phase 5 work;
 - not commit until reviewed.
 
 ## 18. Decision Log
@@ -1449,6 +1635,17 @@ Add entry dated 2026-07-20:
 - governed reviews supply training data;
 - LLM optional only;
 - production target is million-row staged, asynchronous, indexed, model-backed and tenant-isolated operation.
+
+Add entry dated 2026-08-05:
+
+- Phase 3D2B2 completed at `10a14b5d4279e294c07b654ba571d68070a22071`;
+- durable dataset registry foundation selected as the first Phase 4 capability;
+- legacy deterministic SQLite remains pinned to `0001_current_schema`;
+- the future production Alembic head may advance to `0002_dataset_registry`;
+- shared SQLAlchemy metadata is retained;
+- legacy startup will use an explicit original-five-table table-object allowlist before registry models are activated;
+- registry tables are Alembic-owned and are not created by legacy startup;
+- Phase 4A1 pins fixed migration targets before Phase 4A2 introduces `0002_dataset_registry`.
 
 ## 19. Definition of Final Production Success
 
