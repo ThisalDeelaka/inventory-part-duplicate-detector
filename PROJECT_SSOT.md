@@ -67,12 +67,15 @@ Implemented:
 - registered `postgres_integration` marker;
 - real read-only SQLAlchemy/Psycopg PostgreSQL connectivity verification;
 - repeatable PostgreSQL service start, test and teardown with no remaining isolated-project resources;
+- real supplied-connection PostgreSQL Alembic `upgrade head` against a fresh disposable database with exact revision `0001_current_schema` verification;
+- an independent literal PostgreSQL parity contract for the committed five-table schema, covering exact tables, ordered columns, types, nullability, normalized defaults, keys, constraints, indexes, owned sequences and ownership, triggers, custom types, zero rows and absence of unexpected user objects;
+- a second PostgreSQL `upgrade head` no-op proof with an identical deterministic fingerprint and an upgrade-only SQL capture containing two `SELECT` statements;
+- preservation of schema-empty `inventory_test`, cleanup of test-owned `inventory_migration_test` and repeatable isolated PostgreSQL migration/parity verification;
 - one active deterministic scoring engine path.
 
 Not implemented:
 
 - workers;
-- Phase 3D2B1 PostgreSQL Alembic upgrade and schema-parity verification;
 - Phase 3D2B2 PostgreSQL migration failure, transaction and forward-recovery verification;
 - PostgreSQL production deployment;
 - Alembic startup integration;
@@ -90,11 +93,11 @@ Not implemented:
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `62db2b49196d7cdd70adeb464ce84bcdc822d931`;
-- the ordinary full backend suite passes with 405 tests, one intentional PostgreSQL skip and one known pytest configuration warning;
+- the latest verified executable implementation baseline is commit `4bda2efecafca819bcdea1af69b58d564f43e04b`;
+- the ordinary full backend suite passes with 405 tests, two intentional PostgreSQL skips and one known pytest configuration warning;
 - the focused Phase 3D1 engine-configuration suite passes with 39 tests;
-- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests, one intentional PostgreSQL skip and one known pytest configuration warning;
-- live read-only PostgreSQL connectivity passes with one test against PostgreSQL 18.4;
+- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests, two intentional PostgreSQL skips and one known pytest configuration warning;
+- live PostgreSQL marker selection passes with two tests and 405 deselected against PostgreSQL 18.4;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
 - the Alembic graph is `<base> -> 0001_current_schema (head)`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
@@ -108,8 +111,8 @@ Verified baseline:
 - Phase 3D2A is implemented at commit `62db2b49196d7cdd70adeb464ce84bcdc822d931` with the exact committed image `postgres:18.4-bookworm@sha256:1961f96e6029a02c3812d7cb329a3b03a3ac2bb067058dec17b0f5596aca9296`;
 - two complete fresh live PostgreSQL harness cycles passed during Phase 3D2A implementation review and left no isolated-project resources;
 - the Phase 3D2A base integration database remains intentionally schema-empty;
-- no Alembic migration has run against PostgreSQL;
-- no PostgreSQL migration execution or PostgreSQL schema-parity verification exists;
+- Phase 3D2B1 is implemented at commit `4bda2efecafca819bcdea1af69b58d564f43e04b` with the exact tracked file `backend/tests/test_postgresql_migrations.py`;
+- Phase 3D2B1 verifies real PostgreSQL Alembic migration execution, exact independent schema parity, exact revision, second-upgrade no-op behavior, schema-empty base-database preservation and owned temporary-database cleanup;
 - no PostgreSQL migration failure, transactional rollback or forward-recovery evidence exists;
 - no PostgreSQL production deployment exists;
 - no Alembic startup integration exists;
@@ -1108,7 +1111,7 @@ The user approved **Option A — Split into two bounded units** so basic Postgre
 
 ##### Phase 3D2B1 — PostgreSQL Empty-Database Alembic Upgrade and Independent Schema Parity
 
-Phase 3D2B1 is the current bounded implementation unit. It establishes only:
+Phase 3D2B1 was completed and verified at commit `4bda2efecafca819bcdea1af69b58d564f43e04b`. It establishes only:
 
 - Alembic `upgrade head` against a genuinely empty disposable PostgreSQL database;
 - exact resolved and migrated revision `0001_current_schema`;
@@ -1118,6 +1121,8 @@ Phase 3D2B1 is the current bounded implementation unit. It establishes only:
 - a second `upgrade head` that leaves the exact deterministic schema fingerprint and revision unchanged and emits no schema-creating, altering or dropping DDL beyond Alembic's required read/version checks;
 - repeatability across two fresh disposable PostgreSQL harness cycles;
 - preservation of the schema-empty base connectivity database and all SQLite migration and application behavior.
+
+The completed implementation scope is exactly `backend/tests/test_postgresql_migrations.py`. Verification recorded the ordinary suite at 405 passed, two intentional skips and one known warning; the focused Phase 3 regression at 129 passed, two intentional skips and one known warning; the live marker suite at two passed and 405 deselected; PostgreSQL 18.4; revision `0001_current_schema`; two second-upgrade `SELECT` statements only; schema-empty `inventory_test`; and removal of `inventory_migration_test` after every test.
 
 Phase 3D2B1 does not intentionally fail a migration and does not establish failure-recovery policy.
 
@@ -1158,11 +1163,78 @@ Phase 3D2B1 runtime verification must use isolated Compose project `inventory-pa
 
 Phase 3D2B1 must not add or perform intentional failure injection; rollback or forward-recovery testing; PostgreSQL downgrade; changes to `0001_current_schema`, Alembic environment, models, naming convention, Compose, pytest configuration, dependencies or production source; new migrations or schemas; PostgreSQL classifier/bootstrap production code; startup migration integration; production database creation, persistence or deployment; or API, frontend, Dockerfile, Kubernetes, CI, authentication, authorization, tenancy, Phase 4 or later work. Success does not authorize PostgreSQL application startup, production deployment, existing-database adoption or production cutover. The implementation must not be committed until reviewed.
 
-##### Phase 3D2B2 — PostgreSQL Migration Failure, Transaction and Forward-Recovery Verification
+##### Phase 3D2B2 — PostgreSQL Initial-Migration Failure, Transaction Rollback and Real Forward Recovery
 
-Phase 3D2B2 is deferred until Phase 3D2B1 is implemented, reviewed, committed and verified. It will later establish controlled test-only migration failure injection, PostgreSQL DDL/Alembic transaction-boundary evidence, exact post-failure schema and Alembic-revision state, credential-safe failure diagnostics, no destructive automatic cleanup or stamp-after-failure behavior, forward recovery from the verified failed state to committed head, repeatability on a fresh disposable database and unchanged SQLite migration behavior.
+Phase 3D2B2 is the current bounded implementation unit. The user approved **Option A — Failure during initial migration, followed by real forward recovery**. This unit follows the accelerated risk-based strategy: migration, rollback and recovery safety receive complete verification ceremony, while unrelated policy and infrastructure expansion remain deferred.
 
-The later Phase 3D2B2 decision and implementation must use an isolated synthetic migration failure without altering committed production revision history. It must define a temporary Alembic script location or equivalent isolated test migration outside tracked production migration files, fail deterministically after at least one transactional DDL operation, define the exact expected rollback or residual state under PostgreSQL and current Alembic transaction configuration, verify unchanged or correctly advanced Alembic revision state, surface safe wrapped diagnostics, prohibit stamp-after-failure, SQLite fallback, `create_all()`, compatibility helpers and destructive cleanup, and explicitly recover forward to committed head from the verified failure state. It must also prove fresh-database repeatability and no SQLite regression. Production backup tooling, distributed migration locking, deployment ownership and startup integration remain separate decisions and must not be introduced prematurely.
+Phase 3D2B2 establishes only:
+
+- a controlled test-only synthetic initial-migration failure;
+- evidence of PostgreSQL/Alembic transactional rollback after at least one DDL statement is attempted;
+- exact credential-safe failure diagnostics;
+- proof that no synthetic or application schema and no Alembic revision remains after rollback;
+- real forward recovery on the same database through the committed production migration tree;
+- exact recovery to the Phase 3D2B1 fingerprint and revision;
+- repeatability through two fresh disposable PostgreSQL Compose cycles;
+- unchanged SQLite and deterministic behavior.
+
+It does not add production migration-recovery code or startup migration ownership.
+
+The expected tracked implementation scope is exactly:
+
+```text
+backend/tests/test_postgresql_migrations.py
+```
+
+The implementation must add one additional `postgres_integration` test to that existing module. The module must then contain exactly two focused PostgreSQL migration tests: the existing empty-database migration/parity test and the new synthetic-failure and real-forward-recovery test. Module-private helper refactoring is permitted only in the same file when needed to avoid unsafe duplication. No production source, migration, Alembic environment, Compose file, pytest configuration, dependency, model, API, frontend, Dockerfile, Kubernetes or CI file is expected to change. If implementation inspection disproves this one-file scope, Codex must stop before editing and report the conflict.
+
+The new test must own exactly one additional fixed database:
+
+```text
+inventory_migration_recovery_test
+```
+
+The environment must not control that identifier. The test must accept only the existing `POSTGRES_TEST_DATABASE_URL` as trusted base input; require the approved driver, user, server, version and base database `inventory_test`; derive the recovery URL through SQLAlchemy `URL` operations; and require `inventory_migration_recovery_test` to be absent before creation. It must fail rather than adopt, overwrite or drop a pre-existing database. Creation must use an explicit autocommit administrative connection. The test must record internally whether it created this exact database, close all owned connections before cleanup, drop it only when it created it, drop only `inventory_migration_recovery_test` in a `finally` path, prove it absent after cleanup and keep `inventory_test` schema-empty before and after the test.
+
+The test must never drop or mutate `inventory_test`, `inventory_migration_test`, `postgres`, `template0`, `template1` or any unrelated database. It must not terminate unrelated sessions or perform broad cleanup.
+
+The synthetic migration environment must exist only under pytest temporary storage and must be removed automatically with that storage. It must use a temporary Alembic script location, a temporary copy of the committed Alembic environment so the same supplied-connection and transaction configuration is exercised, and exactly one synthetic revision. That isolated revision must use ID `0001_current_schema`; it must not import a production revision or production model metadata and must target only the test-owned recovery database. Reusing the revision ID is approved only inside the separate temporary script location, which must leave no committed revision state after failure. No tracked migration file may be created or modified.
+
+The synthetic revision must create exactly one transactional-DDL probe table:
+
+```text
+phase3d2b2_failure_probe
+```
+
+It must then raise a deterministic test-only exception before completion, must not catch and suppress its own failure, must not insert application or customer rows and must not invoke production migration code. The stable diagnostic must contain no credential or URL and must identify `phase3d2b2 synthetic migration failure`; a built-in test-only exception class is acceptable when source inspection confirms deterministic assertion.
+
+A SQLAlchemy statement listener must be active only around the synthetic Alembic `upgrade head` call and must be removed in `finally` before catalog, revision or fingerprint verification. The test must prove that at least one statement was captured and that the captured synthetic-upgrade SQL includes `CREATE TABLE phase3d2b2_failure_probe`. Verification queries must not enter the capture window, and raw connection URLs or credentials must never be logged.
+
+After the controlled failure, the failed connection must be closed or safely reset and the same recovery database must be inspected through a fresh connection. Without dropping, recreating, stamping, repairing or deleting objects, the required post-failure state is:
+
+- `phase3d2b2_failure_probe` absent;
+- all five application tables absent;
+- `alembic_version` absent and no committed Alembic revision;
+- no non-system table, partitioned table, view, materialized view, foreign table or sequence;
+- no unexpected standalone composite or other custom type;
+- no user trigger or application row;
+- otherwise pristine empty user schema.
+
+If PostgreSQL or Alembic leaves any different state, the test must fail and report it. It must not silently change this expectation, manually clean residual state, stamp a revision or reinterpret residual state as success.
+
+After proving the exact failed state, and without dropping or recreating the database, the test must switch to the real committed `backend/alembic.ini` and production script location, open a new SQLAlchemy connection to the same `inventory_migration_recovery_test`, and supply that live connection through the committed Alembic caller-supplied connection path. Production head must resolve exactly to `0001_current_schema`; the test may run only the real committed `alembic upgrade head`; and the resulting database revision and independent schema contract must exactly equal the Phase 3D2B1 revision and fingerprint. No synthetic probe or temporary object may remain.
+
+Forward recovery must not use a fallback schema path, stamp, `create_all()`, SQLite helper, bootstrap service, manual DDL repair, drop/recreate, downgrade or application startup. Recovery succeeds only when the same database that experienced the verified rollback reaches the exact committed Phase 3D2B1 schema.
+
+The test must skip clearly only when `POSTGRES_TEST_DATABASE_URL` is absent. Empty, whitespace, malformed, unsupported, unreachable, wrong-user, wrong-server-version or wrong-base-database URLs must fail rather than skip. Pre-existing recovery-database ownership, unexpected synthetic exception type or message, residual post-failure state, real recovery failure, wrong final revision or fingerprint and cleanup failure must all fail explicitly. Diagnostics must not expose raw passwords, complete database URLs, URL query values or production/customer data. This unit adds no production exception or recovery class.
+
+Runtime verification must use the existing isolated Compose project `inventory-part-duplicate-postgres-test` for two fresh complete cycles. Each cycle must prove no prior project resources; start only `postgres-test-db` with `--wait --wait-timeout 90`; verify PostgreSQL 18.4, health, loopback exposure, tmpfs and zero persistent volumes; run the original connectivity test, the Phase 3D2B1 parity test, the new Phase 3D2B2 failure/recovery test and complete marker selection; prove schema-empty `inventory_test`; prove both `inventory_migration_test` and `inventory_migration_recovery_test` absent; inspect sanitized logs; tear down in `finally` with `down --volumes --remove-orphans`; and prove zero project containers, networks and volumes with port 55432 released. The second cycle must use the opposite focused-test order to prove order independence.
+
+After implementation, the ordinary service-down backend suite is expected to report 405 passed, three intentional PostgreSQL skips and one known warning. The focused Phase 3 regression is expected to report 129 passed, three intentional PostgreSQL skips and one known warning. Live marker selection is expected to report three passed and 405 deselected. The known `asyncio_default_fixture_loop_scope` warning remains outside this unit.
+
+Phase 3D2B2 must not add or perform a production migration runner or recovery service; FastAPI startup migration integration; a distributed lock or concurrent migration ownership; changes to `backend/migrations/env.py` or `0001_current_schema`; tracked synthetic revisions or a new production revision; Alembic stamp or downgrade; backup/restore tooling; destructive residual-state cleanup; PostgreSQL classifier/bootstrap production code; application model or schema changes; existing PostgreSQL database adoption; PostgreSQL production service, storage, deployment or cutover; dependency, Compose, Dockerfile, Kubernetes, CI, API, frontend, authentication, authorization, tenancy, Phase 4 or later work.
+
+Completion proves only controlled transactional initial-migration failure behavior and real forward recovery in a disposable test database. Production backup tooling, distributed migration locking, deployment ownership and startup integration remain separately deferred.
 
 ### Phase 4 — Durable Dataset Ingestion
 
@@ -1346,22 +1418,22 @@ State that unrelated implementation units must not share a commit.
 
 ## 17. Immediate Next Step
 
-**Phase 3D2B1 — PostgreSQL Empty-Database Alembic Upgrade and Independent Schema Parity**
+**Phase 3D2B2 — PostgreSQL Initial-Migration Failure, Transaction Rollback and Real Forward Recovery**
 
 It must:
 
-- follow the complete Phase 3 PostgreSQL migration-verification split decision above;
-- use the committed disposable PostgreSQL harness and keep `inventory_test` schema-empty;
-- create and own only the temporary `inventory_migration_test` database;
-- run programmatic supplied-connection Alembic `upgrade head`;
-- verify the exact `0001_current_schema` revision;
-- compare the migrated schema against a hard-coded independent PostgreSQL expectation;
-- verify that a second upgrade is an exact schema no-op;
-- clean up the temporary database and pass two fresh isolated Compose cycles;
-- preserve all SQLite tests and application behavior;
-- change only `backend/tests/test_postgresql_migrations.py` unless source inspection disproves that scope and requires stopping for review;
-- not change migrations, models, production source, Compose, dependencies, startup, APIs, frontend, Dockerfiles, Kubernetes or Phase 4 infrastructure;
-- not intentionally inject a migration failure or begin Phase 3D2B2;
+- follow the complete Option A decision above;
+- change only `backend/tests/test_postgresql_migrations.py` unless source inspection disproves that scope and requires stopping before editing;
+- add one additional `postgres_integration` test;
+- own only the fixed `inventory_migration_recovery_test` database;
+- create a temporary isolated synthetic Alembic tree under pytest temporary storage;
+- attempt `phase3d2b2_failure_probe` transactional DDL and fail deterministically;
+- verify exact rollback to a pristine empty user-schema and revision state without drop/recreate or manual cleanup;
+- run the real committed migration tree against that same database through the supplied live-connection path;
+- recover exactly to revision `0001_current_schema` and the Phase 3D2B1 fingerprint;
+- pass two fresh isolated Compose cycles with opposite focused-test order;
+- preserve schema-empty `inventory_test` and all SQLite and deterministic behavior;
+- not add production migration recovery, startup integration, deployment, locking, backup tooling or Phase 4 work;
 - not commit until reviewed.
 
 ## 18. Decision Log
