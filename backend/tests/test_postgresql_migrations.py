@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import re
+import shutil
 from types import MappingProxyType
 
 from alembic import command
@@ -30,6 +31,9 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
 _BASE_DATABASE = "inventory_test"
 _MIGRATION_DATABASE = "inventory_migration_test"
+_RECOVERY_DATABASE = "inventory_migration_recovery_test"
+_SYNTHETIC_PROBE_TABLE = "phase3d2b2_failure_probe"
+_SYNTHETIC_FAILURE_MESSAGE = "phase3d2b2 synthetic migration failure"
 _EXPECTED_USER = "inventory_test"
 _EXPECTED_REVISION = "0001_current_schema"
 _EXPECTED_SERVER_VERSION_NUM = "180004"
@@ -248,17 +252,53 @@ def _non_system_relations(connection: Connection) -> tuple[tuple[str, str], ...]
     return tuple((row[0], row[1]) for row in rows)
 
 
-def _database_exists(connection: Connection) -> bool:
+def _database_exists(connection: Connection, database_name: str) -> bool:
     try:
         return bool(connection.execute(
             text("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = :name)"),
-            {"name": _MIGRATION_DATABASE},
+            {"name": database_name},
         ).scalar_one())
     except Exception as error:
         raise AssertionError(
             "inspect migration database ownership failed "
             f"({type(error).__name__}); url={_safe_url(connection.engine)}"
         ) from None
+
+
+def _database_oid(connection: Connection, database_name: str) -> int:
+    try:
+        value = connection.execute(
+            text("SELECT oid FROM pg_database WHERE datname = :name"),
+            {"name": database_name},
+        ).scalar_one()
+        return int(value)
+    except Exception as error:
+        raise AssertionError(
+            "inspect migration database identity failed "
+            f"({type(error).__name__}); url={_safe_url(connection.engine)}"
+        ) from None
+
+
+def _relation_exists(connection: Connection, relation_name: str) -> bool:
+    try:
+        return bool(connection.execute(
+            text("SELECT to_regclass('public.' || :name) IS NOT NULL"),
+            {"name": relation_name},
+        ).scalar_one())
+    except Exception as error:
+        raise AssertionError(
+            "inspect migration relation failed "
+            f"({type(error).__name__}); url={_safe_url(connection.engine)}"
+        ) from None
+
+
+def _database_ddl(action: str, database_name: str) -> str:
+    _require(action in {"CREATE", "DROP"}, "unsupported database DDL action")
+    _require(
+        database_name in {_MIGRATION_DATABASE, _RECOVERY_DATABASE},
+        "unsupported test-owned database name",
+    )
+    return f'{action} DATABASE "{database_name}"'
 
 
 def _validate_base(connection: Connection, engine: Engine) -> None:
@@ -274,6 +314,45 @@ def _validate_base(connection: Connection, engine: Engine) -> None:
     version = _execute(connection, "validate server version", "SELECT current_setting('server_version')").scalar_one()
     _require(version.startswith("18.4"), "PostgreSQL server version must be 18.4")
     _require_equal("base database relations", _non_system_relations(connection), ())
+
+
+def _validate_target_identity(
+    connection: Connection,
+    database_name: str,
+    database_oid: int,
+) -> int:
+    _require_equal(
+        "current database",
+        _execute(connection, "validate target database", "SELECT current_database()").scalar_one(),
+        database_name,
+    )
+    _require_equal(
+        "current user",
+        _execute(connection, "validate target user", "SELECT current_user").scalar_one(),
+        _EXPECTED_USER,
+    )
+    _require_equal(
+        "server version number",
+        _execute(
+            connection,
+            "validate target server version",
+            "SELECT current_setting('server_version_num')",
+        ).scalar_one(),
+        _EXPECTED_SERVER_VERSION_NUM,
+    )
+    version = _execute(
+        connection,
+        "validate target server version",
+        "SELECT current_setting('server_version')",
+    ).scalar_one()
+    _require(version.startswith("18.4"), "PostgreSQL server version must be 18.4")
+    current_oid = _execute(
+        connection,
+        "validate target database identity",
+        "SELECT oid FROM pg_database WHERE datname = current_database()",
+    ).scalar_one()
+    _require_equal("target database identity", int(current_oid), database_oid)
+    return int(current_oid)
 
 
 def _alembic_config() -> Config:
@@ -522,15 +601,123 @@ def _statement_keyword(statement: str) -> str:
     return keyword.group(0).upper() if keyword is not None else ""
 
 
-def _create_migration_engine(base_engine: Engine) -> Engine:
-    migration_url = base_engine.url.set(database=_MIGRATION_DATABASE)
-    raw_url = migration_url.render_as_string(hide_password=False)
+def _create_target_engine(base_engine: Engine, database_name: str) -> Engine:
+    target_url = base_engine.url.set(database=database_name)
+    raw_url = target_url.render_as_string(hide_password=False)
     try:
         return create_database_engine(raw_url)
     except DatabaseEngineConfigurationError as error:
         raise _configuration_failure(error) from None
     finally:
         del raw_url
+
+
+def _synthetic_alembic_config(tmp_path: Path) -> Config:
+    script_location = tmp_path / "phase3d2b2_alembic"
+    versions = script_location / "versions"
+    versions.mkdir(parents=True)
+    committed_env = _BACKEND_ROOT / "migrations" / "env.py"
+    temporary_env = script_location / "env.py"
+    shutil.copyfile(committed_env, temporary_env)
+    _require_equal(
+        "synthetic Alembic environment copy",
+        temporary_env.read_bytes(),
+        committed_env.read_bytes(),
+    )
+    revision_source = f'''from alembic import op
+import sqlalchemy as sa
+
+revision = {_EXPECTED_REVISION!r}
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        {_SYNTHETIC_PROBE_TABLE!r},
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    raise RuntimeError({_SYNTHETIC_FAILURE_MESSAGE!r})
+
+
+def downgrade() -> None:
+    raise NotImplementedError
+'''
+    (versions / "0001_synthetic_failure.py").write_text(
+        revision_source,
+        encoding="utf-8",
+        newline="\n",
+    )
+    _require_equal(
+        "synthetic Alembic tree entries",
+        tuple(sorted(path.name for path in script_location.iterdir())),
+        ("env.py", "versions"),
+    )
+
+    config = Config(str(_ALEMBIC_INI))
+    config.set_main_option("script_location", str(script_location))
+    script = ScriptDirectory.from_config(config)
+    _require_equal("synthetic Alembic bases", tuple(script.get_bases()), (_EXPECTED_REVISION,))
+    _require_equal("synthetic Alembic heads", tuple(script.get_heads()), (_EXPECTED_REVISION,))
+    revision_files = tuple(path.name for path in versions.iterdir() if path.is_file())
+    _require_equal("synthetic Alembic revision files", revision_files, ("0001_synthetic_failure.py",))
+    return config
+
+
+def _is_probe_create_table(statement: str) -> bool:
+    value = statement
+    while True:
+        value = value.lstrip()
+        if value.startswith("/*"):
+            end = value.find("*/", 2)
+            if end < 0:
+                return False
+            value = value[end + 2:]
+            continue
+        if value.startswith("--"):
+            end = re.search(r"\r?\n", value)
+            if end is None:
+                return False
+            value = value[end.end():]
+            continue
+        break
+    identifier = re.escape(_SYNTHETIC_PROBE_TABLE)
+    pattern = (
+        rf'CREATE\s+TABLE\s+(?:(?:"public"|public)\s*\.\s*)?'
+        rf'(?:"{identifier}"|{identifier})\s*\(.+\)\s*;?'
+    )
+    return re.fullmatch(pattern, value, flags=re.IGNORECASE | re.DOTALL) is not None
+
+
+def _require_synthetic_failure(error: BaseException) -> None:
+    _require_equal("synthetic failure type", type(error), RuntimeError)
+    _require_equal("synthetic failure message", str(error), _SYNTHETIC_FAILURE_MESSAGE)
+
+
+def _require_pristine_recovery_database(
+    connection: Connection,
+    database_oid: int,
+) -> tuple[object, ...]:
+    _validate_target_identity(connection, _RECOVERY_DATABASE, database_oid)
+    relations = _non_system_relations(connection)
+    revision = _revision(connection)
+    schemas = _schemas(connection)
+    triggers = _triggers(connection)
+    custom_types = _custom_types(connection)
+    _require_equal("post-failure relations", relations, ())
+    _require_equal("post-failure Alembic revision", revision, None)
+    _require_equal("post-failure schemas", schemas, ("public",))
+    _require_equal("post-failure triggers", triggers, ())
+    _require_equal("post-failure custom types", custom_types, ())
+    absent_names = (*_APPLICATION_TABLES, "alembic_version", _SYNTHETIC_PROBE_TABLE)
+    for name in absent_names:
+        _require(
+            not _relation_exists(connection, name),
+            f"post-failure relation unexpectedly exists: {name}",
+        )
+    return relations, revision, schemas, triggers, custom_types
 
 
 @pytest.mark.postgres_integration
@@ -551,14 +738,20 @@ def test_empty_postgresql_alembic_upgrade_matches_independent_schema_contract() 
         try:
             with base_engine.connect() as base_connection:
                 _validate_base(base_connection, base_engine)
-                _require(not _database_exists(base_connection), "inventory_migration_test already exists; refusing ownership")
+                _require(
+                    not _database_exists(base_connection, _MIGRATION_DATABASE),
+                    "inventory_migration_test already exists; refusing ownership",
+                )
 
             with base_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as admin:
                 _execute(admin, "create migration database", 'CREATE DATABASE "inventory_migration_test"')
                 created = True
-                _require(_database_exists(admin), "created migration database was not found")
+                _require(
+                    _database_exists(admin, _MIGRATION_DATABASE),
+                    "created migration database was not found",
+                )
 
-            migration_engine = _create_migration_engine(base_engine)
+            migration_engine = _create_target_engine(base_engine, _MIGRATION_DATABASE)
             config = _alembic_config()
             with migration_engine.connect() as migration_connection:
                 _run_upgrade(config, migration_connection)
@@ -610,7 +803,10 @@ def test_empty_postgresql_alembic_upgrade_matches_independent_schema_contract() 
                     _require_equal("base checked-out connections before cleanup", checked_out, 0)
                     with base_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as admin:
                         _execute(admin, "drop migration database", 'DROP DATABASE "inventory_migration_test"')
-                        _require(not _database_exists(admin), "migration database still exists after cleanup")
+                        _require(
+                            not _database_exists(admin, _MIGRATION_DATABASE),
+                            "migration database still exists after cleanup",
+                        )
                         _require_equal("base relations after cleanup", _non_system_relations(admin), ())
                 except BaseException as error:
                     if cleanup_error is None:
@@ -624,3 +820,197 @@ def test_empty_postgresql_alembic_upgrade_matches_independent_schema_contract() 
                     )
         if cleanup_error is not None:
             raise cleanup_error
+
+
+@pytest.mark.postgres_integration
+def test_failed_initial_postgresql_migration_rolls_back_and_recovers_on_same_database(
+    tmp_path: Path,
+) -> None:
+    configured_url = os.environ.get("POSTGRES_TEST_DATABASE_URL")
+    if configured_url is None:
+        pytest.skip(
+            "POSTGRES_TEST_DATABASE_URL is not set; "
+            "opt-in PostgreSQL failure/recovery test skipped"
+        )
+
+    base_engine: Engine | None = None
+    recovery_engine: Engine | None = None
+    created = False
+    database_oid: int | None = None
+    primary_error: BaseException | None = None
+    try:
+        try:
+            base_engine = create_database_engine(configured_url)
+        except DatabaseEngineConfigurationError as error:
+            raise _configuration_failure(error) from None
+
+        with base_engine.connect() as base_connection:
+            _validate_base(base_connection, base_engine)
+            _require(
+                not _database_exists(base_connection, _MIGRATION_DATABASE),
+                "parity migration database already exists; refusing recovery test",
+            )
+            _require(
+                not _database_exists(base_connection, _RECOVERY_DATABASE),
+                "recovery migration database already exists; refusing ownership",
+            )
+
+        with base_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as admin:
+            _execute(
+                admin,
+                "create recovery migration database",
+                _database_ddl("CREATE", _RECOVERY_DATABASE),
+            )
+            created = True
+            _require(
+                _database_exists(admin, _RECOVERY_DATABASE),
+                "created recovery migration database was not found",
+            )
+            database_oid = _database_oid(admin, _RECOVERY_DATABASE)
+
+        recovery_engine = _create_target_engine(base_engine, _RECOVERY_DATABASE)
+        synthetic_config = _synthetic_alembic_config(tmp_path)
+        statements: list[str] = []
+
+        def capture(_conn, _cursor, statement, _parameters, _context, _many):
+            statements.append(statement)
+
+        with recovery_engine.connect() as failed_connection:
+            before_failure_oid = _validate_target_identity(
+                failed_connection,
+                _RECOVERY_DATABASE,
+                database_oid,
+            )
+            synthetic_config.attributes["connection"] = failed_connection
+            event.listen(failed_connection, "before_cursor_execute", capture)
+            try:
+                try:
+                    command.upgrade(synthetic_config, "head")
+                except BaseException as error:
+                    _require_synthetic_failure(error)
+                else:
+                    raise AssertionError("synthetic migration unexpectedly completed")
+            finally:
+                event.remove(failed_connection, "before_cursor_execute", capture)
+
+        observable = tuple(statement for statement in statements if statement.strip())
+        _require(bool(observable), "synthetic upgrade emitted no observable SQL statements")
+        keywords = tuple(_statement_keyword(statement) for statement in observable)
+        unclassified = tuple(index for index, keyword in enumerate(keywords) if not keyword)
+        _require_equal("synthetic-upgrade unclassified SQL statements", unclassified, ())
+        probe_creates = tuple(
+            statement for statement in observable if _is_probe_create_table(statement)
+        )
+        _require_equal("synthetic probe CREATE TABLE statements", len(probe_creates), 1)
+
+        with recovery_engine.connect() as post_failure_connection:
+            pristine = _require_pristine_recovery_database(
+                post_failure_connection,
+                database_oid,
+            )
+            post_failure_oid = _database_oid(
+                post_failure_connection,
+                _RECOVERY_DATABASE,
+            )
+            _require_equal("post-failure database identity", post_failure_oid, database_oid)
+
+        real_config = _alembic_config()
+        with recovery_engine.connect() as recovery_connection:
+            _validate_target_identity(recovery_connection, _RECOVERY_DATABASE, database_oid)
+            _run_upgrade(real_config, recovery_connection)
+            _require_equal(
+                "recovered revision",
+                _revision(recovery_connection),
+                _EXPECTED_REVISION,
+            )
+            final_fingerprint = _fingerprint(recovery_connection)
+            _require(
+                not _relation_exists(recovery_connection, _SYNTHETIC_PROBE_TABLE),
+                "synthetic probe remained after real forward recovery",
+            )
+            after_recovery_oid = _validate_target_identity(
+                recovery_connection,
+                _RECOVERY_DATABASE,
+                database_oid,
+            )
+
+        print(
+            "phase3d2b2 evidence: "
+            f"exception=RuntimeError message={_SYNTHETIC_FAILURE_MESSAGE!r} "
+            f"captured_statements={len(observable)} probe_creates={len(probe_creates)} "
+            f"post_failure_revision={pristine[1]!r} "
+            f"post_failure_relations={len(pristine[0])} "
+            f"post_failure_triggers={len(pristine[3])} "
+            f"post_failure_custom_types={len(pristine[4])} "
+            f"oid_before_failure={before_failure_oid} "
+            f"oid_after_failure={post_failure_oid} "
+            f"oid_after_recovery={after_recovery_oid} "
+            f"recovered_revision={_EXPECTED_REVISION} "
+            f"fingerprint_categories={len(final_fingerprint)}"
+        )
+    except AssertionError as error:
+        primary_error = error
+        raise
+    except BaseException as error:
+        safe_url = _safe_url(base_engine) if base_engine is not None else "unavailable"
+        primary_error = AssertionError(
+            "PostgreSQL failure/recovery verification failed "
+            f"({type(error).__name__}); url={safe_url}"
+        )
+        raise primary_error from None
+    finally:
+        cleanup_error: BaseException | None = None
+        if recovery_engine is not None:
+            try:
+                recovery_engine.dispose()
+            except BaseException as error:
+                cleanup_error = AssertionError(
+                    f"dispose recovery engine failed ({type(error).__name__})"
+                )
+        if base_engine is not None:
+            if created:
+                try:
+                    checked_out = getattr(base_engine.pool, "checkedout", lambda: 0)()
+                    _require_equal(
+                        "base checked-out connections before recovery cleanup",
+                        checked_out,
+                        0,
+                    )
+                    with base_engine.connect().execution_options(
+                        isolation_level="AUTOCOMMIT"
+                    ) as admin:
+                        _execute(
+                            admin,
+                            "drop recovery migration database",
+                            _database_ddl("DROP", _RECOVERY_DATABASE),
+                        )
+                        _require(
+                            not _database_exists(admin, _RECOVERY_DATABASE),
+                            "recovery migration database still exists after cleanup",
+                        )
+                        _require(
+                            not _database_exists(admin, _MIGRATION_DATABASE),
+                            "parity migration database exists after recovery cleanup",
+                        )
+                        _require_equal(
+                            "base relations after recovery cleanup",
+                            _non_system_relations(admin),
+                            (),
+                        )
+                except BaseException as error:
+                    if cleanup_error is None:
+                        cleanup_error = error
+            try:
+                base_engine.dispose()
+            except BaseException as error:
+                if cleanup_error is None:
+                    cleanup_error = AssertionError(
+                        f"dispose base engine failed ({type(error).__name__})"
+                    )
+        if cleanup_error is not None:
+            if primary_error is None:
+                raise cleanup_error
+            primary_error.add_note(
+                "Recovery cleanup also failed: "
+                f"{type(cleanup_error).__name__}: {cleanup_error}"
+            )
