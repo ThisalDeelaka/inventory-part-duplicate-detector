@@ -4,7 +4,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass, FrozenInstanceError
 import hashlib
 from pathlib import Path
+import shutil
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 import pytest
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Connection
@@ -38,6 +41,8 @@ MANAGED_TABLES = {
     "rule_exclusion_audit",
     "scan_warning",
 }
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+LEGACY_SCHEMA_REVISION = "0001_current_schema"
 
 
 def _engine(tmp_path: Path, name: str = "database.sqlite"):
@@ -238,7 +243,7 @@ def test_pristine_bootstrap_uses_supplied_connection_and_commits(
     assert result.post_classification.conflicts == ()
     assert result.post_classification.extra_tables == ()
     assert len(calls) == 1
-    assert calls[0][1] == "head"
+    assert calls[0][1] == LEGACY_SCHEMA_REVISION
     assert set(inspect(engine).get_table_names()) == MANAGED_TABLES | {
         "alembic_version"
     }
@@ -712,27 +717,22 @@ def test_defensive_malformed_current_result_is_refused(monkeypatch, tmp_path):
     engine.dispose()
 
 
-@pytest.mark.parametrize(
-    ("heads", "reason"),
-    [
-        ((), "alembic_head_count_invalid"),
-        (("one", "two"), "alembic_head_count_invalid"),
-        (("wrong",), "alembic_head_mismatch"),
-    ],
-)
-def test_invalid_head_configuration_is_fail_closed(
+@pytest.mark.parametrize("resolved_revision", [None, "wrong_revision"])
+def test_missing_or_wrong_legacy_revision_is_fail_closed(
     monkeypatch,
     tmp_path,
-    heads,
-    reason,
+    resolved_revision,
 ):
     from app.db import alembic_bootstrap
 
     engine = _engine(tmp_path)
 
     class Script:
-        def get_heads(self):
-            return list(heads)
+        def get_revision(self, revision):
+            assert revision == LEGACY_SCHEMA_REVISION
+            if resolved_revision is None:
+                return None
+            return type("Revision", (), {"revision": resolved_revision})()
 
     monkeypatch.setattr(
         alembic_bootstrap.ScriptDirectory,
@@ -746,7 +746,8 @@ def test_invalid_head_configuration_is_fail_closed(
     )
     with pytest.raises(SQLiteAlembicBootstrapConfigurationError) as captured:
         bootstrap_pristine_sqlite(engine)
-    assert captured.value.reason == reason
+    assert captured.value.reason == "alembic_legacy_revision_unavailable"
+    assert captured.value.__cause__ is not None
     assert captured.value.classification_result.classification is (
         SQLiteSchemaClassification.EMPTY
     )
@@ -786,6 +787,100 @@ def test_missing_and_malformed_configuration_preserve_cause(
         monkeypatch.undo()
 
 
+def test_unresolvable_legacy_revision_preserves_cause(monkeypatch, tmp_path):
+    from app.db import alembic_bootstrap
+
+    engine = _engine(tmp_path)
+    original = ValueError("ambiguous legacy revision")
+
+    class Script:
+        def get_revision(self, revision):
+            assert revision == LEGACY_SCHEMA_REVISION
+            raise original
+
+    monkeypatch.setattr(
+        alembic_bootstrap.ScriptDirectory,
+        "from_config",
+        lambda _config: Script(),
+    )
+    with pytest.raises(SQLiteAlembicBootstrapConfigurationError) as captured:
+        bootstrap_pristine_sqlite(engine)
+    assert captured.value.reason == "alembic_legacy_revision_unavailable"
+    assert captured.value.__cause__ is original
+    assert inspect(engine).get_table_names() == []
+    _assert_no_checkout(engine)
+    engine.dispose()
+
+
+def test_later_overall_head_does_not_change_legacy_bootstrap_target(
+    monkeypatch,
+    tmp_path,
+):
+    from app.db import alembic_bootstrap
+
+    temporary_backend = tmp_path / "temporary_backend"
+    temporary_migrations = temporary_backend / "migrations"
+    shutil.copytree(BACKEND_ROOT / "migrations", temporary_migrations)
+    temporary_ini = temporary_backend / "alembic.ini"
+    shutil.copyfile(BACKEND_ROOT / "alembic.ini", temporary_ini)
+    future_revision = "0002_future_registry_probe"
+    future_table = "future_registry_probe"
+    (temporary_migrations / "versions" / "0002_future_registry_probe.py").write_text(
+        "from alembic import op\n"
+        "import sqlalchemy as sa\n\n"
+        f"revision = {future_revision!r}\n"
+        f"down_revision = {LEGACY_SCHEMA_REVISION!r}\n"
+        "branch_labels = None\n"
+        "depends_on = None\n\n"
+        "def upgrade() -> None:\n"
+        f"    op.create_table({future_table!r}, "
+        "sa.Column('id', sa.Integer(), nullable=False))\n\n"
+        "def downgrade() -> None:\n"
+        f"    op.drop_table({future_table!r})\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    temporary_config = Config(str(temporary_ini))
+    temporary_script = ScriptDirectory.from_config(temporary_config)
+    assert temporary_script.get_heads() == [future_revision]
+    assert temporary_script.get_revision(LEGACY_SCHEMA_REVISION).revision == (
+        LEGACY_SCHEMA_REVISION
+    )
+
+    engine = _engine(tmp_path, "future-head.sqlite")
+    real_upgrade = alembic_bootstrap.command.upgrade
+    requested_targets = []
+
+    def upgrade(config, target):
+        assert config.config_file_name == str(temporary_ini)
+        assert config.get_main_option("sqlalchemy.url") == (
+            "driver://user:pass@host/dbname"
+        )
+        requested_targets.append(target)
+        return real_upgrade(config, target)
+
+    monkeypatch.setattr(
+        alembic_bootstrap,
+        "_alembic_ini_path",
+        lambda: temporary_ini,
+    )
+    monkeypatch.setattr(alembic_bootstrap.command, "upgrade", upgrade)
+    result = bootstrap_pristine_sqlite(engine)
+
+    assert requested_targets == [LEGACY_SCHEMA_REVISION]
+    assert result.outcome is SQLiteAlembicBootstrapOutcome.BOOTSTRAPPED
+    assert result.post_classification.profile_id is (
+        SQLiteSchemaProfileId.CURRENT_ALEMBIC_0001
+    )
+    assert result.post_classification.alembic_revision == LEGACY_SCHEMA_REVISION
+    assert result.post_classification.extra_tables == ()
+    assert future_table not in inspect(engine).get_table_names()
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT 1")).scalar_one() == 1
+    _assert_no_checkout(engine)
+    engine.dispose()
+
+
 def test_migration_failure_preserves_cause_and_partial_state(
     monkeypatch,
     tmp_path,
@@ -796,7 +891,7 @@ def test_migration_failure_preserves_cause_and_partial_state(
     original = RuntimeError("migration failed")
 
     def fail(config, target):
-        assert target == "head"
+        assert target == LEGACY_SCHEMA_REVISION
         connection = config.attributes["connection"]
         connection.execute(text("CREATE TABLE partial_object (id INTEGER)"))
         connection.commit()
@@ -886,4 +981,6 @@ def test_prohibited_boundaries_and_exact_file_scope():
     assert not any(item in source for item in prohibited)
     assert "alembic_bootstrap" not in main_source
     assert 'config.attributes["connection"] = connection' in source
-    assert 'command.upgrade(config, "head")' in source
+    assert "_LEGACY_SCHEMA_REVISION = \"0001_current_schema\"" in source
+    assert "command.upgrade(config, _LEGACY_SCHEMA_REVISION)" in source
+    assert 'command.upgrade(config, "head")' not in source

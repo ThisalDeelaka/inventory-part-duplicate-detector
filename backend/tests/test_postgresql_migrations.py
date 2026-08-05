@@ -363,10 +363,14 @@ def _alembic_config() -> Config:
     return config
 
 
-def _run_upgrade(config: Config, connection: Connection) -> None:
+def _run_upgrade(
+    config: Config,
+    connection: Connection,
+    target_revision: str,
+) -> None:
     config.attributes["connection"] = connection
     try:
-        command.upgrade(config, "head")
+        command.upgrade(config, target_revision)
     except Exception as error:
         raise AssertionError(
             f"Alembic upgrade failed ({type(error).__name__}); url={_safe_url(connection.engine)}"
@@ -754,7 +758,11 @@ def test_empty_postgresql_alembic_upgrade_matches_independent_schema_contract() 
             migration_engine = _create_target_engine(base_engine, _MIGRATION_DATABASE)
             config = _alembic_config()
             with migration_engine.connect() as migration_connection:
-                _run_upgrade(config, migration_connection)
+                _run_upgrade(
+                    config,
+                    migration_connection,
+                    _EXPECTED_REVISION,
+                )
                 _require_equal("migrated revision", _revision(migration_connection), _EXPECTED_REVISION)
                 first = _fingerprint(migration_connection)
 
@@ -765,12 +773,17 @@ def test_empty_postgresql_alembic_upgrade_matches_independent_schema_contract() 
             with migration_engine.connect() as second_connection:
                 event.listen(second_connection, "before_cursor_execute", capture)
                 try:
-                    _run_upgrade(config, second_connection)
+                    _run_upgrade(
+                        config,
+                        second_connection,
+                        _EXPECTED_REVISION,
+                    )
                 finally:
                     event.remove(second_connection, "before_cursor_execute", capture)
 
                 observable = tuple(item for item in statements if item.strip())
                 _require(bool(observable), "second upgrade emitted no observable SQL statements")
+                _require_equal("second-upgrade SQL statement count", len(observable), 2)
                 keywords = tuple(_statement_keyword(item) for item in observable)
                 unclassified = tuple(index for index, keyword in enumerate(keywords) if not keyword)
                 _require_equal("second-upgrade unclassified SQL statements", unclassified, ())
@@ -885,7 +898,7 @@ def test_failed_initial_postgresql_migration_rolls_back_and_recovers_on_same_dat
             event.listen(failed_connection, "before_cursor_execute", capture)
             try:
                 try:
-                    command.upgrade(synthetic_config, "head")
+                    command.upgrade(synthetic_config, _EXPECTED_REVISION)
                 except BaseException as error:
                     _require_synthetic_failure(error)
                 else:
@@ -917,7 +930,11 @@ def test_failed_initial_postgresql_migration_rolls_back_and_recovers_on_same_dat
         real_config = _alembic_config()
         with recovery_engine.connect() as recovery_connection:
             _validate_target_identity(recovery_connection, _RECOVERY_DATABASE, database_oid)
-            _run_upgrade(real_config, recovery_connection)
+            _run_upgrade(
+                real_config,
+                recovery_connection,
+                _EXPECTED_REVISION,
+            )
             _require_equal(
                 "recovered revision",
                 _revision(recovery_connection),

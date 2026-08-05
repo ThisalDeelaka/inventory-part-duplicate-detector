@@ -25,7 +25,7 @@ from app.db.schema_fingerprint import (
 )
 
 
-_EXPECTED_REVISION = "0001_current_schema"
+_LEGACY_SCHEMA_REVISION = "0001_current_schema"
 
 
 class SQLiteAlembicBootstrapOutcome(str, Enum):
@@ -107,7 +107,7 @@ def _is_exact_current(result: SQLiteSchemaClassificationResult) -> bool:
     return (
         result.classification is SQLiteSchemaClassification.CURRENT_ALEMBIC
         and result.profile_id is SQLiteSchemaProfileId.CURRENT_ALEMBIC_0001
-        and result.alembic_revision == _EXPECTED_REVISION
+        and result.alembic_revision == _LEGACY_SCHEMA_REVISION
         and result.conflicts == ()
     )
 
@@ -156,23 +156,28 @@ def _verified_config(
     try:
         config = Config(str(ini_path))
         script = ScriptDirectory.from_config(config)
-        heads = tuple(script.get_heads())
     except Exception as original_error:
         raise SQLiteAlembicBootstrapConfigurationError(
             "alembic_configuration_invalid",
             pre,
         ) from original_error
 
-    if len(heads) != 1:
+    try:
+        target_revision = script.get_revision(_LEGACY_SCHEMA_REVISION)
+    except Exception as original_error:
         raise SQLiteAlembicBootstrapConfigurationError(
-            "alembic_head_count_invalid",
+            "alembic_legacy_revision_unavailable",
+            pre,
+        ) from original_error
+    if (
+        target_revision is None
+        or target_revision.revision != _LEGACY_SCHEMA_REVISION
+    ):
+        error = SQLiteAlembicBootstrapConfigurationError(
+            "alembic_legacy_revision_unavailable",
             pre,
         )
-    if heads[0] != _EXPECTED_REVISION:
-        raise SQLiteAlembicBootstrapConfigurationError(
-            "alembic_head_mismatch",
-            pre,
-        )
+        raise error from LookupError("legacy Alembic revision is unavailable")
     return config
 
 
@@ -183,7 +188,7 @@ def _is_exact_postcondition(result: SQLiteSchemaClassificationResult) -> bool:
 def bootstrap_pristine_sqlite(
     engine: Engine,
 ) -> SQLiteAlembicBootstrapResult:
-    """Migrate an exact pristine SQLite database to the one committed head."""
+    """Migrate an exact pristine SQLite database to the legacy revision."""
     if not isinstance(engine, Engine):
         raise TypeError("engine must be a SQLAlchemy Engine")
     if engine.dialect.name != "sqlite":
@@ -221,7 +226,7 @@ def bootstrap_pristine_sqlite(
 
         config.attributes["connection"] = connection
         try:
-            command.upgrade(config, "head")
+            command.upgrade(config, _LEGACY_SCHEMA_REVISION)
         except Exception as original_error:
             try:
                 post_failure = classify_sqlite_schema(connection)

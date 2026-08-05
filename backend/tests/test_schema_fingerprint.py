@@ -545,7 +545,7 @@ def test_current_alembic_profile_and_extra_table(tmp_path):
     database = tmp_path / "alembic-current.sqlite"
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database.as_posix()}")
-    command.upgrade(config, "head")
+    command.upgrade(config, "0001_current_schema")
     engine = create_engine(f"sqlite:///{database.as_posix()}")
     try:
         with engine.begin() as connection:

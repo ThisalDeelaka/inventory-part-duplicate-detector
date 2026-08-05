@@ -131,7 +131,7 @@ def test_empty_database_upgrade_matches_model_and_has_no_drift(tmp_path):
     migrated_path = tmp_path / "migrated.sqlite"
     model_path = tmp_path / "model.sqlite"
     config = _config(migrated_path)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0001_current_schema")
     migrated = create_engine(f"sqlite:///{migrated_path.as_posix()}")
     model = create_engine(f"sqlite:///{model_path.as_posix()}")
     try:
@@ -170,7 +170,7 @@ def test_empty_database_upgrade_matches_model_and_has_no_drift(tmp_path):
 def test_downgrade_preserves_unknown_table(tmp_path):
     database = tmp_path / "downgrade.sqlite"
     config = _config(database)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0001_current_schema")
     engine = create_engine(f"sqlite:///{database.as_posix()}")
     with engine.begin() as connection:
         connection.execute(text("CREATE TABLE unknown_extension (id INTEGER PRIMARY KEY)"))
@@ -189,12 +189,12 @@ def test_downgrade_preserves_unknown_table(tmp_path):
 def test_upgrade_downgrade_upgrade_is_repeatable(tmp_path):
     database = tmp_path / "repeat.sqlite"
     config = _config(database)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0001_current_schema")
     engine = create_engine(f"sqlite:///{database.as_posix()}")
     first = _fingerprint(engine)
     engine.dispose()
     command.downgrade(config, "base")
-    command.upgrade(config, "head")
+    command.upgrade(config, "0001_current_schema")
     engine = create_engine(f"sqlite:///{database.as_posix()}")
     try:
         assert _fingerprint(engine) == first
