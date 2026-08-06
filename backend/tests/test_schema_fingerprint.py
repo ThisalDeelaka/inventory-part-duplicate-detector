@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import models as _models  # noqa: F401 - registers current metadata
 from app.db.database import Base
+from app.db.models import LEGACY_STARTUP_TABLES
 from app.db.schema_fingerprint import (
     APPROVED_PROFILE_FINGERPRINTS,
     SQLiteSchemaClassification,
@@ -512,7 +513,7 @@ def test_empty_is_repeatable_and_never_creates_version_table(
 def test_current_metadata_profile_and_canonical_length():
     engine = _memory_engine()
     try:
-        Base.metadata.create_all(engine)
+        Base.metadata.create_all(engine, tables=LEGACY_STARTUP_TABLES)
         result = classify_sqlite_schema(engine)
         assert result.classification is SQLiteSchemaClassification.CURRENT_UNVERSIONED
         assert result.profile_id is SQLiteSchemaProfileId.CURRENT_NAMED_UNVERSIONED
@@ -527,7 +528,7 @@ def test_current_metadata_profile_and_canonical_length():
 def test_current_unversioned_profile_survives_extra_unknown_table():
     engine = _memory_engine()
     try:
-        Base.metadata.create_all(engine)
+        Base.metadata.create_all(engine, tables=LEGACY_STARTUP_TABLES)
         with engine.begin() as connection:
             connection.execute(
                 text("CREATE TABLE extension_table (payload TEXT)")
@@ -558,6 +559,31 @@ def test_current_alembic_profile_and_extra_table(tmp_path):
         assert result.alembic_revision == "0001_current_schema"
         assert result.extra_tables == ("extension_table",)
         assert set(inspect(engine).get_table_names()) == before
+    finally:
+        engine.dispose()
+
+
+def test_registry_revision_is_not_legacy_current_alembic_0001(tmp_path):
+    database = tmp_path / "alembic-registry.sqlite"
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database.as_posix()}")
+    command.upgrade(config, "0002_dataset_registry")
+    engine = create_engine(f"sqlite:///{database.as_posix()}")
+    try:
+        result = classify_sqlite_schema(engine)
+        assert result.classification is SQLiteSchemaClassification.UNKNOWN
+        assert result.profile_id is None
+        assert result.alembic_revision == "0002_dataset_registry"
+        assert result.extra_tables == (
+            "dataset_artifacts",
+            "dataset_versions",
+            "datasets",
+        )
+        assert any(
+            conflict.code == "alembic_revision"
+            and conflict.actual == "0002_dataset_registry"
+            for conflict in result.conflicts
+        )
     finally:
         engine.dispose()
 

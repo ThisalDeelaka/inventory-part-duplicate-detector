@@ -8,11 +8,12 @@ from app.api import routes_config, routes_diagnostics, routes_feedback, routes_l
 from app.core.config import settings
 from app.db.database import Base, SessionLocal, engine
 from app.db.migrations import ensure_sqlite_demo_columns
+from app.db.models import LEGACY_STARTUP_TABLES
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, tables=LEGACY_STARTUP_TABLES)
     ensure_sqlite_demo_columns(engine)
     yield
 

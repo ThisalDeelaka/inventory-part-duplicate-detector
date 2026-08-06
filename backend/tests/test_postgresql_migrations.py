@@ -36,6 +36,7 @@ _SYNTHETIC_PROBE_TABLE = "phase3d2b2_failure_probe"
 _SYNTHETIC_FAILURE_MESSAGE = "phase3d2b2 synthetic migration failure"
 _EXPECTED_USER = "inventory_test"
 _EXPECTED_REVISION = "0001_current_schema"
+_EXPECTED_OVERALL_HEAD = "0002_dataset_registry"
 _EXPECTED_SERVER_VERSION_NUM = "180004"
 _APPLICATION_TABLES = (
     "duplicate_candidate",
@@ -359,7 +360,11 @@ def _alembic_config() -> Config:
     config = Config(str(_ALEMBIC_INI))
     script = ScriptDirectory.from_config(config)
     _require_equal("Alembic bases", tuple(script.get_bases()), (_EXPECTED_REVISION,))
-    _require_equal("Alembic heads", tuple(script.get_heads()), (_EXPECTED_REVISION,))
+    _require_equal(
+        "Alembic heads",
+        tuple(script.get_heads()),
+        (_EXPECTED_OVERALL_HEAD,),
+    )
     return config
 
 

@@ -23,6 +23,8 @@ from app.db.alembic_bootstrap import (
     SQLiteAlembicBootstrapResult,
     bootstrap_pristine_sqlite,
 )
+from app.db.database import Base
+from app.db.models import LEGACY_STARTUP_TABLES
 from app.db.schema_fingerprint import (
     CURRENT_NAMED_FINGERPRINT,
     SQLiteSchemaClassification,
@@ -525,11 +527,9 @@ def test_extra_managed_column_is_unknown_and_refused(
     tmp_path,
 ):
     from app.db import alembic_bootstrap
-    from app.db.database import Base
-    from app.db import models as _models  # noqa: F401
 
     engine = _engine(tmp_path)
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine, tables=LEGACY_STARTUP_TABLES)
     with engine.begin() as connection:
         connection.execute(
             text("ALTER TABLE duplicate_scan ADD COLUMN unexpected TEXT")
@@ -559,11 +559,8 @@ def test_managed_type_conflict_is_incompatible_and_refused(
     tmp_path,
 ):
     from app.db import alembic_bootstrap
-    from app.db.database import Base
-    from app.db import models as _models  # noqa: F401
-
     engine = _engine(tmp_path)
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine, tables=LEGACY_STARTUP_TABLES)
     with engine.begin() as connection:
         connection.execute(
             text("ALTER TABLE duplicate_scan RENAME TO original_duplicate_scan")
@@ -608,11 +605,8 @@ def test_managed_type_conflict_is_incompatible_and_refused(
 
 def test_current_unversioned_is_refused_without_mutation(monkeypatch, tmp_path):
     from app.db import alembic_bootstrap
-    from app.db.database import Base
-    from app.db import models as _models  # noqa: F401
-
     engine = _engine(tmp_path)
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine, tables=LEGACY_STARTUP_TABLES)
     pre = classify_sqlite_schema(engine)
     assert pre.classification is SQLiteSchemaClassification.CURRENT_UNVERSIONED
     assert pre.profile_id is SQLiteSchemaProfileId.CURRENT_NAMED_UNVERSIONED
@@ -823,13 +817,13 @@ def test_later_overall_head_does_not_change_legacy_bootstrap_target(
     shutil.copytree(BACKEND_ROOT / "migrations", temporary_migrations)
     temporary_ini = temporary_backend / "alembic.ini"
     shutil.copyfile(BACKEND_ROOT / "alembic.ini", temporary_ini)
-    future_revision = "0002_future_registry_probe"
+    future_revision = "0003_future_registry_probe"
     future_table = "future_registry_probe"
-    (temporary_migrations / "versions" / "0002_future_registry_probe.py").write_text(
+    (temporary_migrations / "versions" / "0003_future_registry_probe.py").write_text(
         "from alembic import op\n"
         "import sqlalchemy as sa\n\n"
         f"revision = {future_revision!r}\n"
-        f"down_revision = {LEGACY_SCHEMA_REVISION!r}\n"
+        "down_revision = '0002_dataset_registry'\n"
         "branch_labels = None\n"
         "depends_on = None\n\n"
         "def upgrade() -> None:\n"

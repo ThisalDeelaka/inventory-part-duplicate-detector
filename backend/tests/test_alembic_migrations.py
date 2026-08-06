@@ -19,6 +19,7 @@ from sqlalchemy import (
 
 from app.db import models as _models  # noqa: F401 - register metadata
 from app.db.database import Base, NAMING_CONVENTION
+from app.db.models import LEGACY_STARTUP_TABLES
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -94,11 +95,12 @@ def test_dependency_configuration_and_revision_graph(tmp_path):
         "driver://user:pass@host/dbname"
     )
     assert sorted(path.name for path in VERSIONS_PATH.glob("*.py")) == [
-        "0001_current_schema.py"
+        "0001_current_schema.py",
+        "0002_dataset_registry.py",
     ]
     script = ScriptDirectory.from_config(config)
     assert script.get_bases() == ["0001_current_schema"]
-    assert script.get_heads() == ["0001_current_schema"]
+    assert script.get_heads() == ["0002_dataset_registry"]
 
 
 def test_naming_convention_is_exact_immutable_and_applied():
@@ -107,15 +109,15 @@ def test_naming_convention_is_exact_immutable_and_applied():
     with pytest.raises(TypeError):
         NAMING_CONVENTION["pk"] = "changed"
     assert Base.metadata.naming_convention == EXPECTED_CONVENTION
-    assert {index.name for table in Base.metadata.tables.values() for index in table.indexes} == (
+    assert {index.name for table in LEGACY_STARTUP_TABLES for index in table.indexes} == (
         EXPECTED_INDEXES
     )
     assert {
-        table.primary_key.name for table in Base.metadata.tables.values()
+        table.primary_key.name for table in LEGACY_STARTUP_TABLES
     } == {f"pk_{table}" for table in APPLICATION_TABLES}
     constraints = {
         constraint
-        for table in Base.metadata.tables.values()
+        for table in LEGACY_STARTUP_TABLES
         for constraint in table.constraints
     }
     assert {
@@ -135,7 +137,7 @@ def test_empty_database_upgrade_matches_model_and_has_no_drift(tmp_path):
     migrated = create_engine(f"sqlite:///{migrated_path.as_posix()}")
     model = create_engine(f"sqlite:///{model_path.as_posix()}")
     try:
-        Base.metadata.create_all(model)
+        Base.metadata.create_all(model, tables=LEGACY_STARTUP_TABLES)
         assert set(inspect(migrated).get_table_names()) == APPLICATION_TABLES | {
             "alembic_version"
         }
@@ -159,6 +161,9 @@ def test_empty_database_upgrade_matches_model_and_has_no_drift(tmp_path):
                     "compare_type": True,
                     "compare_server_default": True,
                     "target_metadata": Base.metadata,
+                    "include_object": lambda _object, name, type_, _reflected, _compare_to: (
+                        type_ != "table" or name in APPLICATION_TABLES
+                    ),
                 },
             )
             assert compare_metadata(context, Base.metadata) == []
@@ -212,7 +217,10 @@ def test_startup_and_alembic_paths_remain_separate():
     ini_source = INI_PATH.read_text(encoding="utf-8")
     requirements = (BACKEND_ROOT / "requirements.txt").read_text(encoding="utf-8")
 
-    assert "Base.metadata.create_all(bind=engine)" in main_source
+    assert (
+        "Base.metadata.create_all(bind=engine, tables=LEGACY_STARTUP_TABLES)"
+        in main_source
+    )
     assert "ensure_sqlite_demo_columns(engine)" in main_source
     assert "create_all" not in env_source
     assert "ensure_sqlite_demo_columns" not in env_source

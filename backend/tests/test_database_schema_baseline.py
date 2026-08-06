@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.db import models as _models  # noqa: F401 - registers the committed tables
 from app.db.database import Base
 from app.db.migrations import ensure_sqlite_demo_columns
+from app.db.models import LEGACY_STARTUP_TABLES
 
 
 EXPECTED_SCHEMA = {
@@ -333,7 +334,7 @@ def _create_legacy_schema(engine):
 @pytest.fixture
 def fresh_engine():
     engine = _new_memory_engine()
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, tables=LEGACY_STARTUP_TABLES)
     try:
         yield engine
     finally:
@@ -364,10 +365,27 @@ def test_fresh_create_all_has_exact_committed_schema(fresh_engine):
     assert actual == EXPECTED_SCHEMA
 
 
+def test_shared_metadata_and_legacy_startup_allowlist_are_exact():
+    assert set(Base.metadata.tables) == set(EXPECTED_SCHEMA) | {
+        "datasets",
+        "dataset_versions",
+        "dataset_artifacts",
+    }
+    assert isinstance(LEGACY_STARTUP_TABLES, tuple)
+    assert {table.name for table in LEGACY_STARTUP_TABLES} == set(
+        EXPECTED_SCHEMA
+    )
+    assert all(
+        table is Base.metadata.tables[table.name]
+        for table in LEGACY_STARTUP_TABLES
+    )
+
+
 def test_orm_client_defaults_are_not_fresh_server_defaults(fresh_engine):
     actual_scalar_defaults = {}
     actual_callable_defaults = set()
-    for table_name, table in Base.metadata.tables.items():
+    for table in LEGACY_STARTUP_TABLES:
+        table_name = table.name
         actual_scalar_defaults[table_name] = {}
         for column in table.columns:
             if column.default is None:
@@ -676,7 +694,9 @@ def test_schema_characterization_uses_only_memory_or_pytest_temporary_database(
     try:
         assert memory_engine.url.database is None
         assert Path(file_engine.url.database).resolve() == temporary_database.resolve()
-        Base.metadata.create_all(bind=file_engine)
+        Base.metadata.create_all(
+            bind=file_engine, tables=LEGACY_STARTUP_TABLES
+        )
         assert temporary_database.is_file()
     finally:
         memory_engine.dispose()
