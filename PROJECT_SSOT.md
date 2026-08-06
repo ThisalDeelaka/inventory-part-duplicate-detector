@@ -52,7 +52,7 @@ Implemented:
 - read-only caller-supplied SQLAlchemy `Engine` and `Connection` classification;
 - explicit pristine SQLite Alembic bootstrap service;
 - exact current-Alembic no-op and strict pristine-empty preflight;
-- programmatic supplied-connection Alembic `upgrade head` with exact postcondition verification;
+- programmatic supplied-connection Alembic upgrade pinned to `0001_current_schema` with exact postcondition verification;
 - explicit bootstrap refusal, configuration, migration and postcondition failure boundaries;
 - pinned Psycopg 3 binary dependency `psycopg[binary]==3.3.4`;
 - synchronous SQLite/PostgreSQL engine-construction boundary;
@@ -67,11 +67,17 @@ Implemented:
 - registered `postgres_integration` marker;
 - real read-only SQLAlchemy/Psycopg PostgreSQL connectivity verification;
 - repeatable PostgreSQL service start, test and teardown with no remaining isolated-project resources;
-- real supplied-connection PostgreSQL Alembic `upgrade head` against a fresh disposable database with exact revision `0001_current_schema` verification;
+- real supplied-connection PostgreSQL Alembic upgrade pinned to `0001_current_schema` against a fresh disposable database with exact revision verification;
 - an independent literal PostgreSQL parity contract for the committed five-table schema, covering exact tables, ordered columns, types, nullability, normalized defaults, keys, constraints, indexes, owned sequences and ownership, triggers, custom types, zero rows and absence of unexpected user objects;
-- a second PostgreSQL `upgrade head` no-op proof with an identical deterministic fingerprint and an upgrade-only SQL capture containing two `SELECT` statements;
+- a second explicit PostgreSQL `0001_current_schema` upgrade no-op proof with an identical deterministic fingerprint and an upgrade-only SQL capture containing two `SELECT` statements;
 - preservation of schema-empty `inventory_test`, cleanup of test-owned `inventory_migration_test` and repeatable isolated PostgreSQL migration/parity verification;
 - controlled test-only PostgreSQL initial-migration failure, exact transactional rollback, unchanged database identity and real same-database forward recovery to the Phase 3D2B1 fingerprint;
+- immutable `LEGACY_STARTUP_TABLES` startup allowlist for the original five deterministic tables;
+- shared-Base durable dataset registry models for `datasets`, `dataset_versions` and `dataset_artifacts`;
+- Alembic revision `0002_dataset_registry` with exact SQLite and PostgreSQL migration parity, repeatability, downgrade and re-upgrade proof;
+- typed immutable dataset-registry commands, records and result contracts;
+- caller-owned dataset-registry repository sessions and service-owned transaction boundaries;
+- dataset-local sequential version numbering, source-version idempotency, artifact-slot idempotency, global object-URI ownership and exact lifecycle-transition enforcement;
 - one active deterministic scoring engine path.
 
 Not implemented:
@@ -83,9 +89,13 @@ Not implemented:
 - distributed migration locking or ownership;
 - backup and restore tooling;
 - existing SQLite database mutation or stamping beyond explicit pristine-empty bootstrap;
-- Phase 4 executable work, including the dataset registry and revision `0002_dataset_registry`;
 - object storage;
+- upload and staging APIs;
+- streamed request ingestion;
+- database/object coordination and compensation;
+- CSV streaming validation and profiling;
 - Parquet;
+- asynchronous jobs, Redis and Celery;
 - scalable lexical/vector retrieval;
 - CatBoost/LightGBM identity model;
 - LLM gateway;
@@ -93,22 +103,27 @@ Not implemented:
 - authentication;
 - authorization;
 - tenant isolation;
+- production PostgreSQL deployment and production migration startup ownership, locking, backup and recovery;
 - frontend tests.
 
 Verified baseline:
 
-- the latest verified executable implementation baseline is commit `10a14b5d4279e294c07b654ba571d68070a22071`;
-- the ordinary full backend suite passes with 405 tests, three intentional PostgreSQL skips and one known pytest configuration warning;
+- the latest verified executable implementation baseline is commit `f1753b0e9b523cd9b427e2fa577384a4cdc12bff`, subject `Add dataset registry foundation`, with parent `0095ed25c5aee57282ee7e469ecdb3550525f7fc`;
+- the ordinary full backend suite passes with 507 tests, four intentional PostgreSQL skips and one known pytest configuration warning;
 - the focused Phase 3D1 engine-configuration suite passes with 39 tests;
-- the combined Phase 3 schema, migration, classifier, bootstrap and engine-configuration regression suite passes with 129 tests, three intentional PostgreSQL skips and one known pytest configuration warning;
-- live PostgreSQL marker selection passes with three tests and 405 deselected against PostgreSQL 18.4 / `server_version_num` `180004`;
+- the protected Phase 3 regression suite passes with 132 tests, three intentional PostgreSQL skips and one known pytest configuration warning;
+- live PostgreSQL marker selection passes with four tests and 507 deselected against PostgreSQL 18.4 / `server_version_num` `180004`;
 - the Vite 8.0.16 production build passes with 34 modules transformed;
-- the Alembic graph is `<base> -> 0001_current_schema (head)`;
+- the Alembic graph is `<base> -> 0001_current_schema -> 0002_dataset_registry (head)`;
+- the only known warning is `PytestConfigWarning: Unknown config option: asyncio_default_fixture_loop_scope`;
 - `USE_REDESIGNED_ENGINE` exists and defaults off;
 - `REDESIGNED_RESULT_MODE` and `REDESIGNED_INCLUDE_STATUSES` remain absent from runtime configuration;
 - the deterministic legacy engine remains the default and fallback;
 - the redesigned production engine is not implemented or runnable;
-- current startup still uses `Base.metadata.create_all()` and `ensure_sqlite_demo_columns()`;
+- shared SQLAlchemy metadata contains the original five legacy tables plus the three registry tables;
+- normal deterministic startup passes the immutable `LEGACY_STARTUP_TABLES` table-object tuple to `Base.metadata.create_all()` and therefore creates only `duplicate_scan`, `duplicate_candidate`, `duplicate_feedback`, `scan_warning` and `rule_exclusion_audit`;
+- registry tables are not created by normal legacy startup, and `ensure_sqlite_demo_columns(engine)` remains unchanged after the restricted create-all call;
+- explicit legacy SQLite bootstrap, PostgreSQL B1 and PostgreSQL B2 remain pinned to `0001_current_schema`, while explicitly Alembic-managed databases may advance to `0002_dataset_registry`;
 - the Phase 3C1 read-only SQLite schema classifier is implemented;
 - the Phase 3C2 explicit pristine SQLite Alembic bootstrap is implemented;
 - Phase 3D1 is implemented and establishes only the Psycopg dependency and lazy synchronous SQLite/PostgreSQL engine-construction foundation;
@@ -120,6 +135,11 @@ Verified baseline:
 - Phase 3D2B2 is implemented and verified at commit `10a14b5d4279e294c07b654ba571d68070a22071` in the same focused PostgreSQL migration-test module;
 - Phase 3D2B2 proves that a synthetic initial migration attempted transactional probe DDL and raised the exact deterministic test failure; PostgreSQL restored the same database to a pristine user schema with no Alembic revision or synthetic/application object; the database OID remained unchanged through failure, rollback and recovery; and the real committed migration restored revision `0001_current_schema` and the exact Phase 3D2B1 fingerprint;
 - Phase 3D2B2 verification removed both test-owned databases and every isolated Docker project resource after each cycle;
+- Phase 4A1 is completed and verified at `0095ed25c5aee57282ee7e469ecdb3550525f7fc`, subject `Pin legacy migrations to 0001`;
+- Phase 4A2 is completed and verified at `f1753b0e9b523cd9b427e2fa577384a4cdc12bff`, subject `Add dataset registry foundation`;
+- Phase 4A2 verification covers the exact shared-Base registry schema; exact `0002_dataset_registry`; SQLite and PostgreSQL upgrade, no-op, downgrade and re-upgrade behavior; complete original-five-table preservation; application UUID and UTC timestamp ownership; portable lowercase SHA-256 and ASCII-whitespace checks; typed immutable contracts; repository/session and service/transaction ownership; idempotency; global object-URI ownership; exact lifecycle transitions; and explicit unavailable-schema behavior;
+- two final PostgreSQL Phase 4A2 verification cycles passed in opposite focused-test order and left zero test-owned databases, containers, networks and volumes, released port `55432`, and no relevant test environment variables;
+- durable dataset registry metadata is implemented, but physical object storage, upload coordination and durable dataset ingestion are not complete;
 - no PostgreSQL production deployment exists;
 - no Alembic startup integration exists;
 - as protected-baseline historical evidence, the sample smoke completed with 20 rows, 48 pairs, 10 candidates, and 38 rule exclusions.
@@ -551,7 +571,7 @@ Completing this minimal engine metadata contract satisfies the Phase 2 contract-
 
 #### Phase 3 Controlled Alembic Transition Decision
 
-Alembic will become the sole long-term schema authority for managed production databases. The transition is incremental: current startup schema creation and SQLite compatibility behavior remain temporarily unchanged until separately reviewed Alembic startup and legacy-bootstrap units are implemented and verified.
+Alembic will become the sole long-term schema authority for managed production databases. The transition remains incremental: deterministic SQLite startup and compatibility behavior stay protected, while production migration-startup ownership requires a separately reviewed unit.
 
 The first Alembic revision will create the exact currently committed five-table schema for an empty database. The characterized fresh SQLAlchemy `create_all()` behavior is the canonical initial schema:
 
@@ -768,12 +788,12 @@ At Phase 3C2 completion, the only permitted Alembic action for a pristine empty 
 alembic upgrade head
 ```
 
-At that completion point, resolved head was exactly `0001_current_schema`. The Phase 4 pinning decision supersedes reliance on moving `head`: Phase 4A1 must change the service to invoke the explicit immutable target `0001_current_schema` before `0002_dataset_registry` exists. The service must continue using the committed Alembic configuration and migration environment and programmatically supply the service-opened connection from the caller-owned `Engine`. It must not use the placeholder URL in `alembic.ini`, construct or infer a repository database URL, run `stamp` or `downgrade`, generate or autogenerate a revision, call `Base.metadata.create_all()` or `ensure_sqlite_demo_columns()`, add seed data, or normalize or repair an existing schema.
+At that completion point, resolved head was exactly `0001_current_schema`. Phase 4A1 subsequently superseded reliance on moving `head` and changed the service to invoke the explicit immutable target `0001_current_schema` before `0002_dataset_registry` was added. The service continues using the committed Alembic configuration and migration environment and programmatically supplies the service-opened connection from the caller-owned `Engine`. It does not use the placeholder URL in `alembic.ini`, construct or infer a repository database URL, run `stamp` or `downgrade`, generate or autogenerate a revision, call `Base.metadata.create_all()` or `ensure_sqlite_demo_columns()`, add seed data, or normalize or repair an existing schema.
 
 Preflight and postcondition behavior is exact:
 
 - exact `CURRENT_ALEMBIC` at `current_alembic_0001` returns an already-current success without invoking a migration command or mutating schema or data;
-- exact pristine `EMPTY` runs the explicit `0001_current_schema` upgrade target after Phase 4A1, then classifies again;
+- exact pristine `EMPTY` runs the explicit `0001_current_schema` upgrade target, then classifies again;
 - bootstrap success requires the post-migration result to be exactly `CURRENT_ALEMBIC`, profile `current_alembic_0001`, revision `0001_current_schema`, with no managed-schema conflicts or unexpected extra tables;
 - every other state is refused explicitly before mutation.
 
@@ -1149,7 +1169,7 @@ The test must use the existing test-only `inventory_test` role and accept the ex
 
 Preflight must require that `inventory_migration_test` does not exist and must fail rather than adopt, drop or overwrite a pre-existing database. Creation must use an explicit autocommit administrative connection because PostgreSQL forbids `CREATE DATABASE` inside a transaction. Every connection and engine must be closed or disposed. Only `inventory_migration_test` may be dropped, in a `finally` path after all test-owned connections close. The test must not drop or mutate `inventory_test`, `postgres`, `template0`, `template1` or an unrelated database, terminate unrelated sessions or perform broad cleanup. After cleanup it must prove that `inventory_migration_test` no longer exists and `inventory_test` remains schema-empty. The full isolated Compose project must still be torn down after each verification cycle under the existing Phase 3D2A policy.
 
-Phase 3D2B1 ran Alembic programmatically through the committed `backend/alembic.ini`, migration script location and caller-supplied connection path. The test opened a live SQLAlchemy connection from the derived migration-database engine and supplied it through Alembic configuration. It did not use the placeholder `alembic.ini` URL, mutate settings or `DATABASE_URL`, invoke FastAPI startup, call `Base.metadata.create_all()`, `ensure_sqlite_demo_columns()` or the SQLite bootstrap service, or use an Alembic subprocess. At Phase 3D2B1 completion it ran `alembic upgrade head`, and both resolved head and the database revision were exactly `0001_current_schema`. Under the Phase 4 pinning decision, Phase 4A1 must replace that moving-target invocation with explicit `0001_current_schema`; downgrade, stamp, revision generation and autogeneration remain prohibited.
+Phase 3D2B1 ran Alembic programmatically through the committed `backend/alembic.ini`, migration script location and caller-supplied connection path. The test opened a live SQLAlchemy connection from the derived migration-database engine and supplied it through Alembic configuration. It did not use the placeholder `alembic.ini` URL, mutate settings or `DATABASE_URL`, invoke FastAPI startup, call `Base.metadata.create_all()`, `ensure_sqlite_demo_columns()` or the SQLite bootstrap service, or use an Alembic subprocess. At Phase 3D2B1 completion it ran `alembic upgrade head`, and both resolved head and the database revision were exactly `0001_current_schema`. Phase 4A1 subsequently replaced that moving-target invocation with explicit `0001_current_schema`; downgrade, stamp, revision generation and autogeneration remain prohibited.
 
 If the committed migration cannot upgrade a fresh PostgreSQL database, implementation must stop and report the exact credential-safe failure, preserve any uncommitted focused test work already added, and leave the committed migration, models, Alembic environment and production source unchanged. It must not add a fallback schema path or reinterpret failure as parity success. Any required migration or model correction is a separate reviewed decision and bounded correction unit.
 
@@ -1255,20 +1275,20 @@ Completion proves only controlled transactional initial-migration failure behavi
 
 #### Phase 4 Legacy SQLite `0001` Pinning and Dataset Registry Migration Decision
 
-The user approved **Option 1 — Keep legacy deterministic SQLite pinned to `0001_current_schema`**. Durable dataset registry ownership is the selected first Phase 4 capability, but no Phase 4 executable work is implemented by this decision.
+The user approved **Option 1 — Keep legacy deterministic SQLite pinned to `0001_current_schema`**. Phase 4A1 and Phase 4A2 completed the fixed legacy target and durable dataset registry foundation without activating object storage or durable ingestion.
 
 Alembic revision ownership is fixed as follows:
 
 - `0001_current_schema` remains the immutable protected five-table deterministic schema;
-- the future dataset registry revision is exactly `0002_dataset_registry`;
-- `0002_dataset_registry` will declare `down_revision = "0001_current_schema"`;
-- once `0002_dataset_registry` is committed, the overall production Alembic head becomes `0002_dataset_registry`;
+- the dataset registry revision is exactly `0002_dataset_registry`;
+- `0002_dataset_registry` declares `down_revision = "0001_current_schema"`;
+- the overall production Alembic head is `0002_dataset_registry`;
 - moving production head must not reinterpret the legacy SQLite schema as outdated, incomplete or automatically mutable;
 - explicitly Alembic-managed production databases may advance from `0001_current_schema` to `0002_dataset_registry`;
 - normal deterministic SQLite startup must not advance to `0002_dataset_registry`;
 - no existing repository SQLite database may be opened, stamped or upgraded during implementation or tests.
 
-Legacy deterministic SQLite startup retains the existing SQLAlchemy `Base` as the preferred shared model metadata. A separate registry declarative base must not be introduced merely to avoid startup activation. Before registry models enter shared metadata, normal startup must restrict `Base.metadata.create_all()` to actual SQLAlchemy table objects for exactly these original committed tables:
+Legacy deterministic SQLite startup retains the existing SQLAlchemy `Base` as shared model metadata. No separate registry declarative base was introduced. Normal startup restricts `Base.metadata.create_all()` through the immutable `LEGACY_STARTUP_TABLES` tuple of actual SQLAlchemy table objects for exactly these original committed tables:
 
 ```text
 duplicate_scan
@@ -1284,11 +1304,11 @@ The Phase 3C2 explicit pristine SQLite bootstrap is permanently pinned to the ex
 
 The Phase 3C1 classifier remains a classifier for the protected legacy five-table SQLite family. `CURRENT_ALEMBIC` and `current_alembic_0001` continue to mean exact revision `0001_current_schema`. The initial registry foundation does not expand the classifier or authorize `0002_dataset_registry` mutation. Registry services must not treat classifier success as proof that registry tables exist. A future production-startup or managed-database classifier may be designed separately.
 
-Every Phase 3 test whose purpose is the protected five-table baseline must target `0001_current_schema` explicitly rather than moving `head`. This includes PostgreSQL B1 parity/no-op and B2 rollback/recovery verification, plus SQLite migration, classifier and bootstrap paths whose contract is the protected legacy schema. They must continue proving the original five-table fingerprint and must not be weakened to accept registry tables. New Phase 4 migration tests will separately verify `0001_current_schema` to `0002_dataset_registry`, exact `0002` schema parity and repeatability.
+Every Phase 3 test whose purpose is the protected five-table baseline targets `0001_current_schema` explicitly rather than moving `head`. This includes PostgreSQL B1 parity/no-op and B2 rollback/recovery verification, plus SQLite migration, classifier and bootstrap paths whose contract is the protected legacy schema. They continue proving the original five-table fingerprint and are not weakened to accept registry tables. Phase 4A2 migration tests separately verify `0001_current_schema` to `0002_dataset_registry`, exact `0002` schema parity and repeatability.
 
 #### Phase 4A — Durable Dataset Registry and Versioned Artifact Metadata Foundation
 
-Phase 4A is the selected first durable-ingestion capability. It establishes database ownership and immutable version identity before MinIO/S3 upload APIs or object processing are added.
+Phase 4A is the completed first durable-ingestion foundation. It establishes database ownership and immutable version identity before MinIO/S3 upload APIs or object processing are added.
 
 The schema adds exactly three tables without modifying any original five-table object:
 
@@ -1298,7 +1318,7 @@ dataset_versions
 dataset_artifacts
 ```
 
-New registry primary keys are immutable application-generated UUID values. Models must use SQLAlchemy's supported portable UUID type with native PostgreSQL UUID behavior and SQLite test portability. This unit adds no UUID package, database-generated random-UUID extension or public sequential dataset identifier.
+New registry primary keys are immutable application-generated UUID values. Models use SQLAlchemy's supported portable UUID type with native PostgreSQL UUID behavior and SQLite test portability. This unit added no UUID package, database-generated random-UUID extension or public sequential dataset identifier.
 
 `datasets` contains conceptually:
 
@@ -1391,7 +1411,7 @@ Its exact policy is:
 
 All registry primary keys, foreign keys, unique constraints, checks and indexes use deterministic names under the established naming convention. Required indexes support dataset status, version lookup by dataset, version lifecycle status, artifact lookup by dataset version and artifact-kind lookup within a version. No speculative full-text, vector, tenant, job, scan or profile index is authorized.
 
-The future typed repository/service boundary supports only:
+The implemented typed repository/service boundary supports only:
 
 - creating an active dataset and reading it by ID;
 - registering a source version and idempotently returning an existing version for the same dataset/source identity;
@@ -1402,16 +1422,16 @@ The future typed repository/service boundary supports only:
 
 No HTTP route is introduced. The initial guarantee is deterministic sequential version allocation inside one database transaction, with database uniqueness authoritative. Cross-process concurrent allocation, retry orchestration and distributed ownership remain deferred to Phase 5.
 
-Registry models use the existing shared `Base`, but legacy startup must first be restricted to the original-five-table table-object allowlist. Alembic alone creates registry tables. Registry repositories/services fail explicitly when registry tables are absent and must not call `create_all()`, Alembic, the SQLite helper or SQLite bootstrap. No automatic startup activation is introduced.
+Registry models use the existing shared `Base`, while legacy startup is restricted to the original-five-table table-object allowlist. Alembic alone creates registry tables. Registry repositories/services fail explicitly when registry tables are absent and do not call `create_all()`, Alembic, the SQLite helper or SQLite bootstrap. No automatic startup activation was introduced.
 
-The future manually reviewed `0002_dataset_registry` migration must:
+The committed and verified `0002_dataset_registry` migration:
 
-- add only the three approved registry tables, constraints and indexes;
-- upgrade an exact `0001_current_schema` database to `0002_dataset_registry` on disposable SQLite and real PostgreSQL;
-- preserve every original five-table object and row during upgrade;
-- downgrade a disposable `0002` database to exact `0001` by dropping only registry-owned objects in dependency-safe order;
-- support exact schema-parity verification and a second `upgrade head` no-op proof;
-- fail explicitly without fallback or `create_all()`.
+- adds only the three approved registry tables, constraints and indexes;
+- upgrades an exact `0001_current_schema` database to `0002_dataset_registry` on disposable SQLite and real PostgreSQL;
+- preserves every original five-table object and row during upgrade;
+- downgrades a disposable `0002` database to exact `0001` by dropping only registry-owned objects in dependency-safe order;
+- supports exact schema-parity verification and a second `upgrade head` no-op proof;
+- fails explicitly without fallback or `create_all()`.
 
 Production downgrade remains non-primary recovery; forward migration plus verified backup/restore policy remains the operational direction.
 
@@ -1419,23 +1439,214 @@ Phase 4A explicitly does not add MinIO or other object storage, an S3 client, mu
 
 ##### Phase 4A1 — Fixed Legacy Migration Target Compatibility Seam
 
-Phase 4A1 is the sole immediate implementation unit. It must:
+Phase 4A1 completed at commit `0095ed25c5aee57282ee7e469ecdb3550525f7fc`, subject `Pin legacy migrations to 0001`. It:
 
-- pin the explicit pristine SQLite bootstrap to `0001_current_schema`;
-- pin every Phase 3 SQLite baseline path whose contract is the original schema to `0001_current_schema`;
-- pin PostgreSQL B1 and B2 migration verification to `0001_current_schema`;
-- preserve the exact B1 five-table fingerprint and B2 recovery behavior;
-- prove unchanged current behavior while overall `head` is still `0001_current_schema`;
-- introduce no `0002` revision, dataset model/table, repository, service, API, dependency or object-storage code;
-- change only the smallest source/test set proved necessary;
-- preserve normal legacy startup unchanged in this first seam;
-- remain uncommitted until reviewed.
+- pinned the explicit pristine SQLite bootstrap to `0001_current_schema`;
+- pinned every Phase 3 SQLite baseline path whose contract is the original schema to `0001_current_schema`;
+- pinned PostgreSQL B1 and B2 migration verification to `0001_current_schema`;
+- preserved the exact B1 five-table fingerprint and B2 recovery behavior;
+- proved unchanged protected behavior while overall `head` was still `0001_current_schema`;
+- introduced no `0002` revision, dataset model/table, repository, service, API, dependency or object-storage code;
+- changed only the source-proven compatibility and test scope;
+- preserved normal legacy startup unchanged in that seam.
 
-Expected files are limited conceptually to the bootstrap target and directly affected migration tests. Any additional focused file must be source-proven and reported before editing.
+It also added a meaningful later-head regression while preserving exact PostgreSQL B1 fingerprint and B2 rollback/recovery behavior.
 
 ##### Phase 4A2 — Dataset Registry Schema and Persistence Foundation
 
-Phase 4A2 remains future until Phase 4A1 is committed and verified. It will restrict legacy startup `create_all()` to the original-five-table table-object allowlist, add shared-Base registry models and `0002_dataset_registry`, add typed repository/service contracts and focused tests, add SQLite and live PostgreSQL migration verification, preserve all Phase 3 tests pinned to `0001_current_schema`, and add no object-store or HTTP upload behavior.
+Phase 4A2 completed at commit `f1753b0e9b523cd9b427e2fa577384a4cdc12bff`, subject `Add dataset registry foundation`. It restricted legacy startup `create_all()` to the original-five-table table-object allowlist; added shared-Base registry models and `0002_dataset_registry`; added typed repository/service contracts and focused tests; verified SQLite and live PostgreSQL upgrade, no-op, downgrade and re-upgrade behavior; preserved all Phase 3 tests pinned to `0001_current_schema`; and added no object-store or HTTP upload behavior.
+
+Accepted Phase 4A2 limitations remain: no cross-process version-allocation retry ownership, no registry HTTP API, no physical object verification, no database/object coordination or compensation, no CSV profiling or Parquet processing, and no production migration-startup ownership.
+
+#### Phase 4B1 — S3-Compatible Object Storage Foundation Decision
+
+**User-approved option: Object-storage foundation first.**
+
+Phase 4B1 is the sole immediate executable unit. It establishes an independently verified provider-neutral object-store boundary before any upload API, registry integration or database/object coordination. It is synchronous because the current FastAPI persistence and service foundations are synchronous; asynchronous job ownership remains Phase 5 work.
+
+##### Provider, SDK and application boundary
+
+Use S3-compatible object storage through a synchronous `boto3`/`botocore` client, with MinIO only for disposable local live verification. Retain a provider-neutral application contract around one boto3-backed implementation. Do not add `aioboto3`, another asynchronous AWS SDK or the provider-specific MinIO Python SDK.
+
+During implementation, resolve exact mutually compatible `boto3`, `botocore` and `s3transfer` versions from official package metadata, pin all three, report the resolution and avoid unrelated dependency upgrades. The SSOT does not preselect versions. Do not construct a global client at import time or activate object storage during FastAPI startup.
+
+The provider-neutral synchronous interface has exactly these conceptual operations:
+
+```text
+check readiness
+put a verified immutable object
+read object metadata
+download and verify an object into a caller-owned binary sink
+```
+
+It has no list, delete, copy, rename, presigned URL, public URL, multipart upload, bucket creation/deletion, retention, lifecycle, object-lock, database-write, registry-lifecycle, HTTP-route or scan operation. The adapter never calls Alembic, SQLAlchemy, dataset repositories/services, application startup or scan code.
+
+##### Typed contracts and errors
+
+Use immutable typed values, preferably frozen/slotted dataclasses and protocols, conceptually:
+
+```text
+ObjectStorageSettings
+ObjectArtifactIdentity
+ObjectKey
+PutObjectRequest
+StoredObjectMetadata
+PutObjectResult
+ObjectStorageClient
+```
+
+Provide explicit typed errors at minimum:
+
+```text
+ObjectStorageError
+ObjectStorageConfigurationError
+ObjectStorageUnavailableError
+ObjectNotFoundError
+ObjectConflictError
+ObjectIntegrityError
+ObjectStorageOperationError
+```
+
+Equivalent source-consistent names are acceptable. Provider-neutral contracts expose no boto3, botocore or `StreamingBody` types. Credentials never appear in representations, exceptions, logs, test names or reports.
+
+##### Configuration and bucket ownership
+
+`ObjectStorageSettings` is supplied explicitly to a factory or adapter constructor and conceptually contains endpoint URL, region, bucket, optional access-key ID, optional secret-access key, optional session token, TLS verification, S3 addressing style, connect/read timeouts and retry policy.
+
+- Access-key ID and secret-access key form one required pair: either both are absent or both are supplied.
+- The session token is optional when the access-key pair is supplied.
+- A supplied session token requires both access-key ID and secret-access key.
+- When the access-key pair is absent, the session token must also be absent and the standard boto3 credential chain is permitted.
+- Secret and session-token fields are excluded from representations.
+- No `.env`, secret-management infrastructure or fallback development endpoint, bucket, region or credential is added.
+- Endpoint validation rejects userinfo, fragments, unsupported schemes and unsafe malformed values.
+- TLS verification defaults on and may be disabled only by explicit isolated-local-test configuration.
+- Addressing style is exactly `path` or `virtual`.
+- Initial defaults are a 5-second connect timeout, 60-second read timeout and botocore standard retry mode with 3 total attempts.
+- Complete credential-bearing endpoint URLs are never reported, and no application-global settings activation is introduced.
+
+The approved disposable MinIO live-test configuration uses access-key ID plus secret-access key without a session token.
+
+One adapter instance owns one fixed configured bucket. Production operations never create or delete buckets. Readiness performs a non-mutating bucket-access check and fails explicitly for a missing, inaccessible or incorrectly configured bucket. Bucket provisioning, policy, encryption-at-rest, versioning, lifecycle, replication and retention remain deployment responsibilities. Test-only setup may create the fixed disposable bucket after isolated MinIO is healthy.
+
+##### Deterministic key and registry URI
+
+Keys derive only from typed trusted registry UUIDs, artifact kind, ordinal and content SHA-256. The exact canonical format is:
+
+```text
+v1/datasets/{dataset_id}/versions/{dataset_version_id}/artifacts/{artifact_kind_slug}/{artifact_ordinal_8_digits}/{content_sha256}
+```
+
+Exact slugs are:
+
+```text
+SOURCE_CSV -> source-csv
+SCHEMA_PROFILE_JSON -> schema-profile-json
+CANONICAL_PARQUET -> canonical-parquet
+```
+
+UUIDs use canonical lowercase hyphenated form; ordinal is zero-padded to exactly eight decimal digits; SHA-256 is exactly 64 lowercase hexadecimal characters. Source filenames never appear. Arbitrary caller-controlled keys, `..`, empty segments, slash/backslash/NUL injection, URL encoding, filesystem conversion and normalization are prohibited. Equal identity yields an equal key; changing any identity component yields a different key.
+
+The canonical registry URI is `s3://{bucket}/{canonical_key}` and never embeds the endpoint. This namespace is explicitly single-tenant; tenant-aware ownership requires a later approved migration.
+
+##### Required metadata and verified immutable put
+
+Every object carries provider metadata equivalent to:
+
+```text
+dataset-id
+dataset-version-id
+artifact-kind
+artifact-ordinal
+sha256
+```
+
+Identity metadata must exactly match the typed key identity and request. Use normal provider `ContentLength`, `ContentType`, opaque `ETag` and `VersionId` when supplied. ETag is never treated as MD5 or integrity proof; provider checksums may supplement but never replace application SHA-256. Source filename and customer data are not copied into object metadata, logs or diagnostics.
+
+Put accepts one caller-owned seekable binary stream, exact expected byte length, exact lowercase SHA-256, content type and typed artifact identity. It must:
+
+1. never close the caller stream;
+2. verify length and digest in bounded chunks before upload and reject mismatches before object creation;
+3. restore the original stream position before and after the provider operation;
+4. never load the complete object into one in-memory bytes value;
+5. cap one put at exactly 5,000,000,000 bytes (5 GB), the approved single-request S3-compatible limit;
+6. reject any expected byte length greater than 5,000,000,000 before reading the stream or calling the provider;
+7. implement no multipart upload;
+8. use conditional create so an existing key is never silently overwritten;
+9. return the exact existing object with `created = false` only when length, content type, identity metadata and SHA-256 all match;
+10. raise `ObjectConflictError` for any conflicting immutable metadata;
+11. read metadata back after creation, require exact equality and return `created = true`;
+12. resolve a lost conditional-create race only by re-reading metadata and classifying exact idempotency or explicit conflict;
+13. use no fallback key, overwrite, rename, delete or repair path.
+
+The caller's original stream position defines the payload start. Verification and provider upload read exactly the declared payload byte count beginning at that entry position. The original position is restored after verification and again after the provider operation. Boundary tests must not allocate or upload a five-gigabyte object merely to test this limit.
+
+Bounded client retries never route application conflicts or integrity failures through a different key.
+
+##### Metadata lookup and verified download
+
+Metadata lookup uses the exact canonical key, returns immutable provider-neutral metadata, maps absence to `ObjectNotFoundError`, distinguishes credential/network/provider failures from absence, and requires complete valid identity metadata.
+
+Verified download accepts a caller-owned binary sink, streams the provider response in bounded chunks, computes length and SHA-256, requires exact stored-metadata agreement, always closes the provider response and never closes the caller sink. Truncation, overrun, missing checksum metadata or digest mismatch raises `ObjectIntegrityError`. On failure it does not rewind, truncate or delete a partially written sink or create a temporary file; cleanup remains caller-owned. The fixed internal chunk size is 1 MiB unless implementation inspection proves a stronger project-wide constant.
+
+##### Client construction and safe failure mapping
+
+The focused factory constructs service `s3` with explicit region, optional endpoint, TLS verification, path/virtual addressing, 5-second connect timeout, 60-second read timeout and standard retries with 3 total attempts. Construction makes no network connection.
+
+Missing objects are not availability failures. A conditional-create failure is not classified until exact metadata is re-read. Authentication, authorization, endpoint, timeout and provider failures remain credential-safe. Raw provider bodies, full URLs, credentials, tokens and signed headers are not exposed; exception causes are preserved internally. No silent endpoint, region, credential, addressing, provider, bucket or filesystem fallback is permitted.
+
+##### Disposable MinIO live-test profile
+
+The executable unit may add exactly one opt-in Compose profile/service:
+
+```text
+profile: object-storage-test
+service: minio-test
+project: inventory-part-duplicate-object-storage-test
+```
+
+Use the official MinIO server image. During implementation, resolve a stable official release and exact multi-platform manifest digest, verify required developer-platform support, and pin `minio/minio:<verified-release>@sha256:<verified-manifest-digest>`. Do not preselect the release/digest in this SSOT; stop for a floating, unofficial, prerelease or mismatched image.
+
+Normal `docker compose up` must not start MinIO, and backend/frontend/PostgreSQL services must not depend on it. Use `restart: "no"`, tmpfs-only storage at the supported data directory, no persistent or external storage/network, seed/customer/repository data, console publication or public interface. Publish only `127.0.0.1:${MINIO_TEST_API_PORT:-59000}:9000`. The public disposable fixtures are access key `inventory_test`, secret key `inventory_test_only_2026`, and bucket `inventory-datasets-test`; they are test-only and never reused elsewhere. Use an image-supported finite health check and Compose `--wait --wait-timeout 90`. Test setup creates the bucket after health; teardown removes the isolated project and tmpfs data. No production MinIO/S3, Kubernetes, ingress, TLS-certificate or secret infrastructure is added.
+
+##### Test and verification policy
+
+Register exactly one marker, `object_storage_integration`. The ordinary backend suite never starts Docker or connects to MinIO and gains exactly one intentional skip with a clear reason when explicit live configuration is absent. Supplied malformed or unreachable configuration fails. Tests never use a real cloud account, shared bucket, developer-home credentials or a default AWS account.
+
+Credential-validation tests accept:
+
+- no explicit credentials;
+- access-key ID plus secret-access key;
+- access-key ID plus secret-access key plus session token.
+
+They reject:
+
+- access-key ID only;
+- secret-access key only;
+- session token without the complete access-key pair;
+- access-key ID plus session token without secret-access key;
+- secret-access key plus session token without access-key ID.
+
+Size-boundary tests prove without allocating giant payloads that:
+
+- expected length 5,000,000,000 is accepted by boundary validation;
+- expected length 5,000,000,001 is rejected before stream reading and before provider invocation;
+- negative expected length is rejected;
+- ordinary small-stream byte-count and digest verification remain exact.
+
+Focused unit tests also cover settings/redaction, endpoint/bucket validation, keys/URIs/slugs, ordinal/SHA checks, no-network construction, addressing/timeouts/retries, seekability and bounded verification, pre-provider mismatch rejection, stream-position restoration, create/idempotency/conflict/race behavior, metadata/not-found/error mapping, bounded verified download, provider-body closure, caller ownership, corrupt/missing metadata, truncation/overrun/digest mismatch, and absence of database, registry, startup, API, filesystem and network fallback behavior.
+
+Live MinIO tests cover readiness, fixed-bucket ownership, verified create, metadata parity, verified download, exact idempotent repeat, same-key conflict refusal, missing-object behavior and clean teardown. Run two fresh isolated MinIO cycles to prove repeatability.
+
+##### Cross-resource boundary and non-goals
+
+Phase 4B1 does not create a dataset/version/artifact row, mutate any registry lifecycle status, persist `object_uri`, coordinate a database transaction with object storage, compensate/delete after database failure, expose an upload route, accept `UploadFile`, parse CSV, use filenames in keys or run a scan.
+
+It also adds no streaming request ingestion, arbitrary keys, multipart upload, list/delete/copy/rename, presigned/public URLs, lifecycle/retention/lock/replication/version policy, production bucket provisioning, database atomicity, CSV profiling, pandas replacement, PyArrow/Polars/Parquet, jobs/Redis/Celery, tenant namespace, auth, frontend, production PostgreSQL/MinIO/S3 deployment, Kubernetes, CI or Phase 5 infrastructure.
+
+##### Phase 4B2 — Staged Source Upload Coordination
+
+Phase 4B2 remains future only. A later separately reviewed decision may define streaming HTTP upload/spooling, hashing and size enforcement, dataset-version registration, `SOURCE_CSV` object writing, artifact registration, `REGISTERED -> STAGED`, compensation/orphan ownership and idempotent upload-request semantics. Phase 4B1 includes no Phase 4B2 implementation.
 
 ### Phase 5 — Asynchronous Jobs and Progress
 
@@ -1608,19 +1819,11 @@ State that unrelated implementation units must not share a commit.
 
 ## 17. Immediate Next Step
 
-**Phase 4A1 — Fixed Legacy Migration Target Compatibility Seam**
+**Phase 4B1 — S3-Compatible Object Storage Foundation**
 
-It must:
+Its bounded goal is to add pinned synchronous boto3/botocore/s3transfer dependencies, provider-neutral typed contracts, one boto3-backed adapter, deterministic object keys and registry URIs, verified immutable seekable-stream put, metadata lookup, verified download, safe configuration/error boundaries, focused tests and two fresh disposable MinIO live cycles.
 
-- pin the explicit pristine SQLite bootstrap to the immutable `0001_current_schema` target rather than moving `head`;
-- pin every directly affected Phase 3 SQLite baseline test to `0001_current_schema` where its contract is the original five-table schema;
-- pin PostgreSQL B1 parity/no-op and B2 failure/rollback/recovery verification to `0001_current_schema`;
-- preserve the exact B1 fingerprint, B2 recovery behavior, classifier meaning and existing deterministic/SQLite behavior;
-- prove behavior is unchanged while the overall Alembic head remains `0001_current_schema`;
-- change only the smallest source and test set established by inspection;
-- preserve normal legacy startup unchanged in this unit;
-- introduce no `0002_dataset_registry`, registry model/table, repository, service, API, dependency, object-storage code, startup Alembic integration, deployment, locking, backup tooling or Phase 5 work;
-- not commit until reviewed.
+It includes no database or registry write, lifecycle mutation, upload HTTP API, database/object coordination or compensation, CSV parsing/profiling, Parquet, jobs, tenancy, authentication, frontend, production deployment or Phase 5 work.
 
 ## 18. Decision Log
 
@@ -1641,11 +1844,25 @@ Add entry dated 2026-08-05:
 - Phase 3D2B2 completed at `10a14b5d4279e294c07b654ba571d68070a22071`;
 - durable dataset registry foundation selected as the first Phase 4 capability;
 - legacy deterministic SQLite remains pinned to `0001_current_schema`;
-- the future production Alembic head may advance to `0002_dataset_registry`;
+- the decision reserved `0002_dataset_registry` as the future production Alembic head;
 - shared SQLAlchemy metadata is retained;
 - legacy startup will use an explicit original-five-table table-object allowlist before registry models are activated;
 - registry tables are Alembic-owned and are not created by legacy startup;
 - Phase 4A1 pins fixed migration targets before Phase 4A2 introduces `0002_dataset_registry`.
+
+Add entry dated 2026-08-06:
+
+- Phase 4A1 completed at `0095ed25c5aee57282ee7e469ecdb3550525f7fc`, subject `Pin legacy migrations to 0001`;
+- Phase 4A2 completed at `f1753b0e9b523cd9b427e2fa577384a4cdc12bff`, subject `Add dataset registry foundation`;
+- the Alembic production head is `0002_dataset_registry`;
+- the full backend passes 507 tests with four intentional service-down PostgreSQL skips and one known warning;
+- durable registry metadata is implemented, but physical object storage and durable ingestion are not;
+- the user selected object-storage foundation before staged-upload coordination;
+- synchronous boto3/botocore is the approved S3-compatible adapter direction;
+- MinIO is approved only as an opt-in disposable local Phase 4B1 live-test service;
+- exact object keys use the versioned canonical registry identity namespace defined in the Phase 4B1 decision;
+- Phase 4B1 does not touch registry rows, lifecycle state, HTTP uploads or database/object compensation;
+- Phase 4B2 staged source upload coordination remains future.
 
 ## 19. Definition of Final Production Success
 
