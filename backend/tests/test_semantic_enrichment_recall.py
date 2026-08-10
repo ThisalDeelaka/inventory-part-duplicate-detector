@@ -314,7 +314,11 @@ def test_enhanced_export_appends_provenance_without_provider_call(db):
     assert rows[0]["candidate_source"] == RECALL_SOURCE
     assert rows[0]["resolution_source"] == SEMANTIC_RESOLUTION
     assert rows[0]["semantic_profile_prompt_version"] == "inventory-record-enrichment-v1"
-    assert list(rows[0])[-5:] == [
+    assert list(rows[0])[-11:-6] == [
         "candidate_source", "rescue_score", "rescue_signals", "resolution_source",
         "semantic_profile_prompt_version",
+    ]
+    assert list(rows[0])[-6:] == [
+        "retrieval_sources", "retrieval_score", "lexical_score", "vector_score",
+        "retrieval_rank", "embedding_model_version",
     ]

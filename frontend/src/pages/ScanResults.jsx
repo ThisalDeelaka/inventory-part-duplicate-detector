@@ -92,6 +92,14 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                     <span>Semantic comparison: {candidate.semantic_profile_result || 'Not used'}</span>
                     <span>Pairwise LLM result: {candidate.pairwise_llm_result || 'Not used'}</span>
                     <span>Human review decision: {candidate.human_review_decision}</span>
+                    {candidate.candidate_source === 'HYBRID_RETRIEVAL' && (
+                      <>
+                        <span>Found by: {(candidate.retrieval_sources || []).join(' / ') || 'Hybrid retrieval'}</span>
+                        <span>Retrieval rank: {candidate.retrieval_rank ?? 'Unavailable'}</span>
+                        <span>Retrieval score: {candidate.retrieval_score ?? 'Unavailable'} (retrieval ranking, not confidence)</span>
+                        <span>Lexical: {candidate.lexical_score ?? 0} / Vector: {candidate.vector_score ?? 0}</span>
+                      </>
+                    )}
                     <small>The deterministic result remains authoritative.</small>
                   </div>
                   <CandidateLlmTools candidate={candidate} />
@@ -167,6 +175,25 @@ function TriagePanel({ value, error, busy, start, retry }) {
           )}
         </>
       ) : <p>No automatic triage run is available yet.</p>}
+    </section>
+  )
+}
+
+function RetrievalPanel({ value }) {
+  if (!value) return null
+  return (
+    <section className="panel triage-panel" aria-label="Candidate retrieval metrics">
+      <div className="llm-heading"><div><p className="eyebrow">Deterministic-first recall</p><h2>Candidate retrieval</h2></div></div>
+      <div className="metrics">
+        <span>Records indexed: {value.records_indexed || 0}</span>
+        <span>Standard deterministic: preserved</span>
+        <span>Hybrid candidates added: {value.hybrid_candidates_added || 0}</span>
+        <span>Lexical candidates: {value.lexical_candidates_generated || 0}</span>
+        <span>Vector candidates: {value.vector_candidates_generated || 0}</span>
+        <span>Multi-source candidates: {value.multi_source_candidates || 0}</span>
+        <span>Average candidates per record: {value.average_candidates_per_record || 0}</span>
+      </div>
+      <small>Retrieval scores rank comparison candidates; they are not duplicate confidence.</small>
     </section>
   )
 }
@@ -337,6 +364,8 @@ export default function ScanResults() {
       </header>
 
       {error && <div className="error">{error}</div>}
+
+      <RetrievalPanel value={scan?.hybrid_retrieval} />
 
       <TriagePanel
         value={triage}

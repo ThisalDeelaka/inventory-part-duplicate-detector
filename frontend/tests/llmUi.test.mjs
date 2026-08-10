@@ -26,9 +26,9 @@ import {
   triageFailureLabel,
 } from '../src/utils/llmUi.js'
 
-test('AI enhancement filters expose the five required views', () => {
+test('AI enhancement filters expose retrieval and advisory views', () => {
   assert.deepEqual(AI_ENHANCEMENT_FILTERS.map(item => item[1]), [
-    'All', 'Standard deterministic', 'Recall rescue',
+    'All', 'Standard deterministic', 'Hybrid retrieval', 'Recall rescue',
     'Semantic-profile resolution', 'Pairwise LLM fallback',
   ])
 })
@@ -37,11 +37,31 @@ test('AI enhancement filters separate provenance and resolution source', () => {
   const rows = [
     { id: 1, candidate_source: 'DETERMINISTIC_STANDARD', resolution_source: 'SEMANTIC_PROFILE_COMPARISON' },
     { id: 2, candidate_source: 'DETERMINISTIC_RECALL_EXPANSION', resolution_source: 'PAIRWISE_LLM_FALLBACK' },
+    { id: 3, candidate_source: 'HYBRID_RETRIEVAL', resolution_source: null },
   ]
   assert.deepEqual(filterAndPrioritizeCandidates(rows, 'STANDARD').map(item => item.id), [1])
   assert.deepEqual(filterAndPrioritizeCandidates(rows, 'RECALL').map(item => item.id), [2])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'HYBRID').map(item => item.id), [3])
   assert.deepEqual(filterAndPrioritizeCandidates(rows, 'SEMANTIC').map(item => item.id), [1])
   assert.deepEqual(filterAndPrioritizeCandidates(rows, 'PAIRWISE').map(item => item.id), [2])
+})
+
+test('hybrid retrieval filtering does not treat retrieval score as assisted status', () => {
+  const rows = [
+    { id: 1, candidate_source: 'HYBRID_RETRIEVAL', retrieval_score: 99, effective_status: 'HUMAN_REVIEW' },
+    { id: 2, candidate_source: 'DETERMINISTIC_STANDARD', retrieval_score: null, effective_status: 'LLM_LIKELY_DUPLICATE' },
+  ]
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'HYBRID').map(item => item.id), [1])
+  assert.equal(filterAndPrioritizeCandidates(rows, 'HYBRID')[0].effective_status, 'HUMAN_REVIEW')
+})
+
+test('standard source filter excludes hybrid and recall candidates', () => {
+  const rows = [
+    { id: 1, candidate_source: 'DETERMINISTIC_STANDARD' },
+    { id: 2, candidate_source: 'HYBRID_RETRIEVAL' },
+    { id: 3, candidate_source: 'DETERMINISTIC_RECALL_EXPANSION' },
+  ]
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'STANDARD').map(item => item.id), [1])
 })
 
 test('normalizes safe backend errors and rejects secret or raw payload text', () => {

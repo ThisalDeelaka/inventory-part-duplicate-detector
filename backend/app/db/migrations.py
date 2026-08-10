@@ -33,6 +33,14 @@ def ensure_sqlite_demo_columns(engine):
             ("normalized_part_no_a", "TEXT DEFAULT ''"),
             ("normalized_part_no_b", "TEXT DEFAULT ''"),
         ],
+        "candidate_discovery_metadata": [
+            ("retrieval_sources_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("retrieval_score", "FLOAT"),
+            ("lexical_score", "FLOAT"),
+            ("vector_score", "FLOAT"),
+            ("retrieval_rank", "INTEGER"),
+            ("embedding_model_version", "VARCHAR(200)"),
+        ],
     }
 
     inspector = inspect(engine)

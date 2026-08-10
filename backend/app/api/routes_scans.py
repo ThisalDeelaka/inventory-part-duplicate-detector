@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.core.config import Settings
-from app.db.models import CandidateDiscoveryMetadata, LlmAdvisorySnapshot, LlmEnhancementRun, utcnow
+from app.db.models import CandidateDiscoveryMetadata, DuplicateCandidate, LlmAdvisorySnapshot, LlmEnhancementRun, utcnow
 from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
@@ -30,6 +30,7 @@ from app.services.llm_triage_service import (
 )
 from app.services.llm_enhancement_service import discovery_values, enhancement_metrics
 from app.services.recall_rescue_service import prepare_recall_rescue
+from app.services.hybrid_retrieval_metrics import hybrid_retrieval_metrics
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
@@ -48,7 +49,7 @@ def _bool_attr(obj, name):
     return str(getattr(obj, name, "false") or "false").lower() == "true"
 
 
-def scan_json(scan, privacy=None):
+def scan_json(scan, privacy=None, retrieval=None):
     payload = {
         "id": scan.id, "scan_id": scan.id, "scan_name": scan.scan_name, "source_type": scan.source_type,
         "selected_fields": json.loads(scan.selected_fields), "threshold": scan.threshold, "status": scan.status,
@@ -59,6 +60,8 @@ def scan_json(scan, privacy=None):
     }
     if privacy:
         payload["privacy"] = privacy
+    if retrieval is not None:
+        payload["hybrid_retrieval"] = retrieval
     return payload
 
 
@@ -112,7 +115,7 @@ def scans(db: Session = Depends(get_db)):
 def scan_detail(scan_id: int, db: Session = Depends(get_db)):
     scan = get_scan(db, scan_id)
     if not scan: raise HTTPException(404, "Scan not found")
-    return scan_json(scan)
+    return scan_json(scan, retrieval=hybrid_retrieval_metrics(db, scan_id))
 
 
 @router.get("/{scan_id}/candidates")
@@ -193,9 +196,17 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
     try:
-        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode))
+        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode), configuration=configuration)
         try:
-            prepare_recall_rescue(db, scan, df, configuration)
+            if configuration.hybrid_retrieval_enabled:
+                if db.query(LlmEnhancementRun).filter_by(scan_id=scan.id).first() is None:
+                    db.add(LlmEnhancementRun(
+                        scan_id=scan.id,
+                        standard_candidate_count=db.query(DuplicateCandidate).filter_by(scan_id=scan.id).count(),
+                    ))
+                    db.commit()
+            else:
+                prepare_recall_rescue(db, scan, df, configuration)
         except Exception:
             db.rollback()
             if db.query(LlmEnhancementRun).filter_by(scan_id=scan.id).first() is None:
@@ -216,7 +227,7 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
                 db.commit()
         privacy = security_transparency(file_hash=metadata["file_sha256"], sensitive_mode=sensitive_mode)
         privacy["file_size_bytes"] = metadata["file_size_bytes"]
-        return scan_json(scan, privacy=privacy)
+        return scan_json(scan, privacy=privacy, retrieval=hybrid_retrieval_metrics(db, scan.id))
     except ValueError as exc: raise HTTPException(422, str(exc)) from exc
     except Exception as exc: raise HTTPException(500, f"Scan failed safely: {exc}") from exc
 

@@ -30,6 +30,7 @@ export const EFFECTIVE_STATUS_OPTIONS = [
 export const AI_ENHANCEMENT_FILTERS = [
   ['', 'All'],
   ['STANDARD', 'Standard deterministic'],
+  ['HYBRID', 'Hybrid retrieval'],
   ['RECALL', 'Recall rescue'],
   ['SEMANTIC', 'Semantic-profile resolution'],
   ['PAIRWISE', 'Pairwise LLM fallback'],
@@ -202,7 +203,8 @@ export function effectiveStatusLabel(status) {
 export function filterAndPrioritizeCandidates(candidates, selectedStatus = '') {
   if (!Array.isArray(candidates)) return []
   const predicates = {
-    STANDARD: candidate => candidate.candidate_source !== 'DETERMINISTIC_RECALL_EXPANSION',
+    STANDARD: candidate => candidate.candidate_source === 'DETERMINISTIC_STANDARD',
+    HYBRID: candidate => candidate.candidate_source === 'HYBRID_RETRIEVAL',
     RECALL: candidate => candidate.candidate_source === 'DETERMINISTIC_RECALL_EXPANSION',
     SEMANTIC: candidate => candidate.resolution_source === 'SEMANTIC_PROFILE_COMPARISON',
     PAIRWISE: candidate => candidate.resolution_source === 'PAIRWISE_LLM_FALLBACK',

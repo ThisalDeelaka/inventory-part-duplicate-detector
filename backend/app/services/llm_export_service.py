@@ -42,6 +42,8 @@ ASSISTED_FIELDS = [
     "effective_status", "effective_recommended_action", "llm_triage_run_state",
     "candidate_source", "rescue_score", "rescue_signals", "resolution_source",
     "semantic_profile_prompt_version",
+    "retrieval_sources", "retrieval_score", "lexical_score", "vector_score",
+    "retrieval_rank", "embedding_model_version",
 ]
 
 TERMINAL_RULE_DECISIONS = frozenset({"REJECT"})
@@ -157,6 +159,12 @@ def candidates_with_llm_to_csv(
             rescue_signals=json.dumps(provenance["rescue_signals"], separators=(",", ":")),
             resolution_source=provenance["resolution_source"],
             semantic_profile_prompt_version=INVENTORY_RECORD_ENRICHMENT_PROMPT_VERSION,
+            retrieval_sources=json.dumps(provenance["retrieval_sources"], separators=(",", ":")),
+            retrieval_score=provenance["retrieval_score"],
+            lexical_score=provenance["lexical_score"],
+            vector_score=provenance["vector_score"],
+            retrieval_rank=provenance["retrieval_rank"],
+            embedding_model_version=provenance["embedding_model_version"],
         )
         rows.append(row)
     return _write_rows(candidates, CANDIDATE_FIELDS, rows, ASSISTED_FIELDS)

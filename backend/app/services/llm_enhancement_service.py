@@ -63,16 +63,29 @@ def discovery_values(metadata: CandidateDiscoveryMetadata | None) -> dict:
             "resolution_source": None,
             "rescue_score": None,
             "rescue_signals": [],
+            "retrieval_sources": [], "retrieval_score": None,
+            "lexical_score": None, "vector_score": None, "retrieval_rank": None,
+            "embedding_model_version": None,
         }
     try:
         signals = json.loads(metadata.signals_json or "[]")
     except (TypeError, json.JSONDecodeError):
         signals = []
+    try:
+        retrieval_sources = json.loads(metadata.retrieval_sources_json or "[]")
+    except (TypeError, json.JSONDecodeError):
+        retrieval_sources = []
     return {
         "candidate_source": metadata.source,
         "resolution_source": metadata.resolution_source,
         "rescue_score": metadata.rescue_score,
         "rescue_signals": [str(item)[:80] for item in signals[:10]] if isinstance(signals, list) else [],
+        "retrieval_sources": [str(item)[:40] for item in retrieval_sources[:4]] if isinstance(retrieval_sources, list) else [],
+        "retrieval_score": metadata.retrieval_score,
+        "lexical_score": metadata.lexical_score,
+        "vector_score": metadata.vector_score,
+        "retrieval_rank": metadata.retrieval_rank,
+        "embedding_model_version": metadata.embedding_model_version,
     }
 
 

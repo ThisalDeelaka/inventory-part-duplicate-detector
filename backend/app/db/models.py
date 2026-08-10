@@ -158,6 +158,12 @@ class CandidateDiscoveryMetadata(Base):
     rank = Column(Integer)
     signals_json = Column(Text, default="[]", nullable=False)
     resolution_source = Column(String(60))
+    retrieval_sources_json = Column(Text, default="[]", nullable=False)
+    retrieval_score = Column(Float)
+    lexical_score = Column(Float)
+    vector_score = Column(Float)
+    retrieval_rank = Column(Integer)
+    embedding_model_version = Column(String(200))
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
@@ -202,6 +208,37 @@ class LlmEnhancementRun(Base):
     rescue_human_review_count = Column(Integer, nullable=False, default=0)
     rescue_failed_count = Column(Integer, nullable=False, default=0)
     rescue_skipped_by_cap_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class LocalEmbeddingCache(Base):
+    __tablename__ = "local_embedding_cache"
+    __table_args__ = (
+        UniqueConstraint("record_fingerprint", "embedding_model_version", name="uq_local_embedding_identity"),
+    )
+    id = Column(Integer, primary_key=True)
+    record_fingerprint = Column(String(64), nullable=False, index=True)
+    embedding_model_version = Column(String(200), nullable=False)
+    vector_json = Column(Text)
+    state = Column(String(30), nullable=False, default="AVAILABLE")
+    generated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class HybridRetrievalRun(Base):
+    __tablename__ = "hybrid_retrieval_run"
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, unique=True, index=True)
+    records_indexed = Column(Integer, nullable=False, default=0)
+    lexical_candidates_generated = Column(Integer, nullable=False, default=0)
+    vector_candidates_generated = Column(Integer, nullable=False, default=0)
+    multi_source_candidates = Column(Integer, nullable=False, default=0)
+    hybrid_candidates_added = Column(Integer, nullable=False, default=0)
+    hybrid_candidates_skipped_by_cap = Column(Integer, nullable=False, default=0)
+    average_candidates_per_record = Column(Float, nullable=False, default=0)
+    max_candidates_for_any_record = Column(Integer, nullable=False, default=0)
+    retrieval_runtime_ms = Column(Float, nullable=False, default=0)
+    embedding_model_version = Column(String(200), nullable=False)
+    provider_request_count = Column(Integer, nullable=False, default=0)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 

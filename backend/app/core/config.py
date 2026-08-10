@@ -157,6 +157,34 @@ class Settings(BaseModel):
         ge=50,
         lt=75,
     )
+    hybrid_retrieval_enabled: bool = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_ENABLED", "true")
+    )
+    hybrid_retrieval_lexical_top_k: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_LEXICAL_TOP_K", "5"), gt=0, le=20
+    )
+    local_embedding_enabled: bool = Field(
+        default_factory=lambda: os.getenv("LOCAL_EMBEDDING_ENABLED", "true")
+    )
+    local_embedding_model: str = Field(
+        default_factory=lambda: os.getenv("LOCAL_EMBEDDING_MODEL", "sklearn-hashing-domain-v1"),
+        min_length=1, max_length=200,
+    )
+    hybrid_retrieval_vector_top_k: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_VECTOR_TOP_K", "5"), gt=0, le=20
+    )
+    hybrid_retrieval_vector_weight: float = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_VECTOR_WEIGHT", "0.4"), ge=0, le=0.6
+    )
+    hybrid_retrieval_final_top_k: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_FINAL_TOP_K", "10"), gt=0, le=30
+    )
+    hybrid_retrieval_min_score: float = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_MIN_SCORE", "55"), ge=0, le=90
+    )
+    hybrid_retrieval_max_pairs_per_scan: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_MAX_PAIRS_PER_SCAN", "500"), gt=0, le=5000
+    )
 
 
 settings = Settings()
