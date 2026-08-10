@@ -14,8 +14,10 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, settings
 from app.db.database import SessionLocal
 from app.db.models import (
+    CandidateDiscoveryMetadata,
     DuplicateCandidate,
     LlmAdvisorySnapshot,
+    LlmEnhancementRun,
     LlmTriageRun,
     utcnow,
 )
@@ -31,6 +33,11 @@ from app.services.llm_snapshot_service import (
     persist_candidate_advisory_result,
     safe_error_category,
 )
+from app.services.llm_enhancement_service import (
+    LlmEnhancementProcessor,
+    PAIRWISE_RESOLUTION,
+)
+from app.services.semantic_enrichment_service import SemanticComparison
 
 
 TRIAGE_CAPABILITY = LLMCapability.CANDIDATE_TRIAGE
@@ -417,6 +424,30 @@ class LlmTriageRunner:
             return result
         raise AssertionError("bounded retry loop exhausted unexpectedly")
 
+    async def _enrich_with_retries(self, service, records, control: _RunControl):
+        provider_attempts = 0
+        for attempt in range(self.configuration.llm_triage_max_retries + 1):
+            await self._wait_for_provider_slot(control)
+            provider_attempts += 1
+            try:
+                result = await service.enrich_batch(records)
+            except Exception as exc:
+                category = safe_error_category(exc)
+                if category not in RETRYABLE_FAILURE_CATEGORIES:
+                    async with control.state_lock:
+                        control.consecutive_retryable_failures = 0
+                    setattr(exc, "provider_attempts", provider_attempts)
+                    raise
+                paused = await self._record_retryable_failure(control, category)
+                if paused or attempt >= self.configuration.llm_triage_max_retries:
+                    setattr(exc, "provider_attempts", provider_attempts)
+                    raise
+                await self.sleeper(self._retry_delay(attempt, exc))
+                continue
+            await self._record_success(control)
+            return result, provider_attempts
+        raise AssertionError("bounded enrichment retry loop exhausted unexpectedly")
+
     async def _process_candidate(
         self, candidate_id: int, control: _RunControl
     ) -> bool:
@@ -432,6 +463,18 @@ class LlmTriageRunner:
                 persist_candidate_advisory_result(
                     db, candidate.id, result, capability=TRIAGE_CAPABILITY
                 )
+                metadata = db.query(CandidateDiscoveryMetadata).filter_by(
+                    candidate_id=candidate.id
+                ).first()
+                if metadata is None:
+                    metadata = CandidateDiscoveryMetadata(candidate_id=candidate.id)
+                    db.add(metadata)
+                metadata.resolution_source = PAIRWISE_RESOLUTION
+                enhancement = db.query(LlmEnhancementRun).filter_by(scan_id=candidate.scan_id).first()
+                if enhancement is not None:
+                    enhancement.pairwise_fallback_count += 1
+                    enhancement.provider_request_count += int(result.metadata.llm_used)
+                db.commit()
             except _PauseBeforeAttempt:
                 return False
             except _AttemptFailure as failure:
@@ -546,8 +589,28 @@ class LlmTriageRunner:
 
     async def run(self, scan_id: int, *, retry_failed: bool = False) -> None:
         self._set_running(scan_id)
-        candidate_ids = self._candidate_ids(scan_id, retry_failed)
         control = _RunControl()
+        processor = LlmEnhancementProcessor(
+            self.configuration, self.provider_factory
+        )
+        db = self.session_factory()
+        try:
+            enhancement_exists = db.query(LlmEnhancementRun.id).filter_by(scan_id=scan_id).first() is not None
+            if self.configuration.llm_semantic_enrichment_enabled and enhancement_exists and not retry_failed:
+                preparation = await processor.prepare(
+                    db,
+                    scan_id,
+                    lambda service, records: self._enrich_with_retries(
+                        service, records, control
+                    ),
+                )
+                candidate_ids = preparation.standard_residual_ids
+                recall_residuals = preparation.recall_residuals
+            else:
+                candidate_ids = self._candidate_ids(scan_id, retry_failed)
+                recall_residuals = []
+        finally:
+            db.close()
         queue: asyncio.Queue[int] = asyncio.Queue()
         for candidate_id in candidate_ids:
             queue.put_nowait(candidate_id)
@@ -575,6 +638,53 @@ class LlmTriageRunner:
         workers = min(self.configuration.llm_triage_concurrency, len(candidate_ids))
         if workers:
             await asyncio.gather(*(worker() for _ in range(workers)))
+        if not control.paused and recall_residuals:
+            fallback_limit = self.configuration.llm_recall_rescue_pairwise_fallback_max
+            for pair in recall_residuals[:fallback_limit]:
+                db = self.session_factory()
+                try:
+                    transient = processor.transient_candidate(pair)
+                    try:
+                        result = await self._advise_with_retries(transient, control)
+                    except Exception:
+                        durable_pair = db.query(type(pair)).filter_by(id=pair.id).first()
+                        if durable_pair is not None:
+                            durable_pair.state = "FAILED"
+                        enhancement = db.query(LlmEnhancementRun).filter_by(scan_id=scan_id).first()
+                        if enhancement is not None:
+                            enhancement.rescue_failed_count += 1
+                            enhancement.pairwise_fallback_count += 1
+                        db.commit()
+                        if control.paused:
+                            break
+                        continue
+                    advisory = result.advisory
+                    durable_pair = db.query(type(pair)).filter_by(id=pair.id).first()
+                    if durable_pair is None or advisory is None:
+                        continue
+                    enhancement = db.query(LlmEnhancementRun).filter_by(scan_id=scan_id).first()
+                    if enhancement is not None:
+                        enhancement.pairwise_fallback_count += 1
+                        enhancement.provider_request_count += int(result.metadata.llm_used)
+                    assessment = advisory.assessment.value
+                    if assessment == "SUPPORTS_NON_DUPLICATE":
+                        durable_pair.state = "DISCARDED"
+                        db.commit()
+                        continue
+                    comparison = SemanticComparison(
+                        assessment,
+                        tuple(item.value for item in getattr(advisory, "decision_basis", [])),
+                    )
+                    candidate = processor.persist_recall_candidate(
+                        db, durable_pair, comparison, PAIRWISE_RESOLUTION
+                    )
+                    db.commit()
+                    result.candidate_id = candidate.id
+                    persist_candidate_advisory_result(
+                        db, candidate.id, result, capability=TRIAGE_CAPABILITY
+                    )
+                finally:
+                    db.close()
         if control.paused:
             self._pause(
                 scan_id,

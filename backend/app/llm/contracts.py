@@ -203,3 +203,59 @@ class CandidateTriageResponse(CandidateAdvisoryResponse):
         if len(values) != len(set(values)):
             raise ValueError("decision_basis values must be unique")
         return values
+
+
+SemanticValue = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)
+]
+
+
+class InventoryRecordEvidence(StrictContract):
+    record_id: ShortText
+    part_number: ShortText | None = None
+    description: RawText
+    uom: ShortText | None = None
+    site_or_contract: ShortText | None = None
+    product_category: ShortText | None = None
+    hsn_sac_code: ShortText | None = None
+
+
+class InventoryRecordEnrichmentRequest(StrictContract):
+    records: list[InventoryRecordEvidence] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def unique_record_ids(self) -> "InventoryRecordEnrichmentRequest":
+        ids = [record.record_id for record in self.records]
+        if len(ids) != len(set(ids)):
+            raise ValueError("record_id values must be unique")
+        return self
+
+
+class InventorySemanticProfile(StrictContract):
+    record_id: ShortText
+    canonical_item: SemanticValue | None = None
+    product_type: SemanticValue | None = None
+    purpose: SemanticValue | None = None
+    model: SemanticValue | None = None
+    material: SemanticValue | None = None
+    size_or_dimension: SemanticValue | None = None
+    rating: SemanticValue | None = None
+    side: SemanticValue | None = None
+    placement: SemanticValue | None = None
+    application: SemanticValue | None = None
+    technical_role: SemanticValue | None = None
+    administrative_tokens: list[SemanticValue] = Field(default_factory=list, max_length=12)
+    identity_qualifiers: list[SemanticValue] = Field(default_factory=list, max_length=12)
+    unknown_terms: list[SemanticValue] = Field(default_factory=list, max_length=12)
+    evidence: list[EvidenceText] = Field(default_factory=list, max_length=12)
+
+
+class InventoryRecordEnrichmentResponse(StrictContract):
+    profiles: list[InventorySemanticProfile] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def unique_profile_ids(self) -> "InventoryRecordEnrichmentResponse":
+        ids = [profile.record_id for profile in self.profiles]
+        if len(ids) != len(set(ids)):
+            raise ValueError("profile record_id values must be unique")
+        return self

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  AI_ENHANCEMENT_FILTERS,
   ADVISORY_AUTHORITY_LABEL,
   DETERMINISTIC_AUTHORITY_LABEL,
   EFFECTIVE_STATUS_OPTIONS,
@@ -24,6 +25,24 @@ import {
   shouldPollTriage,
   triageFailureLabel,
 } from '../src/utils/llmUi.js'
+
+test('AI enhancement filters expose the five required views', () => {
+  assert.deepEqual(AI_ENHANCEMENT_FILTERS.map(item => item[1]), [
+    'All', 'Standard deterministic', 'Recall rescue',
+    'Semantic-profile resolution', 'Pairwise LLM fallback',
+  ])
+})
+
+test('AI enhancement filters separate provenance and resolution source', () => {
+  const rows = [
+    { id: 1, candidate_source: 'DETERMINISTIC_STANDARD', resolution_source: 'SEMANTIC_PROFILE_COMPARISON' },
+    { id: 2, candidate_source: 'DETERMINISTIC_RECALL_EXPANSION', resolution_source: 'PAIRWISE_LLM_FALLBACK' },
+  ]
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'STANDARD').map(item => item.id), [1])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'RECALL').map(item => item.id), [2])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'SEMANTIC').map(item => item.id), [1])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'PAIRWISE').map(item => item.id), [2])
+})
 
 test('normalizes safe backend errors and rejects secret or raw payload text', () => {
   assert.deepEqual(

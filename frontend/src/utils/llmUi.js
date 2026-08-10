@@ -27,6 +27,14 @@ export const EFFECTIVE_STATUS_OPTIONS = [
   ['NOT_APPLICABLE', 'Not applicable'],
 ]
 
+export const AI_ENHANCEMENT_FILTERS = [
+  ['', 'All'],
+  ['STANDARD', 'Standard deterministic'],
+  ['RECALL', 'Recall rescue'],
+  ['SEMANTIC', 'Semantic-profile resolution'],
+  ['PAIRWISE', 'Pairwise LLM fallback'],
+]
+
 const TRIAGE_STATES = new Set([
   'QUEUED', 'RUNNING', 'PAUSED', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED',
 ])
@@ -193,8 +201,14 @@ export function effectiveStatusLabel(status) {
 
 export function filterAndPrioritizeCandidates(candidates, selectedStatus = '') {
   if (!Array.isArray(candidates)) return []
+  const predicates = {
+    STANDARD: candidate => candidate.candidate_source !== 'DETERMINISTIC_RECALL_EXPANSION',
+    RECALL: candidate => candidate.candidate_source === 'DETERMINISTIC_RECALL_EXPANSION',
+    SEMANTIC: candidate => candidate.resolution_source === 'SEMANTIC_PROFILE_COMPARISON',
+    PAIRWISE: candidate => candidate.resolution_source === 'PAIRWISE_LLM_FALLBACK',
+  }
   const filtered = selectedStatus
-    ? candidates.filter(candidate => candidate.effective_status === selectedStatus)
+    ? candidates.filter(predicates[selectedStatus] || (candidate => candidate.effective_status === selectedStatus))
     : [...candidates]
   return filtered.sort((left, right) => {
     const leftPriority = left.effective_status === 'LLM_LIKELY_DUPLICATE' ? 0 : 1

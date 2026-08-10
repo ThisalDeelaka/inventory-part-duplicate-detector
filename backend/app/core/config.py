@@ -116,6 +116,47 @@ class Settings(BaseModel):
         gt=0,
         le=20,
     )
+    llm_semantic_enrichment_enabled: bool = Field(
+        default_factory=lambda: os.getenv("LLM_SEMANTIC_ENRICHMENT_ENABLED", "true")
+    )
+    llm_semantic_enrichment_batch_size: int = Field(
+        default_factory=lambda: os.getenv("LLM_SEMANTIC_ENRICHMENT_BATCH_SIZE", "12"),
+        gt=0,
+        le=20,
+    )
+    llm_semantic_enrichment_max_records_per_scan: int = Field(
+        default_factory=lambda: os.getenv("LLM_SEMANTIC_ENRICHMENT_MAX_RECORDS_PER_SCAN", "200"),
+        gt=0,
+        le=500,
+    )
+    llm_semantic_enrichment_concurrency: int = Field(
+        default_factory=lambda: os.getenv("LLM_SEMANTIC_ENRICHMENT_CONCURRENCY", "1"),
+        gt=0,
+        le=2,
+    )
+    llm_recall_rescue_enabled: bool = Field(
+        default_factory=lambda: os.getenv("LLM_RECALL_RESCUE_ENABLED", "true")
+    )
+    llm_recall_rescue_top_k_per_row: int = Field(
+        default_factory=lambda: os.getenv("LLM_RECALL_RESCUE_TOP_K_PER_ROW", "3"),
+        gt=0,
+        le=10,
+    )
+    llm_recall_rescue_max_candidates_per_scan: int = Field(
+        default_factory=lambda: os.getenv("LLM_RECALL_RESCUE_MAX_CANDIDATES_PER_SCAN", "50"),
+        gt=0,
+        le=100,
+    )
+    llm_recall_rescue_pairwise_fallback_max: int = Field(
+        default_factory=lambda: os.getenv("LLM_RECALL_RESCUE_PAIRWISE_FALLBACK_MAX", "10"),
+        ge=0,
+        le=25,
+    )
+    llm_recall_rescue_min_score: float = Field(
+        default_factory=lambda: os.getenv("LLM_RECALL_RESCUE_MIN_SCORE", "62"),
+        ge=50,
+        lt=75,
+    )
 
 
 settings = Settings()

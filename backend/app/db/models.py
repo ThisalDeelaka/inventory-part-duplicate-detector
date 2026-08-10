@@ -125,6 +125,86 @@ class LlmTriageRun(Base):
     last_safe_error_category = Column(String(80))
 
 
+class LlmSemanticProfile(Base):
+    __tablename__ = "llm_semantic_profile"
+    __table_args__ = (
+        UniqueConstraint(
+            "evidence_fingerprint", "model", "prompt_version",
+            name="uq_llm_semantic_profile_identity",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    evidence_fingerprint = Column(String(64), nullable=False, index=True)
+    model = Column(String(200), nullable=False)
+    prompt_version = Column(String(100), nullable=False)
+    profile_json = Column(Text)
+    state = Column(String(30), nullable=False, default="PENDING")
+    safe_error_category = Column(String(80))
+    generated_at = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CandidateDiscoveryMetadata(Base):
+    __tablename__ = "candidate_discovery_metadata"
+    __table_args__ = (
+        UniqueConstraint("candidate_id", name="uq_candidate_discovery_candidate"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    candidate_id = Column(Integer, ForeignKey("duplicate_candidate.id"), nullable=False, index=True)
+    source = Column(String(60), nullable=False, default="DETERMINISTIC_STANDARD")
+    rescue_score = Column(Float)
+    rank = Column(Integer)
+    signals_json = Column(Text, default="[]", nullable=False)
+    resolution_source = Column(String(60))
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RecallRescuePair(Base):
+    __tablename__ = "llm_recall_rescue_pair"
+    __table_args__ = (
+        UniqueConstraint("scan_id", "left_fingerprint", "right_fingerprint", name="uq_recall_pair"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    left_fingerprint = Column(String(64), nullable=False)
+    right_fingerprint = Column(String(64), nullable=False)
+    left_evidence_json = Column(Text, nullable=False)
+    right_evidence_json = Column(Text, nullable=False)
+    rescue_score = Column(Float, nullable=False)
+    rank = Column(Integer, nullable=False)
+    signals_json = Column(Text, default="[]", nullable=False)
+    state = Column(String(30), nullable=False, default="PENDING")
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class LlmEnhancementRun(Base):
+    __tablename__ = "llm_enhancement_run"
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, unique=True, index=True)
+    unique_records_total = Column(Integer, nullable=False, default=0)
+    profiles_cached = Column(Integer, nullable=False, default=0)
+    profiles_requested = Column(Integer, nullable=False, default=0)
+    profiles_available = Column(Integer, nullable=False, default=0)
+    profiles_failed = Column(Integer, nullable=False, default=0)
+    enrichment_batches_sent = Column(Integer, nullable=False, default=0)
+    provider_request_count = Column(Integer, nullable=False, default=0)
+    enrichment_records_sent = Column(Integer, nullable=False, default=0)
+    locally_resolved_count = Column(Integer, nullable=False, default=0)
+    pairwise_fallback_count = Column(Integer, nullable=False, default=0)
+    standard_candidate_count = Column(Integer, nullable=False, default=0)
+    rescue_pool_considered_count = Column(Integer, nullable=False, default=0)
+    rescue_candidate_count = Column(Integer, nullable=False, default=0)
+    rescue_likely_duplicate_count = Column(Integer, nullable=False, default=0)
+    rescue_human_review_count = Column(Integer, nullable=False, default=0)
+    rescue_failed_count = Column(Integer, nullable=False, default=0)
+    rescue_skipped_by_cap_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class DuplicateFeedback(Base):
     __tablename__ = "duplicate_feedback"
     id = Column(Integer, primary_key=True)

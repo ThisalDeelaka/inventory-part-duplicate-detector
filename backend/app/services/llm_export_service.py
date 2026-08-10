@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 from datetime import datetime, timezone
 
 from app.llm.service_contracts import LLMCapability
@@ -9,6 +10,8 @@ from app.services.llm_triage_service import (
     effective_recommended_action,
     effective_status,
 )
+from app.llm.prompts import INVENTORY_RECORD_ENRICHMENT_PROMPT_VERSION
+from app.services.llm_enhancement_service import discovery_values
 
 
 CANDIDATE_FIELDS = [
@@ -37,6 +40,8 @@ LLM_FIELDS = [
 
 ASSISTED_FIELDS = [
     "effective_status", "effective_recommended_action", "llm_triage_run_state",
+    "candidate_source", "rescue_score", "rescue_signals", "resolution_source",
+    "semantic_profile_prompt_version",
 ]
 
 TERMINAL_RULE_DECISIONS = frozenset({"REJECT"})
@@ -125,8 +130,10 @@ def candidates_with_llm_to_csv(
     snapshots_by_candidate,
     triage_snapshots_by_candidate=None,
     triage_run_state="NOT_STARTED",
+    discovery_by_candidate=None,
 ):
     triage_snapshots_by_candidate = triage_snapshots_by_candidate or {}
+    discovery_by_candidate = discovery_by_candidate or {}
     rows = []
     for item in candidates:
         triage_snapshot = triage_snapshots_by_candidate.get(item.id)
@@ -142,6 +149,14 @@ def candidates_with_llm_to_csv(
             effective_status=status,
             effective_recommended_action=effective_recommended_action(status),
             llm_triage_run_state=triage_run_state,
+        )
+        provenance = discovery_values(discovery_by_candidate.get(item.id))
+        row.update(
+            candidate_source=provenance["candidate_source"],
+            rescue_score=provenance["rescue_score"],
+            rescue_signals=json.dumps(provenance["rescue_signals"], separators=(",", ":")),
+            resolution_source=provenance["resolution_source"],
+            semantic_profile_prompt_version=INVENTORY_RECORD_ENRICHMENT_PROMPT_VERSION,
         )
         rows.append(row)
     return _write_rows(candidates, CANDIDATE_FIELDS, rows, ASSISTED_FIELDS)

@@ -5,7 +5,7 @@ import Score from '../components/Score'
 import CandidateLlmTools from '../components/CandidateLlmTools'
 import LlmStatus from '../components/LlmStatus'
 import {
-  EFFECTIVE_STATUS_OPTIONS,
+  AI_ENHANCEMENT_FILTERS,
   effectiveStatusLabel,
   filterAndPrioritizeCandidates,
   scanExportTargets,
@@ -86,8 +86,12 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                   <p>{candidate.recommended_action}</p>
                   <div className="triage-result-card">
                     <b>Effective assisted status: {candidate.effective_status}</b>
+                    <span>Candidate source: {candidate.candidate_source}</span>
+                    <span>Resolution source: {candidate.resolution_source || 'Pending'}</span>
                     <span>Deterministic result: {candidate.business_status} / {candidate.confidence_level} / {candidate.similarity_score}</span>
-                    <span>LLM triage result: {candidate.llm_triage_assessment || candidate.llm_triage_state}{candidate.llm_triage_confidence == null ? '' : ` / ${candidate.llm_triage_confidence}`}</span>
+                    <span>Semantic comparison: {candidate.semantic_profile_result || 'Not used'}</span>
+                    <span>Pairwise LLM result: {candidate.pairwise_llm_result || 'Not used'}</span>
+                    <span>Human review decision: {candidate.human_review_decision}</span>
                     <small>The deterministic result remains authoritative.</small>
                   </div>
                   <CandidateLlmTools candidate={candidate} />
@@ -139,6 +143,20 @@ function TriagePanel({ value, error, busy, start, retry }) {
             <span>Human review: {value.human_review_count}</span>
             <span>Failed: {value.failed_count}</span>
             <span>Skipped: {value.skipped_count}</span>
+          </div>
+          <h3>AI enhancement</h3>
+          <div className="metrics">
+            <span>Profiles cached: {value.semantic_profiles_cached || 0}</span>
+            <span>Profiles generated: {value.semantic_profiles_generated || 0}</span>
+            <span>Profiles failed: {value.semantic_profiles_failed || 0}</span>
+            <span>Provider requests: {value.provider_request_count || 0}</span>
+            <span>Resolved by semantic comparison: {value.locally_resolved_count || 0}</span>
+            <span>Pairwise fallback: {value.pairwise_fallback_count || 0}</span>
+            <span>Recall-rescue pairs considered: {value.rescue_pool_considered_count || 0}</span>
+            <span>Recall-rescue candidates added: {value.rescue_candidate_count || 0}</span>
+            <span>Recall likely duplicate: {value.rescue_likely_duplicate_count || 0}</span>
+            <span>Recall human review: {value.rescue_human_review_count || 0}</span>
+            <span>Recall failed: {value.rescue_failed_count || 0}</span>
           </div>
           {!!Object.keys(value.failure_categories || {}).length && (
             <div className="mismatch-list" aria-label="LLM failure categories">
@@ -329,9 +347,9 @@ export default function ScanResults() {
       />
 
       <div className="assisted-filter">
-        <label>Assisted status
+        <label>AI enhancement
           <select value={assistedFilter} onChange={event => setAssistedFilter(event.target.value)}>
-            {EFFECTIVE_STATUS_OPTIONS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}
+            {AI_ENHANCEMENT_FILTERS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}
           </select>
         </label>
       </div>

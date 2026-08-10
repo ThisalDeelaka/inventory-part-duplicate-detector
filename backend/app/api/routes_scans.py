@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.core.config import Settings
-from app.db.models import LlmAdvisorySnapshot, utcnow
+from app.db.models import CandidateDiscoveryMetadata, LlmAdvisorySnapshot, LlmEnhancementRun, utcnow
 from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
@@ -28,6 +28,8 @@ from app.services.llm_triage_service import (
     triage_failure_categories,
     triage_run_json,
 )
+from app.services.llm_enhancement_service import discovery_values, enhancement_metrics
+from app.services.recall_rescue_service import prepare_recall_rescue
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
@@ -60,7 +62,7 @@ def scan_json(scan, privacy=None):
     return payload
 
 
-def candidate_json(c, triage_snapshot=None, triage_run_state=None):
+def candidate_json(c, triage_snapshot=None, triage_run_state=None, discovery=None):
     payload = {
         "id": c.id, "scan_id": c.scan_id, "contract_a": c.contract_a, "part_no_a": c.part_no_a, "description_a": c.description_a,
         "contract_b": c.contract_b, "part_no_b": c.part_no_b, "description_b": c.description_b, "similarity_score": c.similarity_score,
@@ -85,6 +87,19 @@ def candidate_json(c, triage_snapshot=None, triage_run_state=None):
         "normalized_part_no_b": getattr(c, "normalized_part_no_b", "") or "",
     }
     payload.update(candidate_triage_fields(c, triage_snapshot, triage_run_state))
+    provenance = discovery_values(discovery)
+    payload.update(provenance)
+    payload["semantic_profile_result"] = (
+        triage_snapshot.assessment
+        if triage_snapshot and provenance["resolution_source"] == "SEMANTIC_PROFILE_COMPARISON"
+        else None
+    )
+    payload["pairwise_llm_result"] = (
+        triage_snapshot.assessment
+        if triage_snapshot and provenance["resolution_source"] == "PAIRWISE_LLM_FALLBACK"
+        else None
+    )
+    payload["human_review_decision"] = c.review_status
     return payload
 
 
@@ -110,9 +125,13 @@ def candidates(scan_id: int, db: Session = Depends(get_db)):
         LlmAdvisorySnapshot.capability == LLMCapability.CANDIDATE_TRIAGE.value,
     ).all() if candidate_ids else []
     snapshot_map = {snapshot.candidate_id: snapshot for snapshot in snapshots}
+    discoveries = db.query(CandidateDiscoveryMetadata).filter(
+        CandidateDiscoveryMetadata.candidate_id.in_(candidate_ids)
+    ).all() if candidate_ids else []
+    discovery_map = {item.candidate_id: item for item in discoveries}
     run = get_triage_run(db, scan_id)
     return [
-        candidate_json(c, snapshot_map.get(c.id), run.state if run else None)
+        candidate_json(c, snapshot_map.get(c.id), run.state if run else None, discovery_map.get(c.id))
         for c in records
     ]
 
@@ -176,6 +195,13 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     try:
         scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode))
         try:
+            prepare_recall_rescue(db, scan, df, configuration)
+        except Exception:
+            db.rollback()
+            if db.query(LlmEnhancementRun).filter_by(scan_id=scan.id).first() is None:
+                db.add(LlmEnhancementRun(scan_id=scan.id, rescue_failed_count=1))
+                db.commit()
+        try:
             schedule_automatic_triage(
                 db, background_tasks, scan.id, configuration, triage_scheduler
             )
@@ -237,6 +263,10 @@ def export_with_llm(scan_id: int, db: Session = Depends(get_db)):
         snapshot.candidate_id: snapshot for snapshot in snapshots
         if snapshot.capability == LLMCapability.CANDIDATE_TRIAGE.value
     }
+    discoveries = db.query(CandidateDiscoveryMetadata).filter(
+        CandidateDiscoveryMetadata.candidate_id.in_(candidate_ids)
+    ).all() if candidate_ids else []
+    discovery_map = {item.candidate_id: item for item in discoveries}
     run = get_triage_run(db, scan_id)
     return Response(
         candidates_with_llm_to_csv(
@@ -244,6 +274,7 @@ def export_with_llm(scan_id: int, db: Session = Depends(get_db)):
             snapshot_map,
             triage_snapshot_map,
             run.state if run else "NOT_STARTED",
+            discovery_map,
         ),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-candidates-with-llm.csv"'},
@@ -271,6 +302,12 @@ def _require_triage_ready(configuration: Settings) -> None:
                 "message": "Automatic LLM triage is disabled or unavailable",
             },
         )
+
+
+def _triage_payload(db: Session, scan_id: int, run):
+    payload = triage_run_json(run, triage_failure_categories(db, scan_id))
+    payload.update(enhancement_metrics(db, scan_id))
+    return payload
 
 
 @router.post("/{scan_id}/llm-triage")
@@ -306,7 +343,7 @@ def start_llm_triage(
                     "message": "LLM triage could not be scheduled safely",
                 },
             ) from None
-    return triage_run_json(run, triage_failure_categories(db, scan_id))
+    return _triage_payload(db, scan_id, run)
 
 
 @router.get("/{scan_id}/llm-triage")
@@ -316,7 +353,7 @@ def llm_triage_status(scan_id: int, db: Session = Depends(get_db)):
     run = get_triage_run(db, scan_id)
     if run is None:
         raise HTTPException(404, "LLM triage has not been started")
-    return triage_run_json(run, triage_failure_categories(db, scan_id))
+    return _triage_payload(db, scan_id, run)
 
 
 @router.post("/{scan_id}/llm-triage/retry-failed")
@@ -353,4 +390,4 @@ def retry_failed_llm_triage(
                     "message": "Failed LLM triage items could not be scheduled safely",
                 },
             ) from None
-    return triage_run_json(run, triage_failure_categories(db, scan_id))
+    return _triage_payload(db, scan_id, run)
