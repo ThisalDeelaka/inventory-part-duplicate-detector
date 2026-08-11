@@ -68,12 +68,17 @@ class ScanRunner:
                 ).retrieve(usable, scan_mode, standard_candidate_pairs)
                 records = [row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()]
                 added = 0
+                added_with_uom_difference = 0
+                added_with_uom_unknown = 0
                 post_scoring_excluded = 0
                 post_scoring_reasons = Counter()
                 for retrieved in retrieval.candidates:
                     left = records[retrieved.left_record_id]
                     right = records[retrieved.right_record_id]
-                    result = score_candidate(left, right, selected_fields, scan_mode)
+                    result = score_candidate(
+                        left, right, selected_fields, scan_mode,
+                        allow_uom_mapping_review=True,
+                    )
                     if result["rule_decision"] in {"REJECT", "DATA_CONFLICT", "CROSS_SITE"} or result["critical_mismatches"]:
                         post_scoring_excluded += 1
                         reason = str(result.get("rejection_reason") or "").strip().upper()
@@ -105,10 +110,22 @@ class ScanRunner:
                         reciprocal_sources_json=json.dumps(
                             list(retrieved.evidence.reciprocal_sources), separators=(",", ":")
                         ),
+                        uom_relationship=retrieved.evidence.uom_relationship,
+                        uom_evidence=retrieved.evidence.uom_evidence,
+                        uom_penalty=retrieved.evidence.uom_penalty,
+                        mapping_quality=retrieved.evidence.mapping_quality,
                         retrieval_rank=retrieved.retrieval_rank,
                         embedding_model_version=retrieval.embedding_model_version,
                     ))
                     added += 1
+                    if retrieved.evidence.uom_relationship in {
+                        "CONVERTIBLE_SAME_DIMENSION", "DIFFERENT_DIMENSION_OR_BASIS",
+                    }:
+                        added_with_uom_difference += 1
+                    elif retrieved.evidence.uom_relationship in {
+                        "MISSING_OR_WILDCARD", "MALFORMED_OR_UNKNOWN",
+                    }:
+                        added_with_uom_unknown += 1
                 metrics = retrieval.metrics
                 self.db.add(HybridRetrievalRun(
                     scan_id=scan.id,
@@ -121,11 +138,18 @@ class ScanRunner:
                     reciprocal_candidates=metrics.reciprocal_candidates,
                     generic_penalized_candidates=metrics.generic_penalized_candidates,
                     conflict_penalized_candidates=metrics.conflict_penalized_candidates,
+                    uom_same_pairs_considered=metrics.uom_same_pairs_considered,
+                    uom_convertible_pairs_considered=metrics.uom_convertible_pairs_considered,
+                    uom_different_basis_pairs_considered=metrics.uom_different_basis_pairs_considered,
+                    uom_missing_or_wildcard_pairs_considered=metrics.uom_missing_or_wildcard_pairs_considered,
+                    uom_malformed_or_unknown_pairs_considered=metrics.uom_malformed_or_unknown_pairs_considered,
                     multi_source_candidates=metrics.multi_source_candidates,
                     tier_a_candidates=metrics.tier_a_candidates,
                     tier_b_candidates=metrics.tier_b_candidates,
                     tier_c_candidates=metrics.tier_c_candidates,
                     hybrid_candidates_added=added,
+                    hybrid_candidates_added_with_uom_difference=added_with_uom_difference,
+                    hybrid_candidates_added_with_uom_unknown=added_with_uom_unknown,
                     hybrid_post_scoring_excluded_count=post_scoring_excluded,
                     hybrid_post_scoring_exclusion_reasons_json=json.dumps(
                         {

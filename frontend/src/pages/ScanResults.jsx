@@ -13,6 +13,7 @@ import {
   scanExportTargets,
   shouldPollTriage,
   triageFailureLabel,
+  uomRelationshipLabel,
 } from '../utils/llmUi'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
@@ -105,6 +106,12 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                         <span>Lexical: {candidate.lexical_score ?? 0} / Character vector: {candidate.vector_score ?? 0}</span>
                         <span>Reciprocal evidence: {(candidate.reciprocal_sources || []).map(retrievalChannelLabel).join(' / ') || 'None'}</span>
                         <span>Generic/conflict signals: {(candidate.retrieval_conflict_signals || []).join(' / ') || 'None'}</span>
+                        <span>UOM relationship: {uomRelationshipLabel(candidate.uom_relationship)}</span>
+                        <span>Mapping quality: {candidate.mapping_quality || 'Unavailable'}</span>
+                        <span>UOM retrieval penalty: {candidate.uom_penalty == null ? 'Unavailable' : `${candidate.uom_penalty}%`}</span>
+                        {candidate.uom_relationship && candidate.uom_relationship !== 'SAME_UOM' && (
+                          <span>Possible mapping/unit inconsistency — identity still requires review.</span>
+                        )}
                       </>
                     )}
                     <small>The deterministic result remains authoritative.</small>
@@ -189,6 +196,15 @@ function TriagePanel({ value, error, busy, start, retry }) {
 function RetrievalPanel({ value }) {
   if (!value) return null
   const exclusionReasons = value.hybrid_post_scoring_exclusion_reasons || {}
+  const historicalUomMetrics = value.uom_convertible_pairs_considered == null
+    || value.uom_different_basis_pairs_considered == null
+  const uomDifferences = historicalUomMetrics
+    ? 'Unavailable for historical scan'
+    : value.uom_convertible_pairs_considered + value.uom_different_basis_pairs_considered
+  const uomUnknown = value.uom_missing_or_wildcard_pairs_considered == null
+    || value.uom_malformed_or_unknown_pairs_considered == null
+    ? 'Unavailable for historical scan'
+    : value.uom_missing_or_wildcard_pairs_considered + value.uom_malformed_or_unknown_pairs_considered
   return (
     <section className="panel triage-panel" aria-label="Candidate retrieval metrics">
       <div className="llm-heading"><div><p className="eyebrow">Deterministic-first recall</p><h2>Candidate retrieval</h2></div></div>
@@ -209,6 +225,12 @@ function RetrievalPanel({ value }) {
         <span>Reciprocal candidates: {value.reciprocal_candidates || 0}</span>
         <span>Generic-penalized: {value.generic_penalized_candidates || 0}</span>
         <span>Conflict-penalized: {value.conflict_penalized_candidates || 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.uomDifferences}: {uomDifferences}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.uomConvertible}: {value.uom_convertible_pairs_considered ?? 'Unavailable for historical scan'}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.uomDifferentBasis}: {value.uom_different_basis_pairs_considered ?? 'Unavailable for historical scan'}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.uomUnknown}: {uomUnknown}</span>
+        <span>Hybrid candidates added with UOM difference: {value.hybrid_candidates_added_with_uom_difference ?? 'Unavailable for historical scan'}</span>
+        <span>Hybrid candidates added with unknown UOM: {value.hybrid_candidates_added_with_uom_unknown ?? 'Unavailable for historical scan'}</span>
         <span>Multi-source candidates: {value.multi_source_candidates || 0}</span>
         <span>{HYBRID_RETRIEVAL_METRIC_LABELS.skippedByBudget}: {value.hybrid_candidates_skipped_by_budget ?? value.hybrid_candidates_skipped_by_cap ?? 0}</span>
         <span>Average candidates per record: {value.average_candidates_per_record || 0}</span>

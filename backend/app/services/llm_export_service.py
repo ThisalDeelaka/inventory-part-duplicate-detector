@@ -46,6 +46,7 @@ ASSISTED_FIELDS = [
     "retrieval_rank", "embedding_model_version",
     "retrieval_tier", "retrieval_priority", "description_specificity_score",
     "generic_description_penalty", "retrieval_conflict_signals", "reciprocal_sources",
+    "uom_relationship", "uom_evidence", "uom_penalty", "mapping_quality",
 ]
 
 TERMINAL_RULE_DECISIONS = frozenset({"REJECT"})
@@ -175,6 +176,10 @@ def candidates_with_llm_to_csv(
                 provenance["retrieval_conflict_signals"], separators=(",", ":")
             ),
             reciprocal_sources=json.dumps(provenance["reciprocal_sources"], separators=(",", ":")),
+            uom_relationship=provenance["uom_relationship"],
+            uom_evidence=provenance["uom_evidence"],
+            uom_penalty=provenance["uom_penalty"],
+            mapping_quality=provenance["mapping_quality"],
         )
         rows.append(row)
     return _write_rows(candidates, CANDIDATE_FIELDS, rows, ASSISTED_FIELDS)

@@ -7,7 +7,9 @@ def _differs(record_a, record_b, field: str) -> tuple[bool, str, str]:
     return bool(value_a and value_b and value_a.lower() != value_b.lower()), value_a, value_b
 
 
-def evaluate_hard_business_rules(record_a, record_b, scan_mode: str):
+def evaluate_hard_business_rules(
+    record_a, record_b, scan_mode: str, *, allow_uom_mapping_review: bool = False
+):
     scan_mode = normalize_scan_mode(scan_mode)
     part_a = clean_field_value(record_a.get("PART_NO"))
     part_b = clean_field_value(record_b.get("PART_NO"))
@@ -42,7 +44,7 @@ def evaluate_hard_business_rules(record_a, record_b, scan_mode: str):
         }
 
     unit_differs, unit_a, unit_b = _differs(record_a, record_b, "UNIT_MEAS")
-    if unit_differs:
+    if unit_differs and not allow_uom_mapping_review:
         return {
             "blocked": True,
             "business_status": "REJECTED_BY_BUSINESS_RULE",

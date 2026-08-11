@@ -113,9 +113,15 @@ def _blocked_result(record_a, record_b, selected_fields, scan_mode, rule):
     }
 
 
-def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE"):
+def evaluate_candidate(
+    record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE",
+    *, allow_uom_mapping_review=False,
+):
     scan_mode = normalize_scan_mode(scan_mode)
-    rule = evaluate_hard_business_rules(record_a, record_b, scan_mode)
+    rule = evaluate_hard_business_rules(
+        record_a, record_b, scan_mode,
+        allow_uom_mapping_review=allow_uom_mapping_review,
+    )
     if rule["blocked"]:
         return _blocked_result(record_a, record_b, selected_fields, scan_mode, rule)
 
@@ -182,7 +188,10 @@ def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE
 
     final = description * 0.6 + business * 0.2 + part_no * 0.1 + token_score * 0.1
     final = round(max(0.0, min(100.0, final)), 2)
-    explanation = build_explanation(record_a, record_b, matched, mismatched, description)
+    explanation = build_explanation(
+        record_a, record_b, matched, mismatched, description,
+        allow_uom_mapping_review=allow_uom_mapping_review,
+    )
     rule_decision = "ALLOW"
     rejection_reason = ""
     business_status = business_status_for(final)

@@ -18,8 +18,12 @@ from app.services.hybrid_retrieval_benchmark import (
     SILVER_PART_PAIRS, evaluate_retrieval_benchmark, ranking_v2_fixture,
 )
 from app.services.hybrid_retrieval_metrics import hybrid_retrieval_metrics
+from app.engine.uom_relationship import (
+    MappingQuality, UomRelationship, classify_uom_relationship,
+)
+from app.engine.scoring import score_candidate
 from app.services.llm_enhancement_service import discovery_values
-from app.services.llm_export_service import candidates_with_llm_to_csv
+from app.services.llm_export_service import ASSISTED_FIELDS, candidates_with_llm_to_csv
 from app.services.scan_runner import ScanRunner
 
 
@@ -488,3 +492,159 @@ def test_historical_retrieval_metrics_remain_readable_without_inferred_exclusion
     assert metrics["hybrid_retrieval_selected_count"] == sum(
         metrics[name] for name in ("tier_a_candidates", "tier_b_candidates", "tier_c_candidates")
     )
+
+
+@pytest.mark.parametrize(("left", "right", "expected"), [
+    ("l", "L", UomRelationship.SAME_UOM),
+    ("litre", "l", UomRelationship.SAME_UOM),
+    ("l", "liq qt", UomRelationship.CONVERTIBLE_SAME_DIMENSION),
+    ("l", "gal", UomRelationship.CONVERTIBLE_SAME_DIMENSION),
+    ("PCS", "l", UomRelationship.DIFFERENT_DIMENSION_OR_BASIS),
+    ("*", "PCS", UomRelationship.MISSING_OR_WILDCARD),
+    ("", "l", UomRelationship.MISSING_OR_WILDCARD),
+    ("malformed/blank-like", "PCS", UomRelationship.MALFORMED_OR_UNKNOWN),
+])
+def test_uom_relationship_taxonomy_is_deterministic(left, right, expected):
+    first = classify_uom_relationship(left, right)
+    second = classify_uom_relationship(left, right)
+    assert first == second
+    assert first.relationship == expected
+
+
+def _uom_pair(left_uom, right_uom, description="Turbine Lubricating Oil"):
+    return frame([
+        ("AP-LUBE-OIL-ISO068", description, "S1", {"UNIT_MEAS": left_uom}),
+        ("SP-LUBE-OIL-ISO068", description, "S1", {"UNIT_MEAS": right_uom}),
+    ])
+
+
+def test_uom_is_mapping_evidence_not_retrieval_source_or_multisource_creator():
+    item = HybridCandidateRetriever(cfg(), embedder=FakeEmbedder()).retrieve(
+        _uom_pair("l", "liq qt"), "SAME_SITE_DUPLICATE"
+    ).candidates[0]
+    assert item.evidence.uom_relationship == "CONVERTIBLE_SAME_DIMENSION"
+    assert item.evidence.uom_evidence == "UOM_CONVERTIBLE"
+    assert item.evidence.uom_penalty == 3.0
+    assert not any(source.startswith("UOM_") for source in item.evidence.retrieval_sources)
+    assert set(item.evidence.retrieval_sources) <= set(CHANNEL_WEIGHTS)
+    assert item.retrieval_source == (
+        RetrievalSource.MULTI_SOURCE
+        if len(item.evidence.retrieval_sources) > 1
+        else RetrievalSource(item.evidence.retrieval_sources[0])
+    )
+
+
+def test_uom_penalties_are_bounded_and_different_basis_cannot_be_tier_a():
+    same = HybridCandidateRetriever(cfg(), embedder=FakeEmbedder()).retrieve(
+        _uom_pair("l", "l"), "SAME_SITE_DUPLICATE"
+    ).candidates[0]
+    convertible = HybridCandidateRetriever(cfg(), embedder=FakeEmbedder()).retrieve(
+        _uom_pair("l", "liq qt"), "SAME_SITE_DUPLICATE"
+    ).candidates[0]
+    different = HybridCandidateRetriever(cfg(), embedder=FakeEmbedder()).retrieve(
+        _uom_pair("l", "PCS"), "SAME_SITE_DUPLICATE"
+    ).candidates[0]
+    assert same.evidence.uom_penalty == 0
+    assert same.retrieval_priority > convertible.retrieval_priority > different.retrieval_priority
+    assert different.evidence.uom_penalty == 20
+    assert different.retrieval_tier != RetrievalTier.TIER_A
+    assert different.evidence.mapping_quality == MappingQuality.POSSIBLE_MAPPING_ERROR.value
+
+
+@pytest.mark.parametrize(("left_uom", "right_uom", "description_a", "description_b", "relationship"), [
+    ("PCS", "*", "Francis Turbine Lower Bearing", "HA Francis Turbine Lower Bearing", "MISSING_OR_WILDCARD"),
+    ("PCS", "malformed/blank-like", "Contact Cleaner", "Contact Cleaner Spray Can", "MALFORMED_OR_UNKNOWN"),
+])
+def test_unknown_uom_never_blocks_other_retrieval_evidence(
+    left_uom, right_uom, description_a, description_b, relationship
+):
+    data = frame([
+        ("A-1", description_a, "S1", {"UNIT_MEAS": left_uom}),
+        ("B-2", description_b, "S1", {"UNIT_MEAS": right_uom}),
+    ])
+    item = HybridCandidateRetriever(cfg(), embedder=FakeEmbedder()).retrieve(
+        data, "SAME_SITE_DUPLICATE"
+    ).candidates[0]
+    assert item.evidence.uom_relationship == relationship
+    assert item.evidence.mapping_quality == MappingQuality.UNKNOWN.value
+
+
+def test_hybrid_scan_persists_strong_different_basis_pair_for_human_review(db):
+    scan, _ = ScanRunner(db, cfg()).run(
+        _uom_pair("l", "PCS"), "uom-different-basis", ["CONTRACT", "UNIT_MEAS"], 99
+    )
+    candidate = db.query(DuplicateCandidate).filter_by(scan_id=scan.id).one()
+    metadata = db.query(CandidateDiscoveryMetadata).filter_by(candidate_id=candidate.id).one()
+    assert candidate.rule_decision != "REJECT"
+    assert candidate.business_status == "POSSIBLE_DUPLICATE_REVIEW"
+    assert candidate.review_status == "UNREVIEWED"
+    assert metadata.uom_relationship == "DIFFERENT_DIMENSION_OR_BASIS"
+    assert metadata.uom_evidence == "UOM_DIFFERENT_BASIS"
+    assert metadata.mapping_quality == "POSSIBLE_MAPPING_ERROR"
+    assert "identity still requires human review" in candidate.explanation
+
+
+def test_hybrid_disabled_keeps_existing_uom_hard_rule_unchanged(db):
+    direct = score_candidate(
+        _uom_pair("l", "PCS").iloc[0].to_dict(),
+        _uom_pair("l", "PCS").iloc[1].to_dict(),
+        ["CONTRACT", "UNIT_MEAS"],
+    )
+    assert direct["rule_decision"] == "REJECT"
+    assert direct["rejection_reason"] == "UNIT_MEAS_MISMATCH"
+    scan, _ = ScanRunner(db, cfg(hybrid_retrieval_enabled=False)).run(
+        _uom_pair("l", "PCS"), "uom-disabled", ["CONTRACT", "UNIT_MEAS"], 40
+    )
+    assert db.query(DuplicateCandidate).filter_by(scan_id=scan.id).count() == 0
+
+
+def test_uom_metrics_api_and_enhanced_export_are_consistent(client, db):
+    scan, _ = ScanRunner(db, cfg(hybrid_retrieval_final_top_k=5)).run(
+        frame([
+            ("A", "Turbine Lubricating Oil", "S1", {"UNIT_MEAS": "l"}),
+            ("B", "Turbine Lubricating Oil", "S1", {"UNIT_MEAS": "liq qt"}),
+            ("C", "Turbine Lubricating Oil", "S1", {"UNIT_MEAS": "PCS"}),
+            ("D", "Turbine Lubricating Oil", "S1", {"UNIT_MEAS": "*"}),
+        ]),
+        "uom-metrics", ["CONTRACT", "UNIT_MEAS"], 99,
+    )
+    metrics = client.get(f"/api/scans/{scan.id}").json()["hybrid_retrieval"]
+    assert metrics["uom_convertible_pairs_considered"] > 0
+    assert metrics["uom_different_basis_pairs_considered"] > 0
+    assert metrics["uom_missing_or_wildcard_pairs_considered"] > 0
+    assert metrics["hybrid_candidates_added_with_uom_difference"] > 0
+    assert metrics["hybrid_candidates_added_with_uom_unknown"] > 0
+    statements = []
+    def record_select(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+    event.listen(db.bind, "before_cursor_execute", record_select)
+    try:
+        api_candidates = client.get(f"/api/scans/{scan.id}/candidates").json()
+    finally:
+        event.remove(db.bind, "before_cursor_execute", record_select)
+    assert api_candidates
+    assert len(statements) <= 5
+    assert all("uom_relationship" in item and "uom_penalty" in item for item in api_candidates)
+    candidates = db.query(DuplicateCandidate).filter_by(scan_id=scan.id).all()
+    metadata = {
+        item.candidate_id: item
+        for item in db.query(CandidateDiscoveryMetadata).all()
+    }
+    text = candidates_with_llm_to_csv(candidates, {}, {}, "NOT_STARTED", metadata)
+    header = next(csv.reader(io.StringIO(text)))
+    assert header[-4:] == [
+        "uom_relationship", "uom_evidence", "uom_penalty", "mapping_quality",
+    ]
+    assert ASSISTED_FIELDS[-4:] == header[-4:]
+
+
+def test_historical_uom_metrics_remain_unknown(db):
+    run = HybridRetrievalRun(
+        scan_id=999, embedding_model_version="historical", provider_request_count=0,
+    )
+    db.add(run)
+    db.commit()
+    metrics = hybrid_retrieval_metrics(db, 999)
+    assert metrics["uom_same_pairs_considered"] is None
+    assert metrics["hybrid_candidates_added_with_uom_difference"] is None

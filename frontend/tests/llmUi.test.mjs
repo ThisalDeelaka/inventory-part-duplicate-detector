@@ -27,6 +27,7 @@ import {
   scanTriageTargets,
   shouldPollTriage,
   triageFailureLabel,
+  uomRelationshipLabel,
 } from '../src/utils/llmUi.js'
 
 test('AI enhancement filters expose retrieval and advisory views', () => {
@@ -85,8 +86,27 @@ test('hybrid retrieval metric labels distinguish selected, excluded, added, and 
     postScoringExcluded: 'Excluded after deterministic checks',
     added: 'Hybrid candidates added',
     skippedByBudget: 'Skipped by candidate budget',
+    uomDifferences: 'UOM differences considered',
+    uomConvertible: 'Convertible UOM pairs',
+    uomDifferentBasis: 'Different-basis UOM pairs',
+    uomUnknown: 'Unknown/wildcard UOM pairs',
   })
   assert.notEqual(HYBRID_RETRIEVAL_METRIC_LABELS.selected, HYBRID_RETRIEVAL_METRIC_LABELS.added)
+})
+
+test('UOM relationship wording preserves identity and mapping separation', () => {
+  assert.equal(uomRelationshipLabel('SAME_UOM'), 'Same UOM')
+  assert.equal(
+    uomRelationshipLabel('DIFFERENT_DIMENSION_OR_BASIS'),
+    'Different unit dimension or basis',
+  )
+  assert.equal(uomRelationshipLabel('MISSING_OR_WILDCARD'), 'Missing or wildcard UOM')
+  for (const relationship of [
+    'SAME_UOM', 'CONVERTIBLE_SAME_DIMENSION', 'DIFFERENT_DIMENSION_OR_BASIS',
+    'MISSING_OR_WILDCARD', 'MALFORMED_OR_UNKNOWN',
+  ]) {
+    assert.doesNotMatch(uomRelationshipLabel(relationship), /different item|duplicate confidence/i)
+  }
 })
 
 test('standard source filter excludes hybrid and recall candidates', () => {

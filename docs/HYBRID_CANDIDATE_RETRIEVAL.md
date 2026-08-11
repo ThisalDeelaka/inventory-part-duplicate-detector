@@ -4,12 +4,28 @@
 
 Hybrid retrieval only decides which missed pairs deserve bounded comparison work. Four boundaries remain separate:
 
-1. **Blocking and eligibility** decide whether a pair may be considered. Scan mode, site/contract scope, compatible UOM, existing hard rules, and critical variant rules live here.
+1. **Blocking and eligibility** decide whether a pair may be considered. Scan mode, site/contract scope, existing hard identity rules, and critical variant rules live here. UOM compatibility is deliberately not an identity-eligibility gate.
 2. **Retrieval evidence** ranks eligible pairs for candidate budget.
 3. **Existing deterministic scoring** decides business status and remains authoritative.
 4. **Human review** remains the final decision.
 
-Blocking is not positive identity evidence. In particular, same-site scope, contract compatibility, UOM compatibility, and cross-site policy never contribute to rank fusion or make a pair multi-source. Historical `EXACT_BLOCK` is not a Ranking V2 retrieval channel.
+Blocking is not positive identity evidence. In particular, same-site scope, contract compatibility, UOM relationship, and cross-site policy never contribute a retrieval channel or make a pair multi-source. Historical `EXACT_BLOCK` is not a Ranking V2 retrieval channel.
+
+## Physical identity and UOM mapping quality
+
+Physical-item identity and ERP mapping quality are separate questions. A different, missing, wildcard, or malformed Inventory UOM cannot by itself suppress an otherwise eligible same-scope pair from `EXACT_DESCRIPTION`, `PART_NUMBER_FAMILY`, `LEXICAL`, `CHAR_VECTOR`, or `TECHNICAL_IDENTITY` retrieval. This hybrid-only compatibility seam does not change standard deterministic behavior when hybrid retrieval is disabled.
+
+The deterministic pairwise taxonomy is:
+
+- `SAME_UOM`: approved aliases resolve to the same unit, such as `litre` and `l`;
+- `CONVERTIBLE_SAME_DIMENSION`: recognized units share a dimension, such as `l` and `liq qt`;
+- `DIFFERENT_DIMENSION_OR_BASIS`: recognized units have different dimensions or storage bases, such as `PCS` and `l`;
+- `MISSING_OR_WILDCARD`: either value is blank or an explicit bounded wildcard;
+- `MALFORMED_OR_UNKNOWN`: a nonblank value is outside the small approved taxonomy.
+
+UOM produces separate bounded provenance: `UOM_MATCH`, `UOM_CONVERTIBLE`, `UOM_DIFFERENT_BASIS`, `UOM_MISSING_OR_WILDCARD`, or `UOM_MALFORMED_OR_UNKNOWN`. Candidate metadata also exposes a 0%, 3%, 20%, 8%, or 12% retrieval-priority reduction respectively and mapping quality `CONSISTENT`, `POSSIBLE_MAPPING_ERROR`, or `UNKNOWN`. Percentage reduction keeps UOM proportional to Ranking V2 priority instead of overwhelming low-valued RRF results. UOM never becomes a retrieval source, never creates multi-source status, and never raises a weak pair into Tier A. A different-basis relationship prevents Tier A but remains eligible for lower-tier review when identity evidence is strong. Missing, wildcard, and malformed UOM remain visible data-quality evidence without blocking recall.
+
+The standard deterministic scorer retains its historical UOM hard rule. Only hybrid candidates use the identity-safe mapping-review seam, remain subject to deterministic similarity and business evidence, and are forced to human review rather than automatic duplicate status. Hard technical conflicts and `critical_mismatches` remain authoritative in both paths. UOM alone never declares records the same item or different items.
 
 ## Retrieval channels
 
@@ -70,7 +86,7 @@ LEXICAL = 1.0
 CHAR_VECTOR = 0.9
 ```
 
-The RRF value is normalized below 100, then receives at most four points of reciprocal-neighbour preference. Generic and conflict penalties are applied after fusion. Missing channels contribute zero. Ties are resolved by tier, priority, specificity, and canonical record order. Blocking signals contribute zero.
+The RRF value is normalized below 100, then receives at most four points of reciprocal-neighbour preference. Generic, conflict, and bounded UOM penalties are applied after fusion. Missing channels contribute zero. Ties are resolved by tier, priority, specificity, and canonical record order. Blocking and UOM signals contribute zero channels.
 
 The durable and user-visible value is `retrieval_priority`. Historical `retrieval_score` remains readable and is populated as a compatibility alias. Neither value is duplicate confidence.
 
@@ -99,9 +115,9 @@ Tier A is allocated first, so strong must-not-miss candidates are not displaced 
 
 ## Persistence, API, UI, and exports
 
-Existing provenance tables are extended rather than duplicated. Candidate metadata stores sources, priority, tier, specificity, generic penalty, bounded conflict reasons, reciprocal evidence, channel scores, rank, model version, and separate blocking metadata. Historical rows default safely when new fields are absent.
+Existing provenance tables are extended rather than duplicated. Candidate metadata stores sources, priority, tier, specificity, generic penalty, bounded conflict reasons, reciprocal evidence, channel scores, rank, model version, separate blocking metadata, UOM relationship/evidence/penalty, and mapping quality. Historical rows return unknown values when UOM fields are absent.
 
-Scan metrics include Tier A/B/C counts, each retrieval channel, reciprocal candidates, generic/conflict penalties, cap skips, and family concentration. Candidate APIs batch-load provenance with existing metadata queries, avoiding per-candidate lookup. The UI calls the hashing channel “Character vector” and describes priority as candidate-budget allocation, not confidence.
+Scan metrics include Tier A/B/C counts, each retrieval channel, reciprocal candidates, generic/conflict penalties, cap skips, family concentration, each UOM relationship considered before budget selection, and added-candidate counts for differing or unknown UOM. Candidate APIs batch-load provenance with existing metadata queries, avoiding per-candidate lookup. Historical scans return `null` for unavailable persisted UOM metrics. The UI calls the hashing channel “Character vector”, describes priority as candidate-budget allocation rather than confidence, and labels differing UOM as a possible mapping/unit inconsistency requiring identity review.
 
 ### Pre-scoring and post-scoring metric stages
 
@@ -136,6 +152,10 @@ description_specificity_score
 generic_description_penalty
 retrieval_conflict_signals
 reciprocal_sources
+uom_relationship
+uom_evidence
+uom_penalty
+mapping_quality
 ```
 
 Enhanced export reads durable rows only, makes zero provider calls, and retains CSV formula-injection and UTC safeguards.
@@ -159,4 +179,4 @@ The benchmark measures retrieval quality only. It does not label final duplicate
 
 Retrieval constructs no LLM provider and works with `LLM_PROVIDER=none`. Optional semantic enrichment and Groq triage remain downstream and unchanged. No automatic path merges, deletes, or makes a human decision.
 
-The current lexical and hashing indexes are bounded MVP components, not claimed million-row infrastructure. Character features improve deterministic local recall but do not provide deep language semantics. A future, separately provisioned true semantic embedding/ANN stage can implement `LocalEmbedder` without changing deterministic scoring, retrieval contracts, or human governance.
+The current lexical and hashing indexes are bounded MVP components, not claimed million-row infrastructure. Character features improve deterministic local recall but do not provide deep language semantics. The UOM taxonomy intentionally covers only a small approved set of aliases and dimensions; it does not calculate quantities, package conversions, or commercial equivalence. Unknown units require data stewardship or human review. A future, separately provisioned true semantic embedding/ANN stage can implement `LocalEmbedder` without changing deterministic scoring, retrieval contracts, or human governance.

@@ -52,7 +52,23 @@ export const HYBRID_RETRIEVAL_METRIC_LABELS = Object.freeze({
   postScoringExcluded: 'Excluded after deterministic checks',
   added: 'Hybrid candidates added',
   skippedByBudget: 'Skipped by candidate budget',
+  uomDifferences: 'UOM differences considered',
+  uomConvertible: 'Convertible UOM pairs',
+  uomDifferentBasis: 'Different-basis UOM pairs',
+  uomUnknown: 'Unknown/wildcard UOM pairs',
 })
+
+const UOM_RELATIONSHIP_LABELS = Object.freeze({
+  SAME_UOM: 'Same UOM',
+  CONVERTIBLE_SAME_DIMENSION: 'Convertible units (same dimension)',
+  DIFFERENT_DIMENSION_OR_BASIS: 'Different unit dimension or basis',
+  MISSING_OR_WILDCARD: 'Missing or wildcard UOM',
+  MALFORMED_OR_UNKNOWN: 'Malformed or unknown UOM',
+})
+
+export function uomRelationshipLabel(value) {
+  return UOM_RELATIONSHIP_LABELS[value] || 'Unavailable'
+}
 
 export function retrievalChannelLabel(channel) {
   if (typeof channel === 'string' && channel.endsWith('_RECIPROCAL')) {

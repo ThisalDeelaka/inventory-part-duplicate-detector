@@ -10,12 +10,20 @@ def _clean(value):
     return "" if text.lower() in {"", "nan", "none"} else text
 
 
-def build_explanation(record_a, record_b, matched, mismatched, description_similarity):
+def build_explanation(
+    record_a, record_b, matched, mismatched, description_similarity,
+    *, allow_uom_mapping_review=False,
+):
     part_a, part_b = _clean(record_a.get("PART_NO")), _clean(record_b.get("PART_NO"))
     if part_a and part_b and part_a.lower() == part_b.lower():
         return "Same PART_NO detected, so this is treated as the same part across records/sites rather than a duplicate master candidate."
     unit_a, unit_b = _clean(record_a.get("UNIT_MEAS")), _clean(record_b.get("UNIT_MEAS"))
     if unit_a and unit_b and unit_a.lower() != unit_b.lower():
+        if allow_uom_mapping_review:
+            return (
+                f"Inventory UOM differs ({unit_a} vs {unit_b}). This may indicate a mapping or "
+                "unit inconsistency; physical identity still requires human review."
+            )
         return f"Inventory UOM differs ({unit_a} vs {unit_b}), so this should not be treated as the same duplicate part without master-data review."
     strict_mismatches = []
     for field in STRICT_MISMATCH_FIELDS - {"UNIT_MEAS"}:

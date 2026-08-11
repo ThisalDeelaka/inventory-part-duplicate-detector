@@ -68,6 +68,8 @@ def discovery_values(metadata: CandidateDiscoveryMetadata | None) -> dict:
             "lexical_score": None, "vector_score": None, "retrieval_rank": None,
             "description_specificity_score": None, "generic_description_penalty": None,
             "retrieval_conflict_signals": [], "reciprocal_sources": [],
+            "uom_relationship": None, "uom_evidence": None,
+            "uom_penalty": None, "mapping_quality": None,
             "embedding_model_version": None,
         }
     try:
@@ -99,6 +101,10 @@ def discovery_values(metadata: CandidateDiscoveryMetadata | None) -> dict:
         "generic_description_penalty": metadata.generic_description_penalty,
         "retrieval_conflict_signals": bounded_json_list("retrieval_conflict_signals_json"),
         "reciprocal_sources": bounded_json_list("reciprocal_sources_json"),
+        "uom_relationship": metadata.uom_relationship,
+        "uom_evidence": metadata.uom_evidence,
+        "uom_penalty": metadata.uom_penalty,
+        "mapping_quality": metadata.mapping_quality,
         "retrieval_rank": metadata.retrieval_rank,
         "embedding_model_version": metadata.embedding_model_version,
     }

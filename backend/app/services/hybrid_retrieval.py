@@ -23,6 +23,7 @@ from app.engine.normalizer import (
     normalize_description,
     normalize_part_no_with_dictionary,
 )
+from app.engine.uom_relationship import UomRelationship, classify_uom_relationship
 from app.engine.variant_extractor import extract_variant_attributes, find_critical_mismatches
 
 
@@ -62,6 +63,10 @@ class RetrievalEvidence:
     generic_description_penalty: float
     conflict_signals: tuple[str, ...]
     reciprocal_sources: tuple[str, ...]
+    uom_relationship: str
+    uom_evidence: str
+    uom_penalty: float
+    mapping_quality: str
 
 
 @dataclass(frozen=True)
@@ -91,6 +96,11 @@ class RetrievalMetrics:
     reciprocal_candidates: int
     generic_penalized_candidates: int
     conflict_penalized_candidates: int
+    uom_same_pairs_considered: int
+    uom_convertible_pairs_considered: int
+    uom_different_basis_pairs_considered: int
+    uom_missing_or_wildcard_pairs_considered: int
+    uom_malformed_or_unknown_pairs_considered: int
     multi_source_candidates: int
     tier_a_candidates: int
     tier_b_candidates: int
@@ -262,7 +272,9 @@ def _allowed_pair(left: dict, right: dict, scan_mode: str) -> bool:
         return False
     if scan_mode == "CROSS_SITE_STANDARDIZATION" and left_site and right_site and left_site == right_site:
         return False
-    if evaluate_hard_business_rules(left, right, scan_mode)["blocked"]:
+    if evaluate_hard_business_rules(
+        left, right, scan_mode, allow_uom_mapping_review=True
+    )["blocked"]:
         return False
     if find_critical_mismatches(
         extract_variant_attributes(left.get("DESCRIPTION")),
@@ -278,10 +290,6 @@ def _blocking_signals(left: dict, right: dict, scan_mode: str) -> tuple[str, ...
     right_site = str(right.get("CONTRACT") or "").strip().casefold()
     if left_site and right_site:
         signals.append("SAME_SITE_SCOPE" if left_site == right_site else "CROSS_SITE_SCOPE")
-    left_uom = str(left.get("UNIT_MEAS") or "").strip().casefold()
-    right_uom = str(right.get("UNIT_MEAS") or "").strip().casefold()
-    if left_uom and right_uom and left_uom == right_uom:
-        signals.append("UOM_COMPATIBLE")
     signals.append(f"SCAN_MODE_{scan_mode}")
     return tuple(sorted(set(signals)))
 
@@ -626,16 +634,24 @@ class HybridCandidateRetriever:
             priority *= 1 - (0.65 * generic_penalty / 100)
             if conflicts:
                 priority *= 0.35
+            uom = classify_uom_relationship(
+                records[left].get("UNIT_MEAS"), records[right].get("UNIT_MEAS")
+            )
+            priority *= 1 - (uom.penalty / 100)
             priority = round(max(0.0, min(99.99, priority)), 4)
             generic = generic_penalty >= 50 or pair_specificity < 45
             source_set = set(sources)
-            if not conflicts and (
+            if (
+                not conflicts
+                and uom.relationship != UomRelationship.DIFFERENT_DIMENSION_OR_BASIS
+                and (
                 ("EXACT_DESCRIPTION" in source_set and not generic and pair_specificity >= 55)
                 or {"PART_NUMBER_FAMILY", "TECHNICAL_IDENTITY"}.issubset(source_set)
                 or (
                     "EXACT_DESCRIPTION" in source_set
                     and "PART_NUMBER_FAMILY" in source_set
                     and generic_penalty < 60
+                )
                 )
             ):
                 tier = RetrievalTier.TIER_A
@@ -656,6 +672,7 @@ class HybridCandidateRetriever:
                 "generic_penalty": generic_penalty,
                 "reasons": tuple(sorted(reasons)), "conflicts": tuple(sorted(conflicts)),
                 "reciprocal": reciprocal_sources, "tier": tier, "family": description_family,
+                "uom": uom,
             })
 
         prepared.sort(key=lambda item: (
@@ -702,6 +719,10 @@ class HybridCandidateRetriever:
                     item["specificity"], item["generic_penalty"],
                     tuple(sorted(set(item["conflicts"]) | set(item["reasons"]))),
                     item["reciprocal"],
+                    item["uom"].relationship.value,
+                    item["uom"].reason_code,
+                    item["uom"].penalty,
+                    item["uom"].mapping_quality.value,
                 ),
             ))
 
@@ -718,6 +739,25 @@ class HybridCandidateRetriever:
             reciprocal_candidates=sum(bool(item["reciprocal"]) for item in selected),
             generic_penalized_candidates=sum(item["generic_penalty"] > 0 for item in selected),
             conflict_penalized_candidates=sum(bool(item["conflicts"]) for item in selected),
+            uom_same_pairs_considered=sum(
+                item["uom"].relationship == UomRelationship.SAME_UOM for item in prepared
+            ),
+            uom_convertible_pairs_considered=sum(
+                item["uom"].relationship == UomRelationship.CONVERTIBLE_SAME_DIMENSION
+                for item in prepared
+            ),
+            uom_different_basis_pairs_considered=sum(
+                item["uom"].relationship == UomRelationship.DIFFERENT_DIMENSION_OR_BASIS
+                for item in prepared
+            ),
+            uom_missing_or_wildcard_pairs_considered=sum(
+                item["uom"].relationship == UomRelationship.MISSING_OR_WILDCARD
+                for item in prepared
+            ),
+            uom_malformed_or_unknown_pairs_considered=sum(
+                item["uom"].relationship == UomRelationship.MALFORMED_OR_UNKNOWN
+                for item in prepared
+            ),
             multi_source_candidates=sum(len(sources) > 1 for sources in selected_sources),
             tier_a_candidates=sum(item["tier"] == RetrievalTier.TIER_A for item in selected),
             tier_b_candidates=sum(item["tier"] == RetrievalTier.TIER_B for item in selected),

@@ -33,6 +33,11 @@ def hybrid_retrieval_metrics(db: Session, scan_id: int) -> dict:
             "exact_description_candidates": 0, "part_family_candidates": 0,
             "technical_identity_candidates": 0, "reciprocal_candidates": 0,
             "generic_penalized_candidates": 0, "conflict_penalized_candidates": 0,
+            "uom_same_pairs_considered": 0,
+            "uom_convertible_pairs_considered": 0,
+            "uom_different_basis_pairs_considered": 0,
+            "uom_missing_or_wildcard_pairs_considered": 0,
+            "uom_malformed_or_unknown_pairs_considered": 0,
             "tier_a_candidates": 0, "tier_b_candidates": 0, "tier_c_candidates": 0,
             "hybrid_retrieval_selected_count": 0,
             "hybrid_retrieval_selected_tier_a": 0,
@@ -41,6 +46,8 @@ def hybrid_retrieval_metrics(db: Session, scan_id: int) -> dict:
             "hybrid_post_scoring_excluded_count": 0,
             "hybrid_post_scoring_exclusion_reasons": {},
             "hybrid_candidates_added": 0, "hybrid_candidates_skipped_by_cap": 0,
+            "hybrid_candidates_added_with_uom_difference": 0,
+            "hybrid_candidates_added_with_uom_unknown": 0,
             "hybrid_candidates_skipped_by_budget": 0,
             "average_candidates_per_record": 0.0, "max_candidates_for_any_record": 0,
             "largest_description_family_candidates": 0, "candidate_family_concentration": 0.0,
@@ -62,6 +69,11 @@ def hybrid_retrieval_metrics(db: Session, scan_id: int) -> dict:
         "reciprocal_candidates": row.reciprocal_candidates,
         "generic_penalized_candidates": row.generic_penalized_candidates,
         "conflict_penalized_candidates": row.conflict_penalized_candidates,
+        "uom_same_pairs_considered": row.uom_same_pairs_considered,
+        "uom_convertible_pairs_considered": row.uom_convertible_pairs_considered,
+        "uom_different_basis_pairs_considered": row.uom_different_basis_pairs_considered,
+        "uom_missing_or_wildcard_pairs_considered": row.uom_missing_or_wildcard_pairs_considered,
+        "uom_malformed_or_unknown_pairs_considered": row.uom_malformed_or_unknown_pairs_considered,
         "multi_source_candidates": row.multi_source_candidates,
         "tier_a_candidates": tier_a,
         "tier_b_candidates": tier_b,
@@ -77,6 +89,12 @@ def hybrid_retrieval_metrics(db: Session, scan_id: int) -> dict:
             row.hybrid_post_scoring_exclusion_reasons_json
         ),
         "hybrid_candidates_added": row.hybrid_candidates_added,
+        "hybrid_candidates_added_with_uom_difference": (
+            row.hybrid_candidates_added_with_uom_difference
+        ),
+        "hybrid_candidates_added_with_uom_unknown": (
+            row.hybrid_candidates_added_with_uom_unknown
+        ),
         "hybrid_candidates_skipped_by_cap": row.hybrid_candidates_skipped_by_cap,
         "hybrid_candidates_skipped_by_budget": row.hybrid_candidates_skipped_by_cap,
         "average_candidates_per_record": row.average_candidates_per_record,
