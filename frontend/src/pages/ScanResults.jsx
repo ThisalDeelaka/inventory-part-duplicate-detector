@@ -6,6 +6,7 @@ import CandidateLlmTools from '../components/CandidateLlmTools'
 import LlmStatus from '../components/LlmStatus'
 import {
   AI_ENHANCEMENT_FILTERS,
+  HYBRID_RETRIEVAL_METRIC_LABELS,
   effectiveStatusLabel,
   filterAndPrioritizeCandidates,
   retrievalChannelLabel,
@@ -187,16 +188,19 @@ function TriagePanel({ value, error, busy, start, retry }) {
 
 function RetrievalPanel({ value }) {
   if (!value) return null
+  const exclusionReasons = value.hybrid_post_scoring_exclusion_reasons || {}
   return (
     <section className="panel triage-panel" aria-label="Candidate retrieval metrics">
       <div className="llm-heading"><div><p className="eyebrow">Deterministic-first recall</p><h2>Candidate retrieval</h2></div></div>
       <div className="metrics">
         <span>Records indexed: {value.records_indexed || 0}</span>
         <span>Standard deterministic: preserved</span>
-        <span>Hybrid candidates added: {value.hybrid_candidates_added || 0}</span>
-        <span>Tier A: {value.tier_a_candidates || 0}</span>
-        <span>Tier B: {value.tier_b_candidates || 0}</span>
-        <span>Tier C: {value.tier_c_candidates || 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.selected}: {value.hybrid_retrieval_selected_count || 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.tierA}: {value.hybrid_retrieval_selected_tier_a ?? value.tier_a_candidates ?? 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.tierB}: {value.hybrid_retrieval_selected_tier_b ?? value.tier_b_candidates ?? 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.tierC}: {value.hybrid_retrieval_selected_tier_c ?? value.tier_c_candidates ?? 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.postScoringExcluded}: {value.hybrid_post_scoring_excluded_count ?? 'Unavailable for historical scan'}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.added}: {value.hybrid_candidates_added || 0}</span>
         <span>Exact-description candidates: {value.exact_description_candidates || 0}</span>
         <span>Part-family candidates: {value.part_family_candidates || 0}</span>
         <span>Lexical candidates: {value.lexical_candidates_generated || 0}</span>
@@ -206,10 +210,17 @@ function RetrievalPanel({ value }) {
         <span>Generic-penalized: {value.generic_penalized_candidates || 0}</span>
         <span>Conflict-penalized: {value.conflict_penalized_candidates || 0}</span>
         <span>Multi-source candidates: {value.multi_source_candidates || 0}</span>
-        <span>Skipped by candidate budget: {value.hybrid_candidates_skipped_by_cap || 0}</span>
+        <span>{HYBRID_RETRIEVAL_METRIC_LABELS.skippedByBudget}: {value.hybrid_candidates_skipped_by_budget ?? value.hybrid_candidates_skipped_by_cap ?? 0}</span>
         <span>Average candidates per record: {value.average_candidates_per_record || 0}</span>
         <span>Largest description-family candidates: {value.largest_description_family_candidates || 0}</span>
       </div>
+      {!!Object.keys(exclusionReasons).length && (
+        <div className="mismatch-list" aria-label="Post-retrieval exclusion reasons">
+          {Object.entries(exclusionReasons).map(([reason, count]) => (
+            <span key={reason}>{reason.toLowerCase().replaceAll('_', ' ')}: {count}</span>
+          ))}
+        </div>
+      )}
       <small>Retrieval priority allocates comparison budget; it is not duplicate confidence.</small>
     </section>
   )

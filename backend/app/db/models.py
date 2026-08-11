@@ -248,6 +248,8 @@ class HybridRetrievalRun(Base):
     tier_b_candidates = Column(Integer, nullable=False, default=0)
     tier_c_candidates = Column(Integer, nullable=False, default=0)
     hybrid_candidates_added = Column(Integer, nullable=False, default=0)
+    hybrid_post_scoring_excluded_count = Column(Integer)
+    hybrid_post_scoring_exclusion_reasons_json = Column(Text)
     hybrid_candidates_skipped_by_cap = Column(Integer, nullable=False, default=0)
     average_candidates_per_record = Column(Float, nullable=False, default=0)
     max_candidates_for_any_record = Column(Integer, nullable=False, default=0)

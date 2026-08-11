@@ -57,6 +57,8 @@ def ensure_sqlite_demo_columns(engine):
             ("tier_a_candidates", "INTEGER NOT NULL DEFAULT 0"),
             ("tier_b_candidates", "INTEGER NOT NULL DEFAULT 0"),
             ("tier_c_candidates", "INTEGER NOT NULL DEFAULT 0"),
+            ("hybrid_post_scoring_excluded_count", "INTEGER"),
+            ("hybrid_post_scoring_exclusion_reasons_json", "TEXT"),
             ("largest_description_family_candidates", "INTEGER NOT NULL DEFAULT 0"),
             ("candidate_family_concentration", "FLOAT NOT NULL DEFAULT 0"),
         ],

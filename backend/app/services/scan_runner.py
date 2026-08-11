@@ -1,4 +1,6 @@
 import json
+import re
+from collections import Counter
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -66,11 +68,18 @@ class ScanRunner:
                 ).retrieve(usable, scan_mode, standard_candidate_pairs)
                 records = [row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()]
                 added = 0
+                post_scoring_excluded = 0
+                post_scoring_reasons = Counter()
                 for retrieved in retrieval.candidates:
                     left = records[retrieved.left_record_id]
                     right = records[retrieved.right_record_id]
                     result = score_candidate(left, right, selected_fields, scan_mode)
                     if result["rule_decision"] in {"REJECT", "DATA_CONFLICT", "CROSS_SITE"} or result["critical_mismatches"]:
+                        post_scoring_excluded += 1
+                        reason = str(result.get("rejection_reason") or "").strip().upper()
+                        if not re.fullmatch(r"[A-Z0-9_]{1,80}", reason):
+                            reason = "DETERMINISTIC_POST_SCORING_EXCLUSION"
+                        post_scoring_reasons[reason] += 1
                         continue
                     if result["business_status"] == "LIKELY_DUPLICATE":
                         result = dict(result)
@@ -117,6 +126,14 @@ class ScanRunner:
                     tier_b_candidates=metrics.tier_b_candidates,
                     tier_c_candidates=metrics.tier_c_candidates,
                     hybrid_candidates_added=added,
+                    hybrid_post_scoring_excluded_count=post_scoring_excluded,
+                    hybrid_post_scoring_exclusion_reasons_json=json.dumps(
+                        {
+                            reason: post_scoring_reasons[reason]
+                            for reason in sorted(post_scoring_reasons)[:20]
+                        },
+                        separators=(",", ":"),
+                    ),
                     hybrid_candidates_skipped_by_cap=metrics.hybrid_candidates_skipped_by_cap,
                     average_candidates_per_record=metrics.average_candidates_per_record,
                     max_candidates_for_any_record=metrics.max_candidates_for_any_record,

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   AI_ENHANCEMENT_FILTERS,
+  HYBRID_RETRIEVAL_METRIC_LABELS,
   RETRIEVAL_CHANNEL_LABELS,
   ADVISORY_AUTHORITY_LABEL,
   DETERMINISTIC_AUTHORITY_LABEL,
@@ -73,6 +74,19 @@ test('retrieval priority remains separate from deterministic and human status', 
   assert.equal(candidate.retrieval_priority, 91.2)
   assert.equal(candidate.business_status, 'POSSIBLE_DUPLICATE_REVIEW')
   assert.equal(candidate.review_status, 'UNREVIEWED')
+})
+
+test('hybrid retrieval metric labels distinguish selected, excluded, added, and budgeted stages', () => {
+  assert.deepEqual(HYBRID_RETRIEVAL_METRIC_LABELS, {
+    selected: 'Retrieval selected',
+    tierA: 'Selected Tier A',
+    tierB: 'Selected Tier B',
+    tierC: 'Selected Tier C',
+    postScoringExcluded: 'Excluded after deterministic checks',
+    added: 'Hybrid candidates added',
+    skippedByBudget: 'Skipped by candidate budget',
+  })
+  assert.notEqual(HYBRID_RETRIEVAL_METRIC_LABELS.selected, HYBRID_RETRIEVAL_METRIC_LABELS.added)
 })
 
 test('standard source filter excludes hybrid and recall candidates', () => {

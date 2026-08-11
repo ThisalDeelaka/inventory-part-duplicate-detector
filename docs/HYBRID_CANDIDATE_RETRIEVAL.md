@@ -103,6 +103,30 @@ Existing provenance tables are extended rather than duplicated. Candidate metada
 
 Scan metrics include Tier A/B/C counts, each retrieval channel, reciprocal candidates, generic/conflict penalties, cap skips, and family concentration. Candidate APIs batch-load provenance with existing metadata queries, avoiding per-candidate lookup. The UI calls the hashing channel “Character vector” and describes priority as candidate-budget allocation, not confidence.
 
+### Pre-scoring and post-scoring metric stages
+
+The observable scan pipeline is:
+
+```text
+retrieval selected
+→ deterministic rescoring and safety checks
+→ post-scoring exclusions
+→ hybrid candidates added
+```
+
+`hybrid_retrieval_selected_count` is the sum of the selected Tier A, Tier B, and Tier C aliases. These pairs have passed bounded ranking, global/tier budgets, per-record limits, and family limits, but have not yet passed the existing post-retrieval deterministic gate. Historical `tier_a_candidates`, `tier_b_candidates`, and `tier_c_candidates` remain available for compatibility.
+
+`hybrid_post_scoring_excluded_count` records how many selected pairs the unchanged deterministic gate excluded. `hybrid_post_scoring_exclusion_reasons` contains at most 20 deterministically ordered reason-code counts and never contains record descriptions. `hybrid_candidates_added` counts only selected pairs that survive that gate and are added to the scan candidate set. For newly recorded successful scans:
+
+```text
+hybrid_candidates_added
+= hybrid_retrieval_selected_count - hybrid_post_scoring_excluded_count
+```
+
+Historical scans created before these fields return `null` for post-scoring exclusion metrics rather than inferring unavailable facts.
+
+`hybrid_candidates_skipped_by_budget` is a clearer alias of the existing `hybrid_candidates_skipped_by_cap`. Both count pairs omitted during bounded retrieval selection by tier, global, per-record, or description-family controls. They do not include deterministic post-scoring exclusions. The UI labels these stages as “Retrieval selected,” “Excluded after deterministic checks,” “Hybrid candidates added,” and “Skipped by candidate budget.”
+
 Legacy exports and their column ordering remain unchanged. The enhanced export preserves all prior columns and appends:
 
 ```text

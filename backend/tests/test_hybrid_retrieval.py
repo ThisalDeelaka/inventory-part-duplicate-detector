@@ -17,6 +17,7 @@ from app.services.hybrid_retrieval import (
 from app.services.hybrid_retrieval_benchmark import (
     SILVER_PART_PAIRS, evaluate_retrieval_benchmark, ranking_v2_fixture,
 )
+from app.services.hybrid_retrieval_metrics import hybrid_retrieval_metrics
 from app.services.llm_enhancement_service import discovery_values
 from app.services.llm_export_service import candidates_with_llm_to_csv
 from app.services.scan_runner import ScanRunner
@@ -441,3 +442,49 @@ def test_tier_and_family_budget_settings_are_tightly_bounded():
         hybrid_retrieval_tier_c_max=50,
         hybrid_retrieval_family_max=25,
     ).hybrid_retrieval_tier_c_max == 50
+
+
+def test_pre_and_post_scoring_metrics_explain_structural_role_exclusion(db):
+    data = frame([
+        ("MLR-TOP-02.28.2023", "MLR-TOP-02.28.2023", "S1", {}),
+        ("MLR-COMPONENT-02.28.2023", "MLR-COMPONENT-02.28.2023", "S1", {}),
+        ("B1", "MTR BRG DE 6205", "S1", {}),
+        ("B2", "Motor Drive End Bearing 6205", "S1", {}),
+    ])
+    scan, _ = ScanRunner(db, cfg(
+        hybrid_retrieval_max_pairs_per_scan=10,
+        hybrid_retrieval_final_top_k=3,
+    )).run(data, "metric-stages", ["CONTRACT"], 99)
+    metrics = hybrid_retrieval_metrics(db, scan.id)
+    tier_total = sum(metrics[name] for name in (
+        "hybrid_retrieval_selected_tier_a",
+        "hybrid_retrieval_selected_tier_b",
+        "hybrid_retrieval_selected_tier_c",
+    ))
+    assert metrics["hybrid_retrieval_selected_count"] == tier_total
+    assert metrics["hybrid_post_scoring_excluded_count"] == 1
+    assert metrics["hybrid_post_scoring_exclusion_reasons"] == {
+        "STRUCTURAL_ROLE_MISMATCH": 1,
+    }
+    assert metrics["hybrid_candidates_added"] == tier_total - 1
+    assert metrics["hybrid_candidates_skipped_by_budget"] == metrics["hybrid_candidates_skipped_by_cap"]
+    candidates = db.query(DuplicateCandidate).filter_by(scan_id=scan.id).all()
+    persisted_pairs = {frozenset((item.part_no_a, item.part_no_b)) for item in candidates}
+    assert frozenset(("MLR-TOP-02.28.2023", "MLR-COMPONENT-02.28.2023")) not in persisted_pairs
+    assert metrics["retrieval_provider_request_count"] == 0
+
+
+def test_historical_retrieval_metrics_remain_readable_without_inferred_exclusions(db):
+    data = frame([("A", "Milk Soap", "S1", {}), ("B", "Milk-Soap", "S1", {})])
+    scan, _ = ScanRunner(db, cfg()).run(data, "historical-metrics", ["CONTRACT"], 99)
+    run = db.query(HybridRetrievalRun).filter_by(scan_id=scan.id).one()
+    run.hybrid_post_scoring_excluded_count = None
+    run.hybrid_post_scoring_exclusion_reasons_json = None
+    db.commit()
+    metrics = hybrid_retrieval_metrics(db, scan.id)
+    assert metrics["hybrid_post_scoring_excluded_count"] is None
+    assert metrics["hybrid_post_scoring_exclusion_reasons"] is None
+    assert metrics["tier_a_candidates"] == metrics["hybrid_retrieval_selected_tier_a"]
+    assert metrics["hybrid_retrieval_selected_count"] == sum(
+        metrics[name] for name in ("tier_a_candidates", "tier_b_candidates", "tier_c_candidates")
+    )

@@ -44,6 +44,16 @@ export const RETRIEVAL_CHANNEL_LABELS = Object.freeze({
   TECHNICAL_IDENTITY: 'Technical identity',
 })
 
+export const HYBRID_RETRIEVAL_METRIC_LABELS = Object.freeze({
+  selected: 'Retrieval selected',
+  tierA: 'Selected Tier A',
+  tierB: 'Selected Tier B',
+  tierC: 'Selected Tier C',
+  postScoringExcluded: 'Excluded after deterministic checks',
+  added: 'Hybrid candidates added',
+  skippedByBudget: 'Skipped by candidate budget',
+})
+
 export function retrievalChannelLabel(channel) {
   if (typeof channel === 'string' && channel.endsWith('_RECIPROCAL')) {
     const base = channel.slice(0, -'_RECIPROCAL'.length)
