@@ -36,6 +36,22 @@ export const AI_ENHANCEMENT_FILTERS = [
   ['PAIRWISE', 'Pairwise LLM fallback'],
 ]
 
+export const RETRIEVAL_CHANNEL_LABELS = Object.freeze({
+  EXACT_DESCRIPTION: 'Exact description',
+  PART_NUMBER_FAMILY: 'Part-number family',
+  LEXICAL: 'Lexical',
+  CHAR_VECTOR: 'Character vector',
+  TECHNICAL_IDENTITY: 'Technical identity',
+})
+
+export function retrievalChannelLabel(channel) {
+  if (typeof channel === 'string' && channel.endsWith('_RECIPROCAL')) {
+    const base = channel.slice(0, -'_RECIPROCAL'.length)
+    return `${RETRIEVAL_CHANNEL_LABELS[base] || base} reciprocal`
+  }
+  return RETRIEVAL_CHANNEL_LABELS[channel] || String(channel || 'Hybrid retrieval')
+}
+
 const TRIAGE_STATES = new Set([
   'QUEUED', 'RUNNING', 'PAUSED', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED',
 ])

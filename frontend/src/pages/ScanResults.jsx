@@ -8,6 +8,7 @@ import {
   AI_ENHANCEMENT_FILTERS,
   effectiveStatusLabel,
   filterAndPrioritizeCandidates,
+  retrievalChannelLabel,
   scanExportTargets,
   shouldPollTriage,
   triageFailureLabel,
@@ -94,10 +95,15 @@ function PairTable({ items, open, setOpen, comments, setComments, review }) {
                     <span>Human review decision: {candidate.human_review_decision}</span>
                     {candidate.candidate_source === 'HYBRID_RETRIEVAL' && (
                       <>
-                        <span>Found by: {(candidate.retrieval_sources || []).join(' / ') || 'Hybrid retrieval'}</span>
+                        <span>Retrieval tier: {candidate.retrieval_tier || 'Unavailable'}</span>
+                        <span>Found by: {(candidate.retrieval_sources || []).map(retrievalChannelLabel).join(' / ') || 'Hybrid retrieval'}</span>
                         <span>Retrieval rank: {candidate.retrieval_rank ?? 'Unavailable'}</span>
-                        <span>Retrieval score: {candidate.retrieval_score ?? 'Unavailable'} (retrieval ranking, not confidence)</span>
-                        <span>Lexical: {candidate.lexical_score ?? 0} / Vector: {candidate.vector_score ?? 0}</span>
+                        <span>Retrieval priority: {candidate.retrieval_priority ?? candidate.retrieval_score ?? 'Unavailable'} (candidate-budget priority, not duplicate confidence)</span>
+                        <span>Description specificity: {candidate.description_specificity_score ?? 'Unavailable'}</span>
+                        <span>Generic penalty: {candidate.generic_description_penalty ?? 0}</span>
+                        <span>Lexical: {candidate.lexical_score ?? 0} / Character vector: {candidate.vector_score ?? 0}</span>
+                        <span>Reciprocal evidence: {(candidate.reciprocal_sources || []).map(retrievalChannelLabel).join(' / ') || 'None'}</span>
+                        <span>Generic/conflict signals: {(candidate.retrieval_conflict_signals || []).join(' / ') || 'None'}</span>
                       </>
                     )}
                     <small>The deterministic result remains authoritative.</small>
@@ -188,12 +194,23 @@ function RetrievalPanel({ value }) {
         <span>Records indexed: {value.records_indexed || 0}</span>
         <span>Standard deterministic: preserved</span>
         <span>Hybrid candidates added: {value.hybrid_candidates_added || 0}</span>
+        <span>Tier A: {value.tier_a_candidates || 0}</span>
+        <span>Tier B: {value.tier_b_candidates || 0}</span>
+        <span>Tier C: {value.tier_c_candidates || 0}</span>
+        <span>Exact-description candidates: {value.exact_description_candidates || 0}</span>
+        <span>Part-family candidates: {value.part_family_candidates || 0}</span>
         <span>Lexical candidates: {value.lexical_candidates_generated || 0}</span>
-        <span>Vector candidates: {value.vector_candidates_generated || 0}</span>
+        <span>Character-vector candidates: {value.char_vector_candidates_generated || value.vector_candidates_generated || 0}</span>
+        <span>Technical-identity candidates: {value.technical_identity_candidates || 0}</span>
+        <span>Reciprocal candidates: {value.reciprocal_candidates || 0}</span>
+        <span>Generic-penalized: {value.generic_penalized_candidates || 0}</span>
+        <span>Conflict-penalized: {value.conflict_penalized_candidates || 0}</span>
         <span>Multi-source candidates: {value.multi_source_candidates || 0}</span>
+        <span>Skipped by candidate budget: {value.hybrid_candidates_skipped_by_cap || 0}</span>
         <span>Average candidates per record: {value.average_candidates_per_record || 0}</span>
+        <span>Largest description-family candidates: {value.largest_description_family_candidates || 0}</span>
       </div>
-      <small>Retrieval scores rank comparison candidates; they are not duplicate confidence.</small>
+      <small>Retrieval priority allocates comparison budget; it is not duplicate confidence.</small>
     </section>
   )
 }

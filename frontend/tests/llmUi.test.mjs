@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   AI_ENHANCEMENT_FILTERS,
+  RETRIEVAL_CHANNEL_LABELS,
   ADVISORY_AUTHORITY_LABEL,
   DETERMINISTIC_AUTHORITY_LABEL,
   EFFECTIVE_STATUS_OPTIONS,
@@ -20,6 +21,7 @@ import {
   nextValidationToken,
   normalizeLlmError,
   normalizeTriageStatus,
+  retrievalChannelLabel,
   scanExportTargets,
   scanTriageTargets,
   shouldPollTriage,
@@ -53,6 +55,24 @@ test('hybrid retrieval filtering does not treat retrieval score as assisted stat
   ]
   assert.deepEqual(filterAndPrioritizeCandidates(rows, 'HYBRID').map(item => item.id), [1])
   assert.equal(filterAndPrioritizeCandidates(rows, 'HYBRID')[0].effective_status, 'HUMAN_REVIEW')
+})
+
+test('retrieval channel labels describe character vectors accurately', () => {
+  assert.equal(RETRIEVAL_CHANNEL_LABELS.CHAR_VECTOR, 'Character vector')
+  assert.equal(retrievalChannelLabel('CHAR_VECTOR'), 'Character vector')
+  assert.equal(retrievalChannelLabel('CHAR_VECTOR_RECIPROCAL'), 'Character vector reciprocal')
+  assert.doesNotMatch(retrievalChannelLabel('CHAR_VECTOR'), /semantic/i)
+  assert.equal(Object.hasOwn(RETRIEVAL_CHANNEL_LABELS, 'EXACT_BLOCK'), false)
+})
+
+test('retrieval priority remains separate from deterministic and human status', () => {
+  const candidate = {
+    candidate_source: 'HYBRID_RETRIEVAL', retrieval_priority: 91.2,
+    business_status: 'POSSIBLE_DUPLICATE_REVIEW', review_status: 'UNREVIEWED',
+  }
+  assert.equal(candidate.retrieval_priority, 91.2)
+  assert.equal(candidate.business_status, 'POSSIBLE_DUPLICATE_REVIEW')
+  assert.equal(candidate.review_status, 'UNREVIEWED')
 })
 
 test('standard source filter excludes hybrid and recall candidates', () => {

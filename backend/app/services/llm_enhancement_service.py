@@ -64,7 +64,10 @@ def discovery_values(metadata: CandidateDiscoveryMetadata | None) -> dict:
             "rescue_score": None,
             "rescue_signals": [],
             "retrieval_sources": [], "retrieval_score": None,
+            "retrieval_priority": None, "retrieval_tier": None,
             "lexical_score": None, "vector_score": None, "retrieval_rank": None,
+            "description_specificity_score": None, "generic_description_penalty": None,
+            "retrieval_conflict_signals": [], "reciprocal_sources": [],
             "embedding_model_version": None,
         }
     try:
@@ -75,6 +78,12 @@ def discovery_values(metadata: CandidateDiscoveryMetadata | None) -> dict:
         retrieval_sources = json.loads(metadata.retrieval_sources_json or "[]")
     except (TypeError, json.JSONDecodeError):
         retrieval_sources = []
+    def bounded_json_list(attribute, limit=10, width=80):
+        try:
+            values = json.loads(getattr(metadata, attribute, None) or "[]")
+        except (TypeError, json.JSONDecodeError):
+            values = []
+        return [str(item)[:width] for item in values[:limit]] if isinstance(values, list) else []
     return {
         "candidate_source": metadata.source,
         "resolution_source": metadata.resolution_source,
@@ -82,8 +91,14 @@ def discovery_values(metadata: CandidateDiscoveryMetadata | None) -> dict:
         "rescue_signals": [str(item)[:80] for item in signals[:10]] if isinstance(signals, list) else [],
         "retrieval_sources": [str(item)[:40] for item in retrieval_sources[:4]] if isinstance(retrieval_sources, list) else [],
         "retrieval_score": metadata.retrieval_score,
+        "retrieval_priority": metadata.retrieval_priority if metadata.retrieval_priority is not None else metadata.retrieval_score,
+        "retrieval_tier": metadata.retrieval_tier,
         "lexical_score": metadata.lexical_score,
         "vector_score": metadata.vector_score,
+        "description_specificity_score": metadata.description_specificity_score,
+        "generic_description_penalty": metadata.generic_description_penalty,
+        "retrieval_conflict_signals": bounded_json_list("retrieval_conflict_signals_json"),
+        "reciprocal_sources": bounded_json_list("reciprocal_sources_json"),
         "retrieval_rank": metadata.retrieval_rank,
         "embedding_model_version": metadata.embedding_model_version,
     }

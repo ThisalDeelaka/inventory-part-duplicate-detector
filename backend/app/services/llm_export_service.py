@@ -44,6 +44,8 @@ ASSISTED_FIELDS = [
     "semantic_profile_prompt_version",
     "retrieval_sources", "retrieval_score", "lexical_score", "vector_score",
     "retrieval_rank", "embedding_model_version",
+    "retrieval_tier", "retrieval_priority", "description_specificity_score",
+    "generic_description_penalty", "retrieval_conflict_signals", "reciprocal_sources",
 ]
 
 TERMINAL_RULE_DECISIONS = frozenset({"REJECT"})
@@ -165,6 +167,14 @@ def candidates_with_llm_to_csv(
             vector_score=provenance["vector_score"],
             retrieval_rank=provenance["retrieval_rank"],
             embedding_model_version=provenance["embedding_model_version"],
+            retrieval_tier=provenance["retrieval_tier"],
+            retrieval_priority=provenance["retrieval_priority"],
+            description_specificity_score=provenance["description_specificity_score"],
+            generic_description_penalty=provenance["generic_description_penalty"],
+            retrieval_conflict_signals=json.dumps(
+                provenance["retrieval_conflict_signals"], separators=(",", ":")
+            ),
+            reciprocal_sources=json.dumps(provenance["reciprocal_sources"], separators=(",", ":")),
         )
         rows.append(row)
     return _write_rows(candidates, CANDIDATE_FIELDS, rows, ASSISTED_FIELDS)

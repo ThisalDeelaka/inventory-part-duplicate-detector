@@ -1,83 +1,138 @@
 # Hybrid candidate retrieval
 
-## Purpose and architecture
+## Decision boundaries
 
-Global all-pairs comparison grows quadratically and is not a viable million-record retrieval design. The application therefore keeps the existing deterministic generator as its protected precision baseline and adds a bounded retrieval layer after it:
+Hybrid retrieval only decides which missed pairs deserve bounded comparison work. Four boundaries remain separate:
 
-1. exact/business blocking;
-2. lexical nearest-neighbour retrieval;
-3. local vector retrieval;
-4. deterministic merge, deduplication, ranking and top-K caps;
-5. existing hard rules and deterministic scoring;
-6. optional downstream semantic/LLM assistance only for eligible uncertainty;
-7. human review.
+1. **Blocking and eligibility** decide whether a pair may be considered. Scan mode, site/contract scope, compatible UOM, existing hard rules, and critical variant rules live here.
+2. **Retrieval evidence** ranks eligible pairs for candidate budget.
+3. **Existing deterministic scoring** decides business status and remains authoritative.
+4. **Human review** remains the final decision.
 
-Retrieval answers only which records deserve detailed comparison. Its score is a ranking signal, **not duplicate confidence**.
+Blocking is not positive identity evidence. In particular, same-site scope, contract compatibility, UOM compatibility, and cross-site policy never contribute to rank fusion or make a pair multi-source. Historical `EXACT_BLOCK` is not a Ranking V2 retrieval channel.
 
-## Exact and business blocking
+## Retrieval channels
 
-Inverted indexes use normalized description, normalized part-number root and bounded technical-measurement keys. Buckets are capped at 50 records. Self-pairs, identical part numbers, duplicate canonical pairs, scan-mode violations, hard-rule exclusions and critical variant conflicts are removed. Same-site mode requires compatible sites; cross-site standardization requires different sites when both are known. Accounting mappings are not physical-identity exclusions.
+Ranking V2 keeps five explicit, independent channels:
 
-## Lexical retrieval
+- `EXACT_DESCRIPTION`: normalized descriptions are equal. Corpus specificity controls how valuable that equality is.
+- `PART_NUMBER_FAMILY`: approved deterministic part-code aliases and complete normalized family signatures agree. A short superficial prefix is insufficient.
+- `LEXICAL`: bounded character 3–5 gram TF-IDF nearest neighbours.
+- `CHAR_VECTOR`: bounded nearest neighbours from the fixed hashing character-vector runtime.
+- `TECHNICAL_IDENTITY`: existing deterministic technical extraction finds shared numbers, measurements, or dimensions.
 
-The lexical channel uses the already-pinned scikit-learn TF-IDF stack with character 3–5 grams and bounded nearest-neighbour queries. It reuses the project’s normalized descriptions and returns five neighbours per record by default. It does not introduce a second search dependency.
+Reciprocal lexical or character-vector selection is exposed as `LEXICAL_RECIPROCAL` or `CHAR_VECTOR_RECIPROCAL` and receives a small bounded preference. Reciprocity is not mandatory.
 
-## Local vector retrieval and runtime decision
+`sklearn-hashing-domain-v1` uses a 384-feature `HashingVectorizer(char_wb, 3–5 grams)`. It is a deterministic character-vector representation, **not a semantic embedding model**. It needs no fit, provider, network, model download, Torch, Transformers, or ONNX runtime. The existing cache and replaceable `LocalEmbedder` interface remain unchanged.
 
-The local embedding implementation is `sklearn-hashing-domain-v1`: a fixed 384-feature, CPU-friendly `HashingVectorizer` over normalized text plus retrieval-only inventory abbreviations such as `MTR`, `BRG`, `DE`, `NDE`, `ASSY`, and `VLV`. Fixed hashing requires no corpus fitting, network, API, model download, Torch runtime, or model binary. A fixed model/version/input produces deterministic vectors.
+## Description specificity and generic suppression
 
-This choice uses the existing pinned `scikit-learn==1.7.0` dependency. Adding sentence-transformers would introduce a large Torch/Transformers runtime and external model acquisition into the small offline MVP. The `LocalEmbedder` interface allows a locally provisioned sentence model or production vector service to replace the current embedder later without changing retrieval contracts.
+Each scan computes bounded, deterministic corpus statistics:
 
-## Vector cache and future index path
+- normalized-description frequency;
+- per-token document frequency and IDF;
+- informative-token ratio;
+- generic-token ratio;
+- description length.
 
-`local_embedding_cache` stores a secret-free normalized-record fingerprint, embedding model/version, bounded vector JSON, state, and generation time. Unchanged records reuse vectors across scans. SQLite is only the bounded MVP cache; it is not presented as a million-row vector database.
+These become `description_specificity_score` and `generic_description_penalty`, both bounded to 0–100. Rare, informative engineering descriptions rank above repeated or generic descriptions. Known phrases such as `PART`, `NORMAL TIME`, `INVENTORY PART`, `BRACKET`, `TEST`, and `CIRCUIT BOARD` receive explicit generic penalties. High-frequency descriptions receive `HIGH_DESCRIPTION_FREQUENCY`. Very short generic exact matches need independent identity evidence and cannot enter Tier A merely because their text is equal.
 
-The intended production path is durable source datasets in Parquet/object storage, separately built lexical/vector indexes, and top-K query services backed by PostgreSQL metadata and an ANN-capable vector index. The retrieval interfaces avoid coupling downstream scoring to SQLite or to global pair materialization.
+No unbounded corpus structures are stored on candidate rows.
 
-## Merge and ranking
+## Conflicts
 
-Canonical pairs merge evidence from `EXACT_BLOCK`, `LEXICAL`, and `VECTOR`. Multiple channels produce `MULTI_SOURCE`. With the default vector weight of `0.4`, the deterministic score is:
+Existing hard conflicts remain absolute exclusions and are not changed by retrieval. Ranking V2 also exposes bounded soft ranking reasons:
+
+- `GENERIC_DESCRIPTION`;
+- `HIGH_DESCRIPTION_FREQUENCY`;
+- `WEAK_SINGLE_CHANNEL`;
+- `OPPOSITE_VARIANT_TERM`;
+- `TECHNICAL_CONFLICT`.
+
+For example, `SERIAL` versus `NON SERIAL` receives a strong priority reduction and cannot enter Tier A. Existing color, side, electrical-rating, dimension, and other critical mismatches remain excluded before ranking. A conflict is never converted into positive technical evidence.
+
+## Weighted Reciprocal Rank Fusion
+
+Raw channel similarities are not added together. Candidate priority uses channel ranks:
 
 ```text
-lexical × 0.6 + vector × 0.4
-+ 15 for exact blocking
-+ 10 for multi-source support
+RRF(pair) = Σ channel_weight / (60 + channel_rank)
 ```
 
-Scores below 55 are discarded. Ranking prefers more independent sources, then retrieval score, then canonical record order. Defaults are lexical top-K 5, vector top-K 5, final top-K 10 per record, and 500 pairs per scan. All settings have tight validation bounds. Nearest-neighbour queries run in batches and return bounded outputs; the system does not construct a global pair matrix.
-
-## Integration and provenance
-
-When `HYBRID_RETRIEVAL_ENABLED=false`, the existing generator path is unchanged. When enabled, standard candidates are preserved and excluded from hybrid duplication. Additional pairs pass through existing hard rules and deterministic scoring. Hybrid-only additions that would otherwise be deterministic `LIKELY_DUPLICATE` are constrained to `POSSIBLE_DUPLICATE_REVIEW`, preserving the human boundary.
-
-`candidate_discovery_metadata` records `HYBRID_RETRIEVAL`, retrieval sources/scores/rank, and embedding model version. `hybrid_retrieval_run` stores bounded scan metrics: indexed records, lexical/vector/multi-source candidates, additions, cap skips, per-record averages/maxima, runtime, and a provider-request count fixed at zero.
-
-## LLM relationship and disabled-provider operation
-
-Hybrid retrieval is the normal recall mechanism. When enabled, the older deterministic recall-rescue pool is not scheduled as a parallel LLM-dependent discovery path. Cached semantic profiles and pairwise triage remain optional downstream aids governed by existing eligibility. Retrieval never constructs an LLM provider and works with `LLM_PROVIDER=none`.
-
-No automated path merges, deletes, writes back, or makes a final review decision. Human confirmation remains final.
-
-## API, UI and exports
-
-Scan detail exposes safe retrieval metrics. Candidate responses expose source, retrieval sources, retrieval score, lexical/vector scores, rank, and model version using batch-loaded metadata. The UI includes a Candidate retrieval panel and Standard/Hybrid source filters. Hybrid details label retrieval score as ranking, not confidence.
-
-Legacy exports and their ordering remain unchanged. The enhanced export appends retrieval provenance after the existing assisted columns and reads durable data only, making zero provider calls while retaining CSV formula protection and UTC formatting.
-
-## Configuration
+Constants:
 
 ```text
-HYBRID_RETRIEVAL_ENABLED=true
-HYBRID_RETRIEVAL_LEXICAL_TOP_K=5
-LOCAL_EMBEDDING_ENABLED=true
-LOCAL_EMBEDDING_MODEL=sklearn-hashing-domain-v1
-HYBRID_RETRIEVAL_VECTOR_TOP_K=5
-HYBRID_RETRIEVAL_VECTOR_WEIGHT=0.4
-HYBRID_RETRIEVAL_FINAL_TOP_K=10
-HYBRID_RETRIEVAL_MIN_SCORE=55
+RRF_K = 60
+EXACT_DESCRIPTION = 2.4
+PART_NUMBER_FAMILY = 2.2
+TECHNICAL_IDENTITY = 1.8
+LEXICAL = 1.0
+CHAR_VECTOR = 0.9
+```
+
+The RRF value is normalized below 100, then receives at most four points of reciprocal-neighbour preference. Generic and conflict penalties are applied after fusion. Missing channels contribute zero. Ties are resolved by tier, priority, specificity, and canonical record order. Blocking signals contribute zero.
+
+The durable and user-visible value is `retrieval_priority`. Historical `retrieval_score` remains readable and is populated as a compatibility alias. Neither value is duplicate confidence.
+
+The V1 `HYBRID_RETRIEVAL_VECTOR_WEIGHT` and `HYBRID_RETRIEVAL_MIN_SCORE` settings remain accepted for environment compatibility but do not participate in Ranking V2 fusion or tier allocation.
+
+## Tiered candidate budget and fairness
+
+Candidates are allocated in deterministic order:
+
+- `TIER_A`: specific exact descriptions or equally strong corroborated part-family/technical evidence without meaningful conflict;
+- `TIER_B`: strong multi-channel or reciprocal evidence without conflict;
+- `TIER_C`: exploratory, generic, weak single-channel, or conflict-penalized evidence.
+
+Defaults retain the global 500-pair cap:
+
+```text
+HYBRID_RETRIEVAL_TIER_A_MAX=250
+HYBRID_RETRIEVAL_TIER_B_MAX=200
+HYBRID_RETRIEVAL_TIER_C_MAX=50
 HYBRID_RETRIEVAL_MAX_PAIRS_PER_SCAN=500
+HYBRID_RETRIEVAL_FINAL_TOP_K=10
+HYBRID_RETRIEVAL_FAMILY_MAX=25
 ```
 
-## Current limitations
+Tier A is allocated first, so strong must-not-miss candidates are not displaced by a generic family encountered earlier. Per-record top-K and per-description-family caps prevent a large repeated family from dominating the global budget. Metrics expose maximum candidates for one record, largest retained description-family count, and candidate-family concentration.
 
-The hashing embedder provides deterministic local semantic-feature retrieval after domain expansion, not deep pretrained language understanding. The SQLite cache and exact nearest-neighbour implementation are bounded MVP components and have not been benchmarked at one million records. The architecture is million-scale compatible because retrieval/index interfaces replace pair materialization; it makes no unsupported throughput claim.
+## Persistence, API, UI, and exports
+
+Existing provenance tables are extended rather than duplicated. Candidate metadata stores sources, priority, tier, specificity, generic penalty, bounded conflict reasons, reciprocal evidence, channel scores, rank, model version, and separate blocking metadata. Historical rows default safely when new fields are absent.
+
+Scan metrics include Tier A/B/C counts, each retrieval channel, reciprocal candidates, generic/conflict penalties, cap skips, and family concentration. Candidate APIs batch-load provenance with existing metadata queries, avoiding per-candidate lookup. The UI calls the hashing channel “Character vector” and describes priority as candidate-budget allocation, not confidence.
+
+Legacy exports and their column ordering remain unchanged. The enhanced export preserves all prior columns and appends:
+
+```text
+retrieval_tier
+retrieval_priority
+description_specificity_score
+generic_description_penalty
+retrieval_conflict_signals
+reciprocal_sources
+```
+
+Enhanced export reads durable rows only, makes zero provider calls, and retains CSV formula-injection and UTC safeguards.
+
+## Offline quality benchmark
+
+`hybrid_retrieval_benchmark.py` provides a deterministic provider-free fixture with silver-positive engineering pairs and challenge-negative/generic pairs. It reports:
+
+- silver recall at the global budget;
+- silver recall at top-K;
+- Tier-A silver recall;
+- generic and conflict candidate rates;
+- average candidates per record;
+- largest-family share;
+- distinct priority count;
+- provider request count.
+
+The benchmark measures retrieval quality only. It does not label final duplicates.
+
+## Provider independence and limitations
+
+Retrieval constructs no LLM provider and works with `LLM_PROVIDER=none`. Optional semantic enrichment and Groq triage remain downstream and unchanged. No automatic path merges, deletes, or makes a human decision.
+
+The current lexical and hashing indexes are bounded MVP components, not claimed million-row infrastructure. Character features improve deterministic local recall but do not provide deep language semantics. A future, separately provisioned true semantic embedding/ANN stage can implement `LocalEmbedder` without changing deterministic scoring, retrieval contracts, or human governance.

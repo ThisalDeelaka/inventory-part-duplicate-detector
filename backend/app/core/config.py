@@ -185,6 +185,18 @@ class Settings(BaseModel):
     hybrid_retrieval_max_pairs_per_scan: int = Field(
         default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_MAX_PAIRS_PER_SCAN", "500"), gt=0, le=5000
     )
+    hybrid_retrieval_tier_a_max: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_TIER_A_MAX", "250"), ge=0, le=5000
+    )
+    hybrid_retrieval_tier_b_max: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_TIER_B_MAX", "200"), ge=0, le=5000
+    )
+    hybrid_retrieval_tier_c_max: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_TIER_C_MAX", "50"), ge=0, le=5000
+    )
+    hybrid_retrieval_family_max: int = Field(
+        default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_FAMILY_MAX", "25"), gt=0, le=250
+    )
 
 
 settings = Settings()
