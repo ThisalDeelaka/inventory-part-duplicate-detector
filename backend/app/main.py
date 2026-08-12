@@ -8,6 +8,7 @@ from app.api import (
     routes_config,
     routes_diagnostics,
     routes_feedback,
+    routes_identity_groups,
     routes_llm,
     routes_load_test,
     routes_scans,
@@ -36,6 +37,7 @@ app.add_middleware(
 )
 app.include_router(routes_config.router)
 app.include_router(routes_scans.router)
+app.include_router(routes_identity_groups.router)
 app.include_router(routes_feedback.router)
 app.include_router(routes_diagnostics.router)
 app.include_router(routes_load_test.router)
