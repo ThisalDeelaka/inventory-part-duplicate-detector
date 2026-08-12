@@ -7,6 +7,7 @@ import {
   normalizeTriageStatus,
   scanTriageTargets,
 } from '../utils/llmUi'
+import { identityGroupTargets } from '../utils/identityGroupUi'
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
@@ -83,6 +84,17 @@ export const getLlmTriageStatus = scanId => triageRequest(scanId, 'status')
 export const startLlmTriage = scanId => triageRequest(scanId, 'start')
 export const retryFailedLlmTriage = scanId => triageRequest(scanId, 'retryFailed')
 
+export const getIdentityGroupSummary = (scanId, options = {}) =>
+  api.get(identityGroupTargets(scanId, options).summary)
+export const getIdentityGroups = (scanId, options = {}) =>
+  api.get(identityGroupTargets(scanId, options).groups)
+export const getIdentityGroupDetail = (scanId, groupId, options = {}) =>
+  api.get(identityGroupTargets(scanId, options).groupDetail(groupId))
+export const getIdentityDiagnostics = (scanId, options = {}) =>
+  api.get(identityGroupTargets(scanId, options).diagnostics)
+export const getIdentityDiagnosticDetail = (scanId, diagnosticId, options = {}) =>
+  api.get(identityGroupTargets(scanId, options).diagnosticDetail(diagnosticId))
+
 export const api = {
   json: async (path, options) => (await request(path, options)).json(),
   get: (path) => api.json(path),
@@ -100,4 +112,9 @@ export const api = {
   getLlmTriageStatus,
   startLlmTriage,
   retryFailedLlmTriage,
+  getIdentityGroupSummary,
+  getIdentityGroups,
+  getIdentityGroupDetail,
+  getIdentityDiagnostics,
+  getIdentityDiagnosticDetail,
 }

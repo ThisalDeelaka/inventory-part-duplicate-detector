@@ -80,3 +80,24 @@ Group detail exposes ordered persisted members and bounded internal-edge evidenc
 The UOM/mapping summary is a separate structure and is not an identity decision.
 `G1_LOCAL_RESCORING` remains an explicit evidence source with no implied candidate
 row. G3 provides no write, review, merge, export, UI, or LLM operation.
+
+## G4 group-centric Scan Results
+
+The Scan Results page now treats a persisted 2..N identity-group hypothesis as
+the primary business result. Pairwise evidence remains available for diagnostics,
+but users do not reconstruct groups from pair rows. The primary views are Groups,
+Conflicting families, and Pair diagnostics. The older conflict-unaware connected
+component view is no longer reachable from the normal workflow; its backend route
+remains unchanged for transition compatibility.
+
+The summary and first bounded group page load from G3. Group details load only on
+expansion, diagnostic lists load only when their view opens, and diagnostic detail
+also loads on demand. Pair candidates load only after Pair diagnostics is selected.
+Filters use the G3 accepted-status and minimum/maximum-size parameters, and page
+navigation preserves server ordering.
+
+Conflicting families are separate and never presented as duplicate groups. UOM
+and mapping observations are displayed separately from identity status. Historical
+scans show an explicit no-snapshot state with Pair diagnostics still available;
+a valid snapshot containing no groups has a distinct empty state. G4 is read-only;
+group human review comes later.

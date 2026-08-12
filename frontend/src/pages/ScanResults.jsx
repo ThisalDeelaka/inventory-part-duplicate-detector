@@ -15,6 +15,16 @@ import {
   triageFailureLabel,
   uomRelationshipLabel,
 } from '../utils/llmUi'
+import {
+  diagnosticStatusLabel,
+  edgeClassLabel,
+  evidenceSourceLabel,
+  groupSizeDistributionLabel,
+  groupStatusLabel,
+  hasCannotLink,
+  mappingWarnings,
+  reasonLabel,
+} from '../utils/identityGroupUi'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
   if (!items.length) {
@@ -248,69 +258,100 @@ function RetrievalPanel({ value }) {
   )
 }
 
-function GroupView({ groups, openGroup, setOpenGroup }) {
-  if (!groups.length) {
-    return (
-      <p className="empty">
-        No medium/high confidence duplicate groups were built from this scan. Pair-level results are still available.
-      </p>
-    )
-  }
-
+function UomSummary({ value }) {
+  const warnings = mappingWarnings(value)
   return (
-    <div className="groups">
-      {groups.map((group) => (
-        <article className="group-card" key={group.group_id}>
-          <div className="group-head">
-            <div>
-              <h2>{group.group_name}</h2>
-              <small>{group.part_count} parts connected by {group.pair_count} candidate pair(s)</small>
-            </div>
-            <div className="group-score">
-              <span className={`badge ${group.confidence_level}`}>{group.confidence_level}</span>
-              <Score value={group.top_score} />
-            </div>
-          </div>
-          <p>{group.summary}</p>
-          <div className="details">
-            <b>Matched: {group.matched_fields.join(', ') || 'None'}</b>
-            <b>Mismatched: {group.mismatched_fields.join(', ') || 'None'}</b>
-            <span>Average score: {group.average_score}</span>
-          </div>
-          <div className="table-wrap mini">
-            <table>
-              <thead>
-                <tr><th>Site</th><th>Part No</th><th>Description</th></tr>
-              </thead>
-              <tbody>
-                {group.parts.map((part) => (
-                  <tr key={part.key}>
-                    <td>{part.contract || '-'}</td>
-                    <td><b>{part.part_no}</b></td>
-                    <td>{part.description}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button type="button" className="link" onClick={() => setOpenGroup(openGroup === group.group_id ? null : group.group_id)}>
-            {openGroup === group.group_id ? 'Hide pair evidence' : 'Show pair evidence'}
-          </button>
-          {openGroup === group.group_id && (
-            <div className="pair-evidence">
-              {group.pairs.map((pair) => (
-                <div className="warning" key={pair.candidate_id}>
-                  <b>{pair.part_no_a} vs {pair.part_no_b}</b>
-                  <small>{pair.similarity_score} - {pair.confidence_level}</small>
-                  <p>{pair.explanation}</p>
-                </div>
-              ))}
-            </div>
-          )}
+    <section className="mapping-summary" aria-label="Mapping and UOM observations">
+      <h3>Mapping / UOM observations</h3>
+      <div className="metrics">
+        <span>Distinct UOMs: {(value?.distinct_uoms || []).join(', ') || 'None recorded'}</span>
+        <span>Different basis: {value?.different_basis_pair_count || 0}</span>
+        <span>Unknown / wildcard: {(value?.missing_or_wildcard_pair_count || 0) + (value?.malformed_or_unknown_pair_count || 0)}</span>
+        <span>Possible mapping errors: {value?.possible_mapping_error_count || 0}</span>
+      </div>
+      {!!warnings.length && <p className="warning"><b>Mapping:</b> {warnings.join(' · ')}</p>}
+      <small>Mapping observations do not replace or reinterpret the identity-group status.</small>
+    </section>
+  )
+}
+
+function MemberTable({ members }) {
+  return (
+    <div className="table-wrap mini group-members">
+      <table>
+        <thead><tr><th>#</th><th>Site / Contract</th><th>Part No.</th><th>Description</th><th>UOM</th><th>Product category</th><th>HSN/SAC</th></tr></thead>
+        <tbody>{members.map(member => (
+          <tr key={member.record_ref_key}>
+            <td>{member.member_index + 1}</td><td>{member.contract || '—'}</td>
+            <td><b>{member.part_no}</b></td><td>{member.description}</td><td>{member.uom || '—'}</td>
+            <td>{member.product_category_id || '—'}</td><td>{member.hsn_sac_code || '—'}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function EdgeEvidence({ edges, diagnostic = false }) {
+  if (!edges.length) return <p className="empty">No bounded internal-edge evidence was persisted.</p>
+  return (
+    <div className="pair-evidence">
+      {edges.map((edge, index) => (
+        <article className={edge.edge_class === 'CANNOT_LINK' ? 'error' : 'evidence-row'} key={`${edge.left_record_ref_key}-${edge.right_record_ref_key}-${index}`}>
+          <b>{edgeClassLabel(edge.edge_class)}</b>
+          <span>{evidenceSourceLabel(edge.evidence_source)}</span>
+          <small>{edge.left_record_ref_key.slice(0, 10)}… ↔ {edge.right_record_ref_key.slice(0, 10)}…</small>
+          {!!edge.reason_codes?.length && <p>{edge.reason_codes.map(reasonLabel).join(' · ')}</p>}
+          {diagnostic && edge.edge_class === 'CANNOT_LINK' && <small>This relationship prevents acceptance as a duplicate group.</small>}
         </article>
       ))}
     </div>
   )
+}
+
+function GroupDetail({ detail }) {
+  if (hasCannotLink(detail)) return <div className="error" role="alert"><b>Snapshot inconsistency:</b> this accepted group contains cannot-link evidence and cannot be presented as safe.</div>
+  return (
+    <div className="group-detail">
+      <section><h3>Identity evidence</h3><MemberTable members={detail.members || []} /></section>
+      <UomSummary value={detail.uom_summary} />
+      <section><h3>Internal pair evidence</h3><EdgeEvidence edges={detail.internal_edges || []} /></section>
+    </div>
+  )
+}
+
+function IdentityGroupView({ snapshotAvailable, result, detailById, detailLoading, detailError, toggleDetail }) {
+  if (snapshotAvailable === false) return <div className="empty no-snapshot"><b>No identity-group snapshot is available for this scan.</b><span>Pair diagnostics are still available.</span></div>
+  if (!result) return <p className="empty">Loading identity groups…</p>
+  if (!result.items.length) return <p className="empty">This valid identity snapshot contains no accepted groups.</p>
+  return <div className="groups">{result.items.map(group => {
+    const detail = detailById[group.group_snapshot_id]
+    const expanded = detailLoading === group.group_snapshot_id || Boolean(detail) || detailError?.id === group.group_snapshot_id
+    const warnings = mappingWarnings(group.uom_summary)
+    return <article className="group-card" key={group.group_snapshot_id}>
+      <div className="group-head"><div><p className="eyebrow">Potential duplicate group</p><h2>{groupStatusLabel(group.group_status)}</h2><small>{group.group_size} records · {group.internal_pair_count} checked internal relationships</small></div><span className={`badge group-status ${group.group_status}`}>{groupStatusLabel(group.group_status)}</span></div>
+      <div className="member-preview" aria-label={`${group.group_size}-record group preview`}><span>Whole group contains {group.group_size} records. Open to view every member together.</span></div>
+      {!!group.reason_codes?.length && <p><b>Evidence:</b> {group.reason_codes.slice(0, 4).map(reasonLabel).join(' · ')}</p>}
+      {!!warnings.length && <p className="warning"><b>Mapping:</b> {warnings.join(' · ')}</p>}
+      <button type="button" className="link" aria-expanded={expanded} aria-controls={`group-${group.group_snapshot_id}`} onClick={() => toggleDetail(group.group_snapshot_id, expanded)}>{expanded ? 'Close group details' : `Open all ${group.group_size} members and evidence`}</button>
+      {expanded && <div id={`group-${group.group_snapshot_id}`}>{detailLoading === group.group_snapshot_id && <p>Loading group detail…</p>}{detailError?.id === group.group_snapshot_id && <p className="error" role="alert">{detailError.message}</p>}{detail && <GroupDetail detail={detail} />}</div>}
+    </article>
+  })}</div>
+}
+
+function DiagnosticView({ result, detailById, detailLoading, detailError, toggleDetail }) {
+  if (!result) return <p className="empty">Loading conflicting candidate families…</p>
+  if (!result.items.length) return <p className="empty">No conflicting or deferred candidate families exist in this snapshot.</p>
+  return <div className="groups">{result.items.map(item => {
+    const detail = detailById[item.diagnostic_snapshot_id]
+    const expanded = detailLoading === item.diagnostic_snapshot_id || Boolean(detail) || detailError?.id === item.diagnostic_snapshot_id
+    return <article className="group-card diagnostic-card" key={item.diagnostic_snapshot_id}>
+      <div className="group-head"><div><p className="eyebrow">Not an accepted duplicate group</p><h2>{diagnosticStatusLabel(item.diagnostic_status)}</h2><small>{item.member_count} records · {item.cannot_link_count} cannot-link conflict(s)</small></div></div>
+      <p>{item.reason_codes.map(reasonLabel).join(' · ')}</p>
+      <button type="button" className="link" aria-expanded={expanded} aria-controls={`diagnostic-${item.diagnostic_snapshot_id}`} onClick={() => toggleDetail(item.diagnostic_snapshot_id, expanded)}>{expanded ? 'Close family details' : `Open all ${item.member_count} members and conflicts`}</button>
+      {expanded && <div id={`diagnostic-${item.diagnostic_snapshot_id}`}>{detailLoading === item.diagnostic_snapshot_id && <p>Loading family detail…</p>}{detailError?.id === item.diagnostic_snapshot_id && <p className="error">{detailError.message}</p>}{detail && <><MemberTable members={detail.members || []} /><h3>Cannot-link evidence</h3><EdgeEvidence edges={detail.conflict_edges || []} diagnostic /></>}</div>}
+    </article>
+  })}</div>
 }
 
 export default function ScanResults() {
@@ -318,30 +359,66 @@ export default function ScanResults() {
   const exportTargets = scanExportTargets(id)
   const [scan, setScan] = useState(null)
   const [items, setItems] = useState([])
-  const [groups, setGroups] = useState([])
   const [view, setView] = useState('groups')
   const [open, setOpen] = useState(null)
-  const [openGroup, setOpenGroup] = useState(null)
   const [comments, setComments] = useState({})
   const [error, setError] = useState('')
+  const [summary, setSummary] = useState(null)
+  const [summaryError, setSummaryError] = useState('')
+  const [groupResult, setGroupResult] = useState(null)
+  const [groupError, setGroupError] = useState('')
+  const [groupDetails, setGroupDetails] = useState({})
+  const [groupDetailLoading, setGroupDetailLoading] = useState(null)
+  const [groupDetailError, setGroupDetailError] = useState(null)
+  const [diagnosticResult, setDiagnosticResult] = useState(null)
+  const [diagnosticDetails, setDiagnosticDetails] = useState({})
+  const [diagnosticLoading, setDiagnosticLoading] = useState(null)
+  const [diagnosticError, setDiagnosticError] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [minimumSize, setMinimumSize] = useState('')
+  const [maximumSize, setMaximumSize] = useState('')
+  const [groupPage, setGroupPage] = useState(0)
+  const [pairLoaded, setPairLoaded] = useState(false)
   const [triage, setTriage] = useState(null)
   const [triageError, setTriageError] = useState('')
   const [triageBusy, setTriageBusy] = useState(false)
   const [assistedFilter, setAssistedFilter] = useState('')
 
-  const load = () => Promise.all([
-    api.get(`/api/scans/${id}`),
-    api.get(`/api/scans/${id}/candidates`),
-    api.get(`/api/scans/${id}/groups`),
-  ])
-    .then(([scanResponse, candidateResponse, groupResponse]) => {
-      setScan(scanResponse)
-      setItems(candidateResponse)
-      setGroups(groupResponse)
-    })
-    .catch((err) => setError(err.message))
+  const pageLimit = 25
+  const groupOptions = {
+    status: statusFilter || undefined,
+    minimumGroupSize: Number(minimumSize) || undefined,
+    maximumGroupSize: Number(maximumSize) || undefined,
+    limit: pageLimit,
+    offset: groupPage * pageLimit,
+  }
+
+  useEffect(() => {
+    setSummary(null); setGroupResult(null); setGroupDetails({}); setDiagnosticResult(null)
+    setDiagnosticDetails({}); setItems([]); setPairLoaded(false); setView('groups'); setGroupPage(0)
+    setError(''); setSummaryError(''); setGroupError(''); setDiagnosticError(null)
+  }, [id])
+
+  const load = () => {
+    api.get(`/api/scans/${id}`).then(setScan).catch(requestError => setError(requestError.message))
+    api.getIdentityGroupSummary(id).then(response => { setSummary(response); setSummaryError('') }).catch(requestError => setSummaryError(requestError.message))
+  }
 
   useEffect(() => { load() }, [id])
+  useEffect(() => {
+    setGroupResult(null); setGroupError('')
+    api.getIdentityGroups(id, groupOptions).then(setGroupResult).catch(requestError => setGroupError(requestError.message))
+  }, [id, statusFilter, minimumSize, maximumSize, groupPage])
+
+  useEffect(() => {
+    if (view !== 'conflicts' || diagnosticResult) return
+    api.getIdentityDiagnostics(id, { limit: 100 }).then(setDiagnosticResult).catch(requestError => setDiagnosticError({ id: null, message: requestError.message }))
+  }, [id, view, diagnosticResult])
+
+  useEffect(() => {
+    if (view !== 'pairs' || pairLoaded) return
+    api.get(`/api/scans/${id}/candidates`).then(response => { setItems(response); setPairLoaded(true) }).catch(requestError => setError(requestError.message))
+  }, [id, view, pairLoaded])
 
   const loadTriage = async () => {
     try {
@@ -349,8 +426,10 @@ export default function ScanResults() {
       setTriage(response)
       setTriageError('')
       if (!shouldPollTriage(response.state)) {
-        const candidates = await api.get(`/api/scans/${id}/candidates`)
-        setItems(candidates)
+        if (pairLoaded) {
+          const candidates = await api.get(`/api/scans/${id}/candidates`)
+          setItems(candidates)
+        }
       }
       return response
     } catch (requestError) {
@@ -360,12 +439,12 @@ export default function ScanResults() {
     }
   }
 
-  useEffect(() => { loadTriage() }, [id])
+  useEffect(() => { if (view === 'pairs') loadTriage() }, [id, view])
   useEffect(() => {
-    if (!shouldPollTriage(triage?.state)) return undefined
+    if (view !== 'pairs' || !shouldPollTriage(triage?.state)) return undefined
     const timer = window.setInterval(loadTriage, 3000)
     return () => window.clearInterval(timer)
-  }, [id, triage?.state])
+  }, [id, view, triage?.state, pairLoaded])
 
   const triageAction = async action => {
     setTriageBusy(true); setTriageError('')
@@ -388,10 +467,27 @@ export default function ScanResults() {
         user_comment: comments[candidate.id] || '',
         created_by: 'demo-reviewer',
       })
-      load()
+      const candidates = await api.get(`/api/scans/${id}/candidates`)
+      setItems(candidates)
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  const toggleGroupDetail = async (groupId, expanded) => {
+    if (expanded) { setGroupDetails(previous => { const next = { ...previous }; delete next[groupId]; return next }); setGroupDetailError(null); return }
+    setGroupDetailLoading(groupId); setGroupDetailError(null)
+    try { const detail = await api.getIdentityGroupDetail(id, groupId); setGroupDetails(previous => ({ ...previous, [groupId]: detail })) }
+    catch (requestError) { setGroupDetailError({ id: groupId, message: requestError.message }) }
+    finally { setGroupDetailLoading(null) }
+  }
+
+  const toggleDiagnosticDetail = async (diagnosticId, expanded) => {
+    if (expanded) { setDiagnosticDetails(previous => { const next = { ...previous }; delete next[diagnosticId]; return next }); setDiagnosticError(null); return }
+    setDiagnosticLoading(diagnosticId); setDiagnosticError(null)
+    try { const detail = await api.getIdentityDiagnosticDetail(id, diagnosticId); setDiagnosticDetails(previous => ({ ...previous, [diagnosticId]: detail })) }
+    catch (requestError) { setDiagnosticError({ id: diagnosticId, message: requestError.message }) }
+    finally { setDiagnosticLoading(null) }
   }
 
   return (
@@ -417,35 +513,55 @@ export default function ScanResults() {
 
       <RetrievalPanel value={scan?.hybrid_retrieval} />
 
-      <TriagePanel
-        value={triage}
-        error={triageError}
-        busy={triageBusy}
-        start={() => triageAction(api.startLlmTriage)}
-        retry={() => triageAction(api.retryFailedLlmTriage)}
-      />
+      <section className="panel identity-summary" aria-labelledby="identity-summary-heading">
+        <div className="group-head">
+          <div><p className="eyebrow">Identity group summary</p><h2 id="identity-summary-heading">Potential duplicate groups</h2></div>
+          {summary?.selected_projection && <div className="snapshot-meta"><b>Identity projection</b><span>Algorithm: {summary.selected_projection.algorithm_version}</span><span>Snapshot: {new Date(summary.selected_projection.created_at).toLocaleString()}</span></div>}
+        </div>
+        {summaryError ? <p className="error" role="alert">Identity-group summary could not be loaded: {summaryError}</p> : !summary ? <p>Loading identity-group summary…</p> : summary.snapshot_available ? <>
+          <div className="cards compact-cards">
+            <article><label>Accepted groups</label><strong>{summary.accepted_groups}</strong><small>Scan-time hypotheses, not confirmed duplicates</small></article>
+            <article><label>Likely duplicate groups</label><strong>{summary.likely_groups}</strong></article>
+            <article><label>Possible groups — review</label><strong>{summary.review_groups}</strong></article>
+            <article><label>Conflicting candidate families</label><strong>{summary.conflicting_families}</strong></article>
+            <article><label>Largest group</label><strong>{summary.largest_accepted_group}</strong></article>
+          </div>
+          <p className="distribution"><b>Group sizes:</b> {groupSizeDistributionLabel(summary.group_size_distribution)}</p>
+        </> : <div className="no-snapshot"><b>No identity-group snapshot is available for this scan.</b><span>Pair diagnostics are still available.</span></div>}
+      </section>
 
-      <div className="assisted-filter">
-        <label>AI enhancement
-          <select value={assistedFilter} onChange={event => setAssistedFilter(event.target.value)}>
-            {AI_ENHANCEMENT_FILTERS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}
-          </select>
-        </label>
+      <div className="view-toggle" role="tablist" aria-label="Scan result views">
+        <button type="button" role="tab" aria-selected={view === 'groups'} className={view === 'groups' ? '' : 'secondary'} onClick={() => setView('groups')}>
+          Groups ({summary?.accepted_groups ?? '…'})
+        </button>
+        <button type="button" role="tab" aria-selected={view === 'conflicts'} className={view === 'conflicts' ? '' : 'secondary'} onClick={() => setView('conflicts')}>
+          Conflicting families ({summary?.diagnostic_families ?? '…'})
+        </button>
+        <button type="button" role="tab" aria-selected={view === 'pairs'} className={view === 'pairs' ? '' : 'secondary'} onClick={() => setView('pairs')}>
+          Pair diagnostics {pairLoaded ? `(${visibleItems.length})` : ''}
+        </button>
       </div>
 
-      <div className="view-toggle">
-        <button type="button" className={view === 'groups' ? '' : 'secondary'} onClick={() => setView('groups')}>
-          Group View ({groups.length})
-        </button>
-        <button type="button" className={view === 'pairs' ? '' : 'secondary'} onClick={() => setView('pairs')}>
-          Pair View ({visibleItems.length})
-        </button>
-      </div>
+      {view === 'groups' && <>
+        <section className="panel group-filters" aria-label="Identity group filters">
+          <label>Status<select value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setGroupPage(0) }}><option value="">All accepted statuses</option><option value="LIKELY_DUPLICATE_GROUP">Likely duplicate group</option><option value="POSSIBLE_DUPLICATE_GROUP_REVIEW">Possible duplicate group — review</option></select></label>
+          <label>Minimum group size<input type="number" min="2" value={minimumSize} onChange={event => { setMinimumSize(event.target.value); setGroupPage(0) }} /></label>
+          <label>Maximum group size<input type="number" min="2" value={maximumSize} onChange={event => { setMaximumSize(event.target.value); setGroupPage(0) }} /></label>
+        </section>
+        {groupError && <p className="error" role="alert">Identity groups could not be loaded: {groupError}</p>}
+        <section className="panel" role="tabpanel" aria-label="Accepted identity groups">
+          {!groupError && <IdentityGroupView snapshotAvailable={summary?.snapshot_available} result={groupResult} detailById={groupDetails} detailLoading={groupDetailLoading} detailError={groupDetailError} toggleDetail={toggleGroupDetail} />}
+          {groupResult?.total > pageLimit && <nav className="pagination" aria-label="Identity group pages"><button type="button" className="secondary" disabled={groupPage === 0} onClick={() => setGroupPage(page => page - 1)}>Previous</button><span>Page {groupPage + 1} of {Math.ceil(groupResult.total / pageLimit)}</span><button type="button" className="secondary" disabled={(groupPage + 1) * pageLimit >= groupResult.total} onClick={() => setGroupPage(page => page + 1)}>Next</button></nav>}
+        </section>
+      </>}
 
-      <section className="panel table-wrap">
-        {view === 'groups' ? (
-          <GroupView groups={groups} openGroup={openGroup} setOpenGroup={setOpenGroup} />
-        ) : (
+      {view === 'conflicts' && <section className="panel" role="tabpanel" aria-label="Conflicting candidate families">{diagnosticError?.id == null && diagnosticError ? <p className="error" role="alert">Diagnostics could not be loaded: {diagnosticError.message}</p> : <DiagnosticView result={diagnosticResult} detailById={diagnosticDetails} detailLoading={diagnosticLoading} detailError={diagnosticError} toggleDetail={toggleDiagnosticDetail} />}</section>}
+
+      {view === 'pairs' && <>
+        <TriagePanel value={triage} error={triageError} busy={triageBusy} start={() => triageAction(api.startLlmTriage)} retry={() => triageAction(api.retryFailedLlmTriage)} />
+        <div className="assisted-filter"><label>AI enhancement<select value={assistedFilter} onChange={event => setAssistedFilter(event.target.value)}>{AI_ENHANCEMENT_FILTERS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}</select></label></div>
+        <section className="panel table-wrap" role="tabpanel" aria-label="Pair diagnostics">
+          {!pairLoaded ? <p className="empty">Loading pair diagnostics…</p> :
           <PairTable
             items={visibleItems}
             open={open}
@@ -453,9 +569,9 @@ export default function ScanResults() {
             comments={comments}
             setComments={setComments}
             review={review}
-          />
-        )}
-      </section>
+          />}
+        </section>
+      </>}
     </>
   )
 }
