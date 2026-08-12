@@ -22,6 +22,7 @@ import {
   groupSizeDistributionLabel,
   groupStatusLabel,
   hasCannotLink,
+  identityGroupExportTargets,
   mappingWarnings,
   reasonLabel,
 } from '../utils/identityGroupUi'
@@ -357,6 +358,7 @@ function DiagnosticView({ result, detailById, detailLoading, detailError, toggle
 export default function ScanResults() {
   const { id } = useParams()
   const exportTargets = scanExportTargets(id)
+  const groupedExportTargets = identityGroupExportTargets(id)
   const [scan, setScan] = useState(null)
   const [items, setItems] = useState([])
   const [view, setView] = useState('groups')
@@ -501,12 +503,10 @@ export default function ScanResults() {
         <LlmStatus />
         <div className="actions">
           <Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
-          <button type="button" className="secondary" onClick={() => api.download(exportTargets.exclusions.path, exportTargets.exclusions.filename)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
-          <button type="button" onClick={() => api.download(exportTargets.candidates.path, exportTargets.candidates.filename)}>Export CSV</button>
-          <button type="button" className="secondary" title="Does not call Groq. Exports only saved advisory or deterministic bypass status." onClick={() => api.download(exportTargets.exclusionsWithLlm.path, exportTargets.exclusionsWithLlm.filename)}>Rule exclusions with LLM status</button>
-          <button type="button" title="Does not call Groq. Exports only saved advisory or deterministic bypass status." onClick={() => api.download(exportTargets.candidatesWithLlm.path, exportTargets.candidatesWithLlm.filename)}>Export CSV with saved LLM advisories</button>
+          <button type="button" onClick={() => api.download(groupedExportTargets.groups.path, groupedExportTargets.groups.filename)}>Export grouped CSV</button>
+          <button type="button" className="secondary" onClick={() => api.download(groupedExportTargets.diagnostics.path, groupedExportTargets.diagnostics.filename)}>Export conflicting families CSV</button>
         </div>
-        <small className="export-note">Does not call Groq. Exports only saved advisory or deterministic bypass status.</small>
+        <small className="export-note">Group exports read the selected immutable snapshot and do not call an AI provider.</small>
       </header>
 
       {error && <div className="error">{error}</div>}
@@ -559,6 +559,12 @@ export default function ScanResults() {
 
       {view === 'pairs' && <>
         <TriagePanel value={triage} error={triageError} busy={triageBusy} start={() => triageAction(api.startLlmTriage)} retry={() => triageAction(api.retryFailedLlmTriage)} />
+        <div className="actions" aria-label="Pair diagnostic exports">
+          <button type="button" className="secondary" onClick={() => api.download(exportTargets.exclusions.path, exportTargets.exclusions.filename)}>Rule exclusions ({scan?.rejections_count ?? 0})</button>
+          <button type="button" onClick={() => api.download(exportTargets.candidates.path, exportTargets.candidates.filename)}>Export pair CSV</button>
+          <button type="button" className="secondary" title="Does not call Groq. Exports only saved advisory or deterministic bypass status." onClick={() => api.download(exportTargets.exclusionsWithLlm.path, exportTargets.exclusionsWithLlm.filename)}>Rule exclusions with LLM status</button>
+          <button type="button" title="Does not call Groq. Exports only saved advisory or deterministic bypass status." onClick={() => api.download(exportTargets.candidatesWithLlm.path, exportTargets.candidatesWithLlm.filename)}>Export pair CSV with saved LLM advisories</button>
+        </div>
         <div className="assisted-filter"><label>AI enhancement<select value={assistedFilter} onChange={event => setAssistedFilter(event.target.value)}>{AI_ENHANCEMENT_FILTERS.map(([value, label]) => <option value={value} key={value || 'all'}>{label}</option>)}</select></label></div>
         <section className="panel table-wrap" role="tabpanel" aria-label="Pair diagnostics">
           {!pairLoaded ? <p className="empty">Loading pair diagnostics…</p> :

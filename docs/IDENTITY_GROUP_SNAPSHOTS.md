@@ -101,3 +101,25 @@ and mapping observations are displayed separately from identity status. Historic
 scans show an explicit no-snapshot state with Pair diagnostics still available;
 a valid snapshot containing no groups has a distinct empty state. G4 is read-only;
 group human review comes later.
+
+## G5 group-centric CSV export
+
+The canonical group CSV uses one row per group member, repeats group metadata,
+and keeps all members adjacent. Accepted groups are ordered by likely-before-review
+status, descending group size, and hypothesis key; members are ordered by their
+persisted member index. The export never expands a group into N-choose-2 pair rows.
+
+Accepted identity hypotheses and diagnostic families have separate exports:
+
+- `GET /api/scans/{scan_id}/identity-groups/export.csv`
+- `GET /api/scans/{scan_id}/identity-group-diagnostics/export.csv`
+
+Both select the latest completed snapshot by default and accept an exact completed
+`projection_run_id` belonging to the scan. They read only G2 snapshot tables and
+do not project, score, retrieve, enrich, or call an AI provider. Existing pair and
+saved-advisory exports remain unchanged under Pair diagnostics.
+
+CSV does not support merged cells. Group metadata is therefore repeated explicitly
+for every machine-readable member row. A later XLSX presentation may visually merge
+group-level headings while preserving row-per-member data. XLSX visual grouping is
+deferred to G5B because the project declares no XLSX-capable dependency.

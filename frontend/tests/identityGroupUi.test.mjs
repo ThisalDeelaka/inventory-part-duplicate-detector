@@ -9,6 +9,7 @@ import {
   groupStatusLabel,
   hasCannotLink,
   identityGroupTargets,
+  identityGroupExportTargets,
   mappingWarnings,
   pageOffset,
   reasonLabel,
@@ -115,4 +116,12 @@ test('explicit snapshot selection never combines projection runs', () => {
   const targets = identityGroupTargets(21, { projectionRunId: 44 })
   assert.equal(targets.summary, '/api/scans/21/identity-groups/summary?projection_run_id=44')
   assert.equal(targets.groupDetail(7), '/api/scans/21/identity-groups/7?projection_run_id=44')
+})
+
+test('grouped export actions use deterministic G5 routes and filenames', () => {
+  assert.deepEqual(identityGroupExportTargets(21), {
+    groups: { path: '/api/scans/21/identity-groups/export.csv', filename: 'scan-21-identity-groups.csv' },
+    diagnostics: { path: '/api/scans/21/identity-group-diagnostics/export.csv', filename: 'scan-21-identity-group-diagnostics.csv' },
+  })
+  assert.equal(identityGroupExportTargets(21, 7).groups.path, '/api/scans/21/identity-groups/export.csv?projection_run_id=7')
 })

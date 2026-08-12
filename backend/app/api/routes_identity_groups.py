@@ -1,6 +1,7 @@
 """Typed read-only API for immutable identity-group projection snapshots."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -18,6 +19,10 @@ from app.services.identity_group_query_service import (
     IdentityGroupQueryService,
     InvalidSnapshotSelectionError,
     SnapshotNotFoundError,
+)
+from app.services.identity_group_export_service import (
+    identity_group_diagnostics_to_csv,
+    identity_groups_to_csv,
 )
 
 
@@ -75,6 +80,20 @@ def identity_groups(
     ))
 
 
+@router.get("/{scan_id}/identity-groups/export.csv")
+def export_identity_groups(
+    scan_id: int,
+    projection_run_id: int | None = Query(default=None, gt=0),
+    db: Session = Depends(get_db),
+):
+    _service(db, scan_id)
+    content = _safe(lambda: identity_groups_to_csv(db, scan_id, projection_run_id))
+    return Response(
+        content, media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-identity-groups.csv"'},
+    )
+
+
 @router.get("/{scan_id}/identity-groups/{group_snapshot_id}", response_model=IdentityGroupDetail)
 def identity_group_detail(
     scan_id: int,
@@ -99,6 +118,23 @@ def identity_group_diagnostics(
     return _safe(lambda: service.list_diagnostics(
         scan_id, projection_run_id, status.value if status else None, limit, offset
     ))
+
+
+@router.get("/{scan_id}/identity-group-diagnostics/export.csv")
+def export_identity_group_diagnostics(
+    scan_id: int,
+    projection_run_id: int | None = Query(default=None, gt=0),
+    db: Session = Depends(get_db),
+):
+    _service(db, scan_id)
+    content = _safe(lambda: identity_group_diagnostics_to_csv(db, scan_id, projection_run_id))
+    return Response(
+        content, media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="scan-{scan_id}-identity-group-diagnostics.csv"'
+        },
+    )
 
 
 @router.get(

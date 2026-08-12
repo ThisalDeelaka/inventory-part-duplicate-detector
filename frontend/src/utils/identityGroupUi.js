@@ -70,6 +70,22 @@ export function identityGroupTargets(scanId, options = {}) {
   }
 }
 
+export function identityGroupExportTargets(scanId, projectionRunId) {
+  const id = Number(scanId)
+  if (!Number.isInteger(id) || id <= 0) throw new Error('scanId must be a positive integer')
+  const suffix = projectionRunId ? `?projection_run_id=${Number(projectionRunId)}` : ''
+  return {
+    groups: {
+      path: `/api/scans/${id}/identity-groups/export.csv${suffix}`,
+      filename: `scan-${id}-identity-groups.csv`,
+    },
+    diagnostics: {
+      path: `/api/scans/${id}/identity-group-diagnostics/export.csv${suffix}`,
+      filename: `scan-${id}-identity-group-diagnostics.csv`,
+    },
+  }
+}
+
 export function mappingWarnings(summary = {}) {
   const warnings = []
   if ((summary.different_basis_pair_count || 0) > 0) warnings.push('Different-basis unit relationships')
