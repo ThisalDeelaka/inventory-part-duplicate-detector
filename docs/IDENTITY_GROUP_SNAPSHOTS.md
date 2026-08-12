@@ -182,3 +182,26 @@ to reload without automatic resubmission. Historical events remain visible.
 Saving a review does not automatically rerun grouping; effective constraints are
 consumed only by a future explicit projection. Existing pair feedback and G5
 snapshot exports remain separate and unchanged.
+
+## G6C human-reviewed identity-decision export
+
+The system grouped export and reviewed-decision export answer different questions.
+The G5 CSV remains the immutable scan-time projection. The separate G6C CSV
+overlays only the current effective human review on the selected exact G2
+snapshot; it does not modify that snapshot or include superseded decisions as
+current operational output.
+
+Every accepted-group member is included and marked `NOT_REVIEWED`,
+`FULLY_RESOLVED`, `PARTIALLY_RESOLVED`, or `UNSURE`. Reviewed identity-set keys
+are deterministic and scoped to the scan, projection, group snapshot, review
+event, and canonical partition. They are not durable cross-scan item identities.
+Original group identifiers and mapping/UOM observations remain separate audit
+provenance.
+
+`CONFIRM_SELECTED` creates a reviewed set only for the selected members;
+unselected records export as `UNRESOLVED_MEMBER`, never as confirmed singleton
+sets. A split such as 4+1 exports as two adjacent reviewed identity sets while
+preserving the original five-member group snapshot identifiers. Superseded
+review events remain available through review history but do not drive this
+current-state export. Exporting performs no scoring, retrieval, projection,
+provider call, inventory writeback, or automatic regrouping.

@@ -37,6 +37,9 @@ from app.services.identity_group_review_service import (
     IdentityGroupReviewService,
     StaleGroupReviewError,
 )
+from app.services.identity_group_review_export_service import (
+    reviewed_identity_decisions_to_csv,
+)
 
 
 router = APIRouter(prefix="/api/scans", tags=["identity-group-snapshots"])
@@ -104,6 +107,25 @@ def export_identity_groups(
     return Response(
         content, media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-identity-groups.csv"'},
+    )
+
+
+@router.get("/{scan_id}/identity-groups/reviewed-export.csv")
+def export_reviewed_identity_decisions(
+    scan_id: int,
+    projection_run_id: int | None = Query(default=None, gt=0),
+    db: Session = Depends(get_db),
+):
+    _service(db, scan_id)
+    content = _safe(lambda: reviewed_identity_decisions_to_csv(
+        db, scan_id, projection_run_id
+    ))
+    return Response(
+        content, media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="scan-{scan_id}-reviewed-identity-decisions.csv"'
+        },
     )
 
 

@@ -86,6 +86,20 @@ export function identityGroupExportTargets(scanId, projectionRunId) {
   }
 }
 
+export function reviewedIdentityExportTarget(scanId, projectionRunId) {
+  const id = Number(scanId)
+  if (!Number.isInteger(id) || id <= 0) throw new Error('scanId must be a positive integer')
+  const run = projectionRunId == null ? null : Number(projectionRunId)
+  if (run != null && (!Number.isInteger(run) || run <= 0)) {
+    throw new Error('projectionRunId must be a positive integer')
+  }
+  const suffix = run ? `?projection_run_id=${run}` : ''
+  return {
+    path: `/api/scans/${id}/identity-groups/reviewed-export.csv${suffix}`,
+    filename: `scan-${id}-reviewed-identity-decisions.csv`,
+  }
+}
+
 export function mappingWarnings(summary = {}) {
   const warnings = []
   if ((summary.different_basis_pair_count || 0) > 0) warnings.push('Different-basis unit relationships')

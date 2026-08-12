@@ -328,6 +328,8 @@ class IdentityGroupReviewService:
         reviewer = str(reviewer or "").strip()
         if not reviewer:
             raise GroupReviewValidationError("reviewer is required")
+        submitted_members = tuple(submitted_members)
+        partitions = tuple(tuple(block) for block in partitions)
         group, immutable_members = self._group_members(
             scan_id, projection_run_id, group_snapshot_id, group_hypothesis_key
         )

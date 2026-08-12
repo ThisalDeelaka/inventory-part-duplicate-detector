@@ -26,6 +26,7 @@ import {
   identityGroupExportTargets,
   mappingWarnings,
   reasonLabel,
+  reviewedIdentityExportTarget,
 } from '../utils/identityGroupUi'
 import { groupReviewLabel } from '../utils/identityGroupReviewUi'
 
@@ -389,6 +390,7 @@ export default function ScanResults() {
   const [triageError, setTriageError] = useState('')
   const [triageBusy, setTriageBusy] = useState(false)
   const [assistedFilter, setAssistedFilter] = useState('')
+  const [reviewedExportError, setReviewedExportError] = useState('')
 
   const pageLimit = 25
   const groupOptions = {
@@ -514,6 +516,18 @@ export default function ScanResults() {
     } : previous)
   }
 
+  const exportReviewedDecisions = async () => {
+    setReviewedExportError('')
+    try {
+      const target = reviewedIdentityExportTarget(
+        id, summary?.selected_projection?.projection_run_id
+      )
+      await api.download(target.path, target.filename)
+    } catch (requestError) {
+      setReviewedExportError(requestError.message || 'Reviewed decisions export failed.')
+    }
+  }
+
   return (
     <>
       <header>
@@ -526,12 +540,14 @@ export default function ScanResults() {
         <div className="actions">
           <Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
           <button type="button" onClick={() => api.download(groupedExportTargets.groups.path, groupedExportTargets.groups.filename)}>Export grouped CSV</button>
+          {summary?.snapshot_available && <button type="button" onClick={exportReviewedDecisions}>Export reviewed decisions CSV</button>}
           <button type="button" className="secondary" onClick={() => api.download(groupedExportTargets.diagnostics.path, groupedExportTargets.diagnostics.filename)}>Export conflicting families CSV</button>
         </div>
         <small className="export-note">Group exports read the selected immutable snapshot and do not call an AI provider.</small>
       </header>
 
       {error && <div className="error">{error}</div>}
+      {reviewedExportError && <div className="error" role="alert">Reviewed decisions export failed: {reviewedExportError}</div>}
 
       <RetrievalPanel value={scan?.hybrid_retrieval} />
 

@@ -16,10 +16,19 @@ from app.db.models import (
     ScanRecordSnapshot,
 )
 from app.llm.groq_provider import GroqLLMProvider
+from app.engine import scoring
 from app.services import identity_group_projection, identity_group_snapshot_service
+from app.services.hybrid_retrieval import HybridCandidateRetriever
 from app.services.identity_group_export_service import (
     IDENTITY_DIAGNOSTIC_EXPORT_FIELDS,
     IDENTITY_GROUP_EXPORT_FIELDS,
+)
+from app.services.identity_group_review_export_service import (
+    REVIEWED_IDENTITY_EXPORT_FIELDS,
+)
+from app.services.identity_group_review_service import (
+    GroupReviewDecision,
+    IdentityGroupReviewService,
 )
 
 
@@ -127,6 +136,37 @@ def add_diagnostic(db, run, *, size=3, status="CONFLICTING_FAMILY", key="d"):
 
 def rows(response):
     return list(csv.DictReader(io.StringIO(response.text)))
+
+
+def group_refs(db, group):
+    return tuple(row[0] for row in db.query(
+        IdentityGroupMemberSnapshot.record_ref_key
+    ).filter_by(group_snapshot_id=group.id).order_by(
+        IdentityGroupMemberSnapshot.member_index
+    ).all())
+
+
+def add_review(db, run, group, decision, *, selected=(), partitions=(), supersedes=None,
+               reviewer="reviewer", comment=None):
+    refs = group_refs(db, group)
+    submitted = selected if decision == GroupReviewDecision.CONFIRM_SELECTED else (
+        () if decision == GroupReviewDecision.SPLIT_PARTITIONS else refs
+    )
+    return IdentityGroupReviewService(db).create_review(
+        scan_id=run.scan_id, projection_run_id=run.id, group_snapshot_id=group.id,
+        group_hypothesis_key=group.hypothesis_key, decision_type=decision,
+        reviewer=reviewer, comment=comment, submitted_members=submitted,
+        partitions=partitions, supersedes_review_event_id=supersedes,
+    )
+
+
+def reviewed_rows(client, scan_id=1, projection_run_id=None):
+    suffix = f"?projection_run_id={projection_run_id}" if projection_run_id else ""
+    response = client.get(
+        f"/api/scans/{scan_id}/identity-groups/reviewed-export.csv{suffix}"
+    )
+    assert response.status_code == 200, response.text
+    return rows(response)
 
 
 @pytest.mark.parametrize("size", [2, 4, 7, 14])
@@ -287,3 +327,200 @@ def test_export_filenames_are_deterministic_and_business_readable(client, db):
     add_scan(db); run = add_run(db); add_group(db, run, size=2); db.commit()
     assert client.get("/api/scans/1/identity-groups/export.csv").headers["content-disposition"] == 'attachment; filename="scan-1-identity-groups.csv"'
     assert client.get("/api/scans/1/identity-group-diagnostics/export.csv").headers["content-disposition"] == 'attachment; filename="scan-1-identity-group-diagnostics.csv"'
+
+
+def test_reviewed_export_no_review_is_explicit_and_preserves_provenance(client, db):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=2); db.commit()
+    exported = reviewed_rows(client)
+    assert len(exported) == 2
+    assert {row["review_resolution_status"] for row in exported} == {"NOT_REVIEWED"}
+    assert {row["member_review_outcome"] for row in exported} == {"NOT_REVIEWED"}
+    assert all(row["reviewed_identity_set_key"] == "" for row in exported)
+    assert {row["group_snapshot_id"] for row in exported} == {str(group.id)}
+    assert {row["projection_run_id"] for row in exported} == {str(run.id)}
+
+
+@pytest.mark.parametrize("size,expected_links", [(4, 6), (7, 21)])
+def test_reviewed_export_confirm_all_is_one_complete_set(client, db, size, expected_links):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=size); db.commit()
+    add_review(db, run, group, GroupReviewDecision.CONFIRM_ALL_AS_ONE)
+    exported = reviewed_rows(client)
+    assert len(exported) == size
+    assert len({row["reviewed_identity_set_key"] for row in exported}) == 1
+    assert {row["reviewed_identity_set_size"] for row in exported} == {str(size)}
+    assert {row["review_resolution_status"] for row in exported} == {"FULLY_RESOLVED"}
+    assert {row["member_review_outcome"] for row in exported} == {"CONFIRMED_IN_IDENTITY_SET"}
+    assert {row["must_link_count"] for row in exported} == {str(expected_links)}
+
+
+@pytest.mark.parametrize("sizes,expected", [((4, 1), (6, 4)), ((2, 2, 1), (2, 8))])
+def test_reviewed_export_split_sets_are_contiguous_and_deterministic(client, db, sizes, expected):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=5); db.commit()
+    refs = group_refs(db, group); blocks = []; start = 0
+    for size in sizes:
+        blocks.append(tuple(reversed(refs[start:start + size]))); start += size
+    add_review(db, run, group, GroupReviewDecision.SPLIT_PARTITIONS, partitions=reversed(blocks))
+    exported = reviewed_rows(client)
+    indexes = [int(row["reviewed_identity_set_index"]) for row in exported]
+    assert indexes == sorted(indexes)
+    assert [indexes.count(index) for index in sorted(set(indexes))] == sorted(sizes, reverse=True)
+    assert len({row["reviewed_identity_set_key"] for row in exported}) == len(sizes)
+    assert {row["must_link_count"] for row in exported} == {str(expected[0])}
+    assert {row["cannot_link_count"] for row in exported} == {str(expected[1])}
+    assert {row["review_resolution_status"] for row in exported} == {"FULLY_RESOLVED"}
+
+
+def test_reviewed_export_keep_all_separate_has_four_singletons(client, db):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=4); db.commit()
+    add_review(db, run, group, GroupReviewDecision.KEEP_ALL_SEPARATE)
+    exported = reviewed_rows(client)
+    assert len({row["reviewed_identity_set_key"] for row in exported}) == 4
+    assert {row["reviewed_identity_set_size"] for row in exported} == {"1"}
+    assert {row["cannot_link_count"] for row in exported} == {"6"}
+    assert {row["review_resolution_status"] for row in exported} == {"FULLY_RESOLVED"}
+
+
+def test_reviewed_export_confirm_selected_leaves_unselected_without_singleton(client, db):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=5); db.commit()
+    refs = group_refs(db, group)
+    add_review(db, run, group, GroupReviewDecision.CONFIRM_SELECTED, selected=refs[:4])
+    exported = reviewed_rows(client)
+    selected, unresolved = exported[:4], exported[4:]
+    assert len({row["reviewed_identity_set_key"] for row in selected}) == 1
+    assert all(row["member_review_outcome"] == "CONFIRMED_IN_IDENTITY_SET" for row in selected)
+    assert len(unresolved) == 1 and unresolved[0]["record_ref_key"] == refs[4]
+    assert unresolved[0]["reviewed_identity_set_key"] == ""
+    assert unresolved[0]["reviewed_identity_set_index"] == ""
+    assert unresolved[0]["reviewed_identity_set_size"] == ""
+    assert unresolved[0]["member_review_outcome"] == "UNRESOLVED_MEMBER"
+    assert {row["review_resolution_status"] for row in exported} == {"PARTIALLY_RESOLVED"}
+
+
+def test_reviewed_export_unsure_has_no_inferred_sets(client, db):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=4); db.commit()
+    add_review(db, run, group, GroupReviewDecision.UNSURE)
+    exported = reviewed_rows(client)
+    assert {row["review_resolution_status"] for row in exported} == {"UNSURE"}
+    assert {row["member_review_outcome"] for row in exported} == {"UNRESOLVED_MEMBER"}
+    assert all(row["reviewed_identity_set_key"] == "" for row in exported)
+
+
+def test_reviewed_export_uses_chain_head_not_superseded_split(client, db):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=5); db.commit()
+    refs = group_refs(db, group)
+    old = add_review(
+        db, run, group, GroupReviewDecision.SPLIT_PARTITIONS,
+        partitions=(refs[:4], refs[4:]),
+    )
+    current = add_review(
+        db, run, group, GroupReviewDecision.UNSURE,
+        supersedes=old.review_event_id,
+    )
+    exported = reviewed_rows(client)
+    assert {row["review_event_id"] for row in exported} == {str(current.review_event_id)}
+    assert {row["review_decision_type"] for row in exported} == {"UNSURE"}
+    assert all(row["reviewed_identity_set_key"] == "" for row in exported)
+
+
+def test_reviewed_export_projection_and_scan_isolation(client, db):
+    add_scan(db, 1); add_scan(db, 2)
+    older = add_run(db, scan_id=1, suffix="a", created_at=NOW)
+    reviewed = add_group(db, older, size=2, key="a")
+    latest = add_run(db, scan_id=1, suffix="b", created_at=NOW + timedelta(minutes=1))
+    add_group(db, latest, size=2, key="b")
+    other = add_run(db, scan_id=2, suffix="c"); add_group(db, other, size=2, key="c")
+    db.commit(); add_review(db, older, reviewed, GroupReviewDecision.CONFIRM_ALL_AS_ONE)
+    assert {row["review_resolution_status"] for row in reviewed_rows(client, 1)} == {"NOT_REVIEWED"}
+    explicit = reviewed_rows(client, 1, older.id)
+    assert {row["review_resolution_status"] for row in explicit} == {"FULLY_RESOLVED"}
+    assert client.get(
+        f"/api/scans/1/identity-groups/reviewed-export.csv?projection_run_id={other.id}"
+    ).status_code == 404
+
+
+def test_reviewed_export_unknown_failed_and_missing_projection_fail_safely(client, db):
+    add_scan(db, 1); add_scan(db, 2)
+    failed = add_run(db, scan_id=1, suffix="f", status="FAILED")
+    other = add_run(db, scan_id=2, suffix="o")
+    db.commit()
+    checks = [
+        ("/api/scans/1/identity-groups/reviewed-export.csv", 404),
+        ("/api/scans/1/identity-groups/reviewed-export.csv?projection_run_id=999", 404),
+        (f"/api/scans/1/identity-groups/reviewed-export.csv?projection_run_id={failed.id}", 409),
+        (f"/api/scans/1/identity-groups/reviewed-export.csv?projection_run_id={other.id}", 404),
+    ]
+    for path, expected in checks:
+        response = client.get(path)
+        assert response.status_code == expected
+        assert "Traceback" not in response.text and "\\" not in response.text
+
+
+def test_g5_exports_are_byte_compatible_before_and_after_group_review(client, db):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=4); add_diagnostic(db, run); db.commit()
+    group_before = client.get("/api/scans/1/identity-groups/export.csv").content
+    diagnostic_before = client.get("/api/scans/1/identity-group-diagnostics/export.csv").content
+    add_review(db, run, group, GroupReviewDecision.CONFIRM_ALL_AS_ONE)
+    assert client.get("/api/scans/1/identity-groups/export.csv").content == group_before
+    assert client.get("/api/scans/1/identity-group-diagnostics/export.csv").content == diagnostic_before
+
+
+def test_reviewed_export_csv_safety_headers_and_filename(client, db):
+    add_scan(db); run = add_run(db); group = add_group(
+        db, run, size=2, dangerous=True, description='Valve, "quoted"\nsecond line'
+    ); db.commit()
+    add_review(
+        db, run, group, GroupReviewDecision.CONFIRM_ALL_AS_ONE,
+        reviewer="=REVIEWER", comment='+comment, "quoted"\nnext',
+    )
+    response = client.get("/api/scans/1/identity-groups/reviewed-export.csv")
+    header = next(csv.reader(io.StringIO(response.text)))
+    exported = rows(response)[0]
+    assert header == REVIEWED_IDENTITY_EXPORT_FIELDS
+    assert exported["reviewer"] == "'=REVIEWER"
+    assert exported["review_comment"] == "'+comment, \"quoted\"\nnext"
+    assert exported["site_or_contract"] == "'=SITE"
+    assert response.headers["content-disposition"] == 'attachment; filename="scan-1-reviewed-identity-decisions.csv"'
+    assert "\r\n" in response.text
+
+
+def test_reviewed_export_bytes_ignore_insertion_order(client, db):
+    add_scan(db); run = add_run(db); group = add_group(
+        db, run, size=5, member_order=[4, 1, 3, 0, 2]
+    ); db.commit(); refs = group_refs(db, group)
+    add_review(
+        db, run, group, GroupReviewDecision.SPLIT_PARTITIONS,
+        partitions=((refs[4],), tuple(reversed(refs[:4]))),
+    )
+    first = client.get("/api/scans/1/identity-groups/reviewed-export.csv")
+    second = client.get("/api/scans/1/identity-groups/reviewed-export.csv")
+    assert first.content == second.content
+    assert [int(row["original_group_member_index"]) for row in rows(first)] == [0, 1, 2, 3, 4]
+
+
+def test_reviewed_export_makes_no_recomputation_retrieval_or_provider_calls(client, db, monkeypatch):
+    add_scan(db); run = add_run(db); group = add_group(db, run, size=2); db.commit()
+    add_review(db, run, group, GroupReviewDecision.CONFIRM_ALL_AS_ONE)
+    forbidden = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("forbidden work called"))
+    monkeypatch.setattr(identity_group_projection, "project_identity_groups", forbidden)
+    monkeypatch.setattr(identity_group_snapshot_service, "project_identity_groups", forbidden)
+    monkeypatch.setattr(scoring, "score_candidate", forbidden)
+    monkeypatch.setattr(HybridCandidateRetriever, "retrieve", forbidden)
+    monkeypatch.setattr(GroqLLMProvider, "complete_json", forbidden)
+    assert client.get("/api/scans/1/identity-groups/reviewed-export.csv").status_code == 200
+
+
+def test_reviewed_export_has_six_bounded_selects_for_hundreds_of_groups(client, db):
+    add_scan(db); run = add_run(db)
+    for index in range(120):
+        group = add_group(db, run, size=2, key=chr(0x100 + index))
+        if index % 10 == 0:
+            db.commit(); add_review(db, run, group, GroupReviewDecision.CONFIRM_ALL_AS_ONE)
+    db.commit(); selects = []
+    def count(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"): selects.append(statement)
+    event.listen(db.get_bind(), "before_cursor_execute", count)
+    try:
+        assert client.get("/api/scans/1/identity-groups/reviewed-export.csv").status_code == 200
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", count)
+    assert len(selects) == 6
