@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -496,3 +496,83 @@ class IdentityGroupEdgeSnapshot(Base):
     deterministic_status = Column(String(80))
     critical_mismatches_json = Column(Text, nullable=False, default="[]")
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityGroupReviewEvent(Base):
+    __tablename__ = "identity_group_review_event"
+    __table_args__ = (
+        CheckConstraint(
+            "decision_type IN ('CONFIRM_ALL_AS_ONE', 'CONFIRM_SELECTED', "
+            "'SPLIT_PARTITIONS', 'KEEP_ALL_SEPARATE', 'UNSURE')",
+            name="ck_group_review_decision_type",
+        ),
+        UniqueConstraint("supersedes_review_event_id", name="uq_group_review_superseded_once"),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    projection_run_id = Column(Integer, ForeignKey("identity_group_projection_run.id"), nullable=False, index=True)
+    group_snapshot_id = Column(Integer, ForeignKey("identity_group_snapshot.id"), nullable=False, index=True)
+    group_hypothesis_key = Column(String(64), nullable=False)
+    decision_type = Column(String(40), nullable=False, index=True)
+    reviewer = Column(String(100), nullable=False)
+    comment = Column(Text)
+    supersedes_review_event_id = Column(Integer, ForeignKey("identity_group_review_event.id"), index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityGroupReviewPartition(Base):
+    __tablename__ = "identity_group_review_partition"
+    __table_args__ = (
+        UniqueConstraint("review_event_id", "partition_index", name="uq_group_review_partition_index"),
+        CheckConstraint("partition_index >= 0", name="ck_group_review_partition_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    review_event_id = Column(Integer, ForeignKey("identity_group_review_event.id"), nullable=False, index=True)
+    partition_index = Column(Integer, nullable=False)
+
+
+class IdentityGroupReviewPartitionMember(Base):
+    __tablename__ = "identity_group_review_partition_member"
+    __table_args__ = (
+        UniqueConstraint("review_event_id", "record_ref_key", name="uq_group_review_member_once"),
+        UniqueConstraint("partition_id", "member_index", name="uq_group_review_partition_member_index"),
+        CheckConstraint("member_index >= 0", name="ck_group_review_member_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    review_event_id = Column(Integer, ForeignKey("identity_group_review_event.id"), nullable=False, index=True)
+    partition_id = Column(Integer, ForeignKey("identity_group_review_partition.id"), nullable=False, index=True)
+    member_index = Column(Integer, nullable=False)
+    record_ref_key = Column(String(64), nullable=False, index=True)
+
+
+class HumanIdentityConstraint(Base):
+    __tablename__ = "human_identity_constraint"
+    __table_args__ = (
+        CheckConstraint("left_record_ref_key < right_record_ref_key", name="ck_human_constraint_order"),
+        CheckConstraint("constraint_type IN ('MUST_LINK', 'CANNOT_LINK')", name="ck_human_constraint_type"),
+        UniqueConstraint(
+            "source_review_event_id", "left_record_ref_key", "right_record_ref_key",
+            name="uq_human_constraint_event_pair",
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    left_record_ref_key = Column(String(64), nullable=False, index=True)
+    right_record_ref_key = Column(String(64), nullable=False, index=True)
+    constraint_type = Column(String(20), nullable=False, index=True)
+    source_review_event_id = Column(Integer, ForeignKey("identity_group_review_event.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+def _reject_review_history_mutation(_mapper, _connection, _target):
+    raise ValueError("group review history is append-only")
+
+
+for _append_only_model in (
+    IdentityGroupReviewEvent,
+    IdentityGroupReviewPartition,
+    IdentityGroupReviewPartitionMember,
+    HumanIdentityConstraint,
+):
+    event.listen(_append_only_model, "before_update", _reject_review_history_mutation)
+    event.listen(_append_only_model, "before_delete", _reject_review_history_mutation)

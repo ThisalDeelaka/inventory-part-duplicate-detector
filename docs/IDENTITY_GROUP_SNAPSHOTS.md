@@ -123,3 +123,39 @@ CSV does not support merged cells. Group metadata is therefore repeated explicit
 for every machine-readable member row. A later XLSX presentation may visually merge
 group-level headings while preserving row-per-member data. XLSX visual grouping is
 deferred to G5B because the project declares no XLSX-capable dependency.
+
+## G6A append-only group review foundation
+
+G6A stores human decisions against the exact immutable G2 group snapshot that
+was reviewed. A decision records the scan, projection run, group snapshot,
+hypothesis key, reviewer, and normalized member partitions. It never edits the
+G2 snapshot, candidate pairs, exclusions, scan records, or inventory data.
+
+The supported internal decision vocabulary is:
+
+- `CONFIRM_ALL_AS_ONE`: one partition containing the complete group; derives a
+  must-link constraint for every internal pair.
+- `CONFIRM_SELECTED`: one selected partition of at least two members; derives
+  must-links only within that selection and makes no claim about unselected
+  members.
+- `SPLIT_PARTITIONS`: an explicit, complete partition of every group member;
+  derives must-links within partitions and cannot-links across partitions.
+- `KEEP_ALL_SEPARATE`: singleton partitions for every member; derives a
+  cannot-link for every internal pair.
+- `UNSURE`: preserves the review event without deriving identity constraints.
+
+Partition membership is validated against the immutable snapshot and bounded to
+20 members (at most 190 derived pairs). Pair keys and partitions are canonical,
+so derivation is independent of submitted ordering. Review rows, partitions,
+members, and derived constraints are append-only. A correction creates a new
+event that explicitly supersedes the current event; history is retained and only
+the unsuperseded event's constraints are effective.
+
+Human cannot-link is authoritative in a future projection and prevents
+regrouping. Human must-link is strong positive evidence only when no terminal
+deterministic conflict exists; it cannot override a deterministic cannot-link.
+When multiple current group reviews disagree about a scan-local pair, resolution
+fails explicitly instead of choosing by timestamp. The G6A adapter bulk-loads
+effective constraints for an explicitly requested, in-memory future projection.
+It does not run automatically, persist a replacement G2 snapshot, call an LLM,
+or expose a public API or UI; those orchestration surfaces remain deferred.

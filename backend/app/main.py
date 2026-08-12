@@ -15,7 +15,7 @@ from app.api import (
 )
 from app.core.config import settings
 from app.db.database import Base, SessionLocal, engine
-from app.db.migrations import ensure_identity_group_snapshot_tables, ensure_sqlite_demo_columns
+from app.db.migrations import ensure_group_review_tables, ensure_identity_group_snapshot_tables, ensure_sqlite_demo_columns
 
 
 @asynccontextmanager
@@ -23,6 +23,7 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_demo_columns(engine)
     ensure_identity_group_snapshot_tables(engine)
+    ensure_group_review_tables(engine)
     yield
 
 

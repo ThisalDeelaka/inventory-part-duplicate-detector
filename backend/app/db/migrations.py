@@ -106,3 +106,21 @@ def ensure_identity_group_snapshot_tables(engine):
         IdentityGroupEdgeSnapshot.__table__,
     ]
     IdentityGroupProjectionRun.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+
+
+def ensure_group_review_tables(engine):
+    """Add append-only G6A review tables without inventing historical reviews."""
+    from app.db.models import (
+        HumanIdentityConstraint,
+        IdentityGroupReviewEvent,
+        IdentityGroupReviewPartition,
+        IdentityGroupReviewPartitionMember,
+    )
+
+    tables = [
+        IdentityGroupReviewEvent.__table__,
+        IdentityGroupReviewPartition.__table__,
+        IdentityGroupReviewPartitionMember.__table__,
+        HumanIdentityConstraint.__table__,
+    ]
+    IdentityGroupReviewEvent.metadata.create_all(bind=engine, tables=tables, checkfirst=True)

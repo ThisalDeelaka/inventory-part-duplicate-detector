@@ -264,6 +264,7 @@ def project_identity_groups(
     selected_fields: Iterable[str] = (),
     scan_mode: str = "SAME_SITE_DUPLICATE",
     max_validation_members: int = MAX_GROUP_VALIDATION_MEMBERS,
+    human_constraints: Iterable = (),
 ) -> GroupProjectionResult:
     """Build bounded, non-persisted identity hypotheses from existing pair evidence."""
     if scan_id <= 0:
@@ -274,6 +275,7 @@ def project_identity_groups(
     exclusions = tuple(exclusions)
     feedback_by_candidate_id = feedback_by_candidate_id or {}
     selected_fields = tuple(selected_fields)
+    human_constraints = tuple(human_constraints)
 
     record_by_ref = {}
     identity_by_ref = {}
@@ -320,6 +322,31 @@ def project_identity_groups(
 
     for key, record in record_by_ref.items():
         ref_by_key.setdefault(key, _record_ref(scan_id, record))
+
+    for constraint in human_constraints:
+        left = _clean(_value(constraint, "left_record_ref_key"))
+        right = _clean(_value(constraint, "right_record_ref_key"))
+        if left == right or left not in record_by_ref or right not in record_by_ref:
+            continue
+        pair = _pair_key(left, right)
+        constraint_type = str(_value(constraint, "constraint_type", "")).split(".")[-1]
+        if constraint_type == "CANNOT_LINK":
+            classification = IdentityEdgeClassification(
+                IdentityEdgeClass.CANNOT_LINK, ("HUMAN_GROUP_CANNOT_LINK",)
+            )
+        elif constraint_type == "MUST_LINK":
+            if pair not in evidence_by_pair:
+                deterministic = score_candidate(
+                    record_by_ref[left], record_by_ref[right], list(selected_fields), scan_mode,
+                    allow_uom_mapping_review=True,
+                )
+                evidence_by_pair[pair] = classify_identity_edge(deterministic)
+            classification = IdentityEdgeClassification(
+                IdentityEdgeClass.STRONG_SUPPORT, ("HUMAN_GROUP_MUST_LINK",)
+            )
+        else:
+            raise ValueError("unknown human identity constraint type")
+        evidence_by_pair[pair] = _combine_edge(evidence_by_pair.get(pair), classification)
 
     seeds = {
         pair: edge for pair, edge in evidence_by_pair.items()
