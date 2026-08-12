@@ -5,6 +5,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from app.schemas.identity_group_reviews import GroupReviewStateResponse
+
 
 class AcceptedIdentityGroupStatus(str, Enum):
     LIKELY_DUPLICATE_GROUP = "LIKELY_DUPLICATE_GROUP"
@@ -70,6 +72,7 @@ class IdentityGroupListItem(BaseModel):
     uom_summary: IdentityGroupUomSummaryResponse
     projection_algorithm_version: str
     created_at: datetime
+    review_state: GroupReviewStateResponse = Field(default_factory=GroupReviewStateResponse)
 
 
 class IdentityGroupMemberResponse(BaseModel):

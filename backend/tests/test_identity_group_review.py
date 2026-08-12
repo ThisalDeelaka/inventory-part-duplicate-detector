@@ -288,6 +288,38 @@ def test_additive_review_migration_creates_empty_tables_without_backfill(tmp_pat
             "identity_group_review_partition_member", "human_identity_constraint"}.issubset(tables)
     with engine.connect() as connection:
         assert connection.execute(IdentityGroupReviewEvent.__table__.select()).all() == []
+    assert "initial_group_snapshot_id" in {
+        column["name"] for column in inspect(engine).get_columns("identity_group_review_event")
+    }
+
+
+def test_additive_review_migration_upgrades_g6a_event_table_and_backfills_root(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'g6a-upgrade.db'}")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE identity_group_review_event ("
+            "id INTEGER PRIMARY KEY, scan_id INTEGER NOT NULL, "
+            "projection_run_id INTEGER NOT NULL, group_snapshot_id INTEGER NOT NULL, "
+            "group_hypothesis_key VARCHAR(64) NOT NULL, decision_type VARCHAR(40) NOT NULL, "
+            "reviewer VARCHAR(100) NOT NULL, comment TEXT, "
+            "supersedes_review_event_id INTEGER, created_at DATETIME NOT NULL)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO identity_group_review_event "
+            "(id, scan_id, projection_run_id, group_snapshot_id, group_hypothesis_key, "
+            "decision_type, reviewer, created_at) VALUES "
+            "(1, 7, 8, 9, ?, 'UNSURE', 'reviewer', CURRENT_TIMESTAMP)",
+            ("a" * 64,),
+        )
+    ensure_group_review_tables(engine)
+    with engine.connect() as connection:
+        assert connection.exec_driver_sql(
+            "SELECT initial_group_snapshot_id FROM identity_group_review_event WHERE id = 1"
+        ).scalar_one() == 9
+    assert any(
+        item["name"] == "uq_group_review_initial_group" and item["unique"]
+        for item in inspect(engine).get_indexes("identity_group_review_event")
+    )
 
 
 def test_group_review_and_future_projection_never_call_llm_provider(db, monkeypatch):

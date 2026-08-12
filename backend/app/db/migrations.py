@@ -124,3 +124,24 @@ def ensure_group_review_tables(engine):
         HumanIdentityConstraint.__table__,
     ]
     IdentityGroupReviewEvent.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+    if engine.url.get_backend_name().startswith("sqlite"):
+        columns = {
+            column["name"] for column in inspect(engine).get_columns(
+                "identity_group_review_event"
+            )
+        }
+        with engine.begin() as connection:
+            if "initial_group_snapshot_id" not in columns:
+                connection.execute(text(
+                    "ALTER TABLE identity_group_review_event "
+                    "ADD COLUMN initial_group_snapshot_id INTEGER"
+                ))
+                connection.execute(text(
+                    "UPDATE identity_group_review_event "
+                    "SET initial_group_snapshot_id = group_snapshot_id "
+                    "WHERE supersedes_review_event_id IS NULL"
+                ))
+            connection.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_group_review_initial_group "
+                "ON identity_group_review_event (initial_group_snapshot_id)"
+            ))

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, event
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -507,6 +507,7 @@ class IdentityGroupReviewEvent(Base):
             name="ck_group_review_decision_type",
         ),
         UniqueConstraint("supersedes_review_event_id", name="uq_group_review_superseded_once"),
+        Index("uq_group_review_initial_group", "initial_group_snapshot_id", unique=True),
     )
     id = Column(Integer, primary_key=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
@@ -517,6 +518,7 @@ class IdentityGroupReviewEvent(Base):
     reviewer = Column(String(100), nullable=False)
     comment = Column(Text)
     supersedes_review_event_id = Column(Integer, ForeignKey("identity_group_review_event.id"), index=True)
+    initial_group_snapshot_id = Column(Integer, ForeignKey("identity_group_snapshot.id"))
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

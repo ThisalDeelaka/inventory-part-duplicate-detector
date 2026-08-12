@@ -15,6 +15,12 @@ from app.schemas.identity_groups import (
     PaginatedIdentityGroupsResponse,
     ProjectionRunResponse,
 )
+from app.schemas.identity_group_reviews import (
+    GroupReviewCreateRequest,
+    GroupReviewCurrentResponse,
+    GroupReviewEventResponse,
+    GroupReviewHistoryResponse,
+)
 from app.services.identity_group_query_service import (
     IdentityGroupQueryService,
     InvalidSnapshotSelectionError,
@@ -23,6 +29,13 @@ from app.services.identity_group_query_service import (
 from app.services.identity_group_export_service import (
     identity_group_diagnostics_to_csv,
     identity_groups_to_csv,
+)
+from app.services.identity_group_review_service import (
+    GroupReviewDecision,
+    GroupReviewTargetNotFoundError,
+    GroupReviewValidationError,
+    IdentityGroupReviewService,
+    StaleGroupReviewError,
 )
 
 
@@ -103,6 +116,109 @@ def identity_group_detail(
 ):
     service = _service(db, scan_id)
     return _safe(lambda: service.group_detail(scan_id, group_snapshot_id, projection_run_id))
+
+
+def _review_safe(call):
+    try:
+        return call()
+    except GroupReviewTargetNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except StaleGroupReviewError as exc:
+        raise HTTPException(409, str(exc)) from None
+    except GroupReviewValidationError as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
+@router.get(
+    "/{scan_id}/identity-groups/{group_snapshot_id}/reviews",
+    response_model=GroupReviewHistoryResponse,
+)
+def identity_group_review_history(
+    scan_id: int,
+    group_snapshot_id: int,
+    db: Session = Depends(get_db),
+):
+    _service(db, scan_id)
+    items = _review_safe(
+        lambda: IdentityGroupReviewService(db).review_history(scan_id, group_snapshot_id)
+    )
+    current = next((row for row in reversed(items) if row["is_current"]), None)
+    return {
+        "scan_id": scan_id,
+        "group_snapshot_id": group_snapshot_id,
+        "current_review_event_id": current["review_event_id"] if current else None,
+        "items": items,
+    }
+
+
+@router.get(
+    "/{scan_id}/identity-groups/{group_snapshot_id}/reviews/current",
+    response_model=GroupReviewCurrentResponse,
+)
+def identity_group_current_review(
+    scan_id: int,
+    group_snapshot_id: int,
+    db: Session = Depends(get_db),
+):
+    _service(db, scan_id)
+    return _review_safe(
+        lambda: IdentityGroupReviewService(db).current_review_state(
+            scan_id, group_snapshot_id
+        )
+    )
+
+
+@router.post(
+    "/{scan_id}/identity-groups/{group_snapshot_id}/reviews",
+    response_model=GroupReviewEventResponse,
+    status_code=201,
+)
+def create_identity_group_review(
+    scan_id: int,
+    group_snapshot_id: int,
+    payload: GroupReviewCreateRequest,
+    db: Session = Depends(get_db),
+):
+    _service(db, scan_id)
+    service = IdentityGroupReviewService(db)
+    _review_safe(lambda: service._accepted_group(scan_id, group_snapshot_id))
+    decision = GroupReviewDecision(payload.decision_type.value)
+    if decision in {
+        GroupReviewDecision.CONFIRM_ALL_AS_ONE,
+        GroupReviewDecision.KEEP_ALL_SEPARATE,
+        GroupReviewDecision.UNSURE,
+    }:
+        if payload.selected_record_ref_keys or payload.partitions:
+            raise HTTPException(422, "this decision does not accept member selections")
+        submitted_members = _review_safe(lambda: service.group_members(
+            scan_id, payload.projection_run_id, group_snapshot_id,
+            payload.group_hypothesis_key,
+        ))
+        partitions = ()
+    elif decision == GroupReviewDecision.CONFIRM_SELECTED:
+        if payload.partitions:
+            raise HTTPException(422, "CONFIRM_SELECTED does not accept partitions")
+        submitted_members = payload.selected_record_ref_keys
+        partitions = ()
+    else:
+        if payload.selected_record_ref_keys:
+            raise HTTPException(422, "SPLIT_PARTITIONS does not accept selected members")
+        submitted_members = ()
+        partitions = payload.partitions
+    result = _review_safe(lambda: service.create_review(
+        scan_id=scan_id,
+        projection_run_id=payload.projection_run_id,
+        group_snapshot_id=group_snapshot_id,
+        group_hypothesis_key=payload.group_hypothesis_key,
+        decision_type=decision,
+        reviewer=payload.reviewer,
+        comment=payload.comment,
+        supersedes_review_event_id=payload.supersedes_review_event_id,
+        submitted_members=submitted_members,
+        partitions=partitions,
+    ))
+    history = _review_safe(lambda: service.review_history(scan_id, group_snapshot_id))
+    return next(row for row in history if row["review_event_id"] == result.review_event_id)
 
 
 @router.get("/{scan_id}/identity-group-diagnostics", response_model=PaginatedIdentityDiagnosticsResponse)

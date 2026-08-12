@@ -159,3 +159,26 @@ fails explicitly instead of choosing by timestamp. The G6A adapter bulk-loads
 effective constraints for an explicitly requested, in-memory future projection.
 It does not run automatically, persist a replacement G2 snapshot, call an LLM,
 or expose a public API or UI; those orchestration surfaces remain deferred.
+
+## G6B typed review API and human-review UI
+
+G6B exposes the G6A domain through typed, group-scoped history, current-state,
+and create endpoints. Accepted group cards show human review separately from the
+immutable system group status. Opening or saving a review does not call an AI
+provider, run grouping, create another projection snapshot, update inventory, or
+change the reviewed snapshot's membership.
+
+The review UI presents all 2..N members together. `CONFIRM_SELECTED` confirms
+only the chosen subset and does not classify unselected records as
+non-duplicates. `SPLIT_PARTITIONS` is the canonical representation for 4+1,
+2+2+1, and other group decisions: every member is assigned exactly once to one
+of at least two nonempty identity sets. A split is not represented by repeated
+pair clicks. The preview displays relationship counts for clarity, while the
+server revalidates membership and derives the authoritative constraints.
+
+Corrections create a new append-only event and submit the current event ID as an
+optimistic-concurrency token. A stale token returns conflict and requires the UI
+to reload without automatic resubmission. Historical events remain visible.
+Saving a review does not automatically rerun grouping; effective constraints are
+consumed only by a future explicit projection. Existing pair feedback and G5
+snapshot exports remain separate and unchanged.

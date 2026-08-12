@@ -8,6 +8,7 @@ import {
   scanTriageTargets,
 } from '../utils/llmUi'
 import { identityGroupTargets } from '../utils/identityGroupUi'
+import { identityGroupReviewTargets } from '../utils/identityGroupReviewUi'
 
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
@@ -16,7 +17,9 @@ async function request(path, options = {}) {
   if (!response.ok) {
     let message = `Request failed (${response.status})`
     try { const body = await response.json(); message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail || body) } catch {}
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = response.status
+    throw error
   }
   return response
 }
@@ -94,6 +97,12 @@ export const getIdentityDiagnostics = (scanId, options = {}) =>
   api.get(identityGroupTargets(scanId, options).diagnostics)
 export const getIdentityDiagnosticDetail = (scanId, diagnosticId, options = {}) =>
   api.get(identityGroupTargets(scanId, options).diagnosticDetail(diagnosticId))
+export const getIdentityGroupReviewHistory = (scanId, groupId) =>
+  api.get(identityGroupReviewTargets(scanId, groupId).history)
+export const getIdentityGroupCurrentReview = (scanId, groupId) =>
+  api.get(identityGroupReviewTargets(scanId, groupId).current)
+export const createIdentityGroupReview = (scanId, groupId, body) =>
+  api.postJson(identityGroupReviewTargets(scanId, groupId).create, body)
 
 export const api = {
   json: async (path, options) => (await request(path, options)).json(),
@@ -117,4 +126,7 @@ export const api = {
   getIdentityGroupDetail,
   getIdentityDiagnostics,
   getIdentityDiagnosticDetail,
+  getIdentityGroupReviewHistory,
+  getIdentityGroupCurrentReview,
+  createIdentityGroupReview,
 }

@@ -5,6 +5,8 @@ from enum import Enum
 from itertools import combinations
 from typing import Iterable
 
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from app.db.models import (
@@ -57,6 +59,14 @@ class CreatedGroupReview:
 
 
 class GroupReviewValidationError(ValueError):
+    pass
+
+
+class GroupReviewTargetNotFoundError(GroupReviewValidationError):
+    pass
+
+
+class StaleGroupReviewError(GroupReviewValidationError):
     pass
 
 
@@ -191,6 +201,31 @@ class IdentityGroupReviewService:
             raise GroupReviewValidationError("immutable group membership is inconsistent")
         return group, keys
 
+    def group_members(self, scan_id, projection_run_id, group_snapshot_id, hypothesis_key):
+        """Return server-authoritative immutable membership for a typed review write."""
+        return self._group_members(
+            scan_id, projection_run_id, group_snapshot_id, hypothesis_key
+        )[1]
+
+    def _accepted_group(self, scan_id, group_snapshot_id):
+        group = self.db.query(IdentityGroupSnapshot).join(
+            IdentityGroupProjectionRun,
+            IdentityGroupProjectionRun.id == IdentityGroupSnapshot.projection_run_id,
+        ).filter(
+            IdentityGroupSnapshot.id == group_snapshot_id,
+            IdentityGroupSnapshot.scan_id == scan_id,
+            IdentityGroupProjectionRun.scan_id == scan_id,
+            IdentityGroupProjectionRun.status == "COMPLETED",
+            IdentityGroupSnapshot.group_status.in_([
+                "LIKELY_DUPLICATE_GROUP", "POSSIBLE_DUPLICATE_GROUP_REVIEW"
+            ]),
+        ).one_or_none()
+        if group is None:
+            raise GroupReviewTargetNotFoundError(
+                "Accepted identity group snapshot not found for scan"
+            )
+        return group
+
     def current_review(self, group_snapshot_id):
         successor = aliased(IdentityGroupReviewEvent)
         return self.db.query(IdentityGroupReviewEvent).outerjoin(
@@ -205,6 +240,76 @@ class IdentityGroupReviewService:
         return self.db.query(IdentityGroupReviewEvent).filter_by(
             group_snapshot_id=group_snapshot_id
         ).order_by(IdentityGroupReviewEvent.id).all()
+
+    def review_history(self, scan_id, group_snapshot_id):
+        """Load one exact group's complete review graph in bounded bulk queries."""
+        self._accepted_group(scan_id, group_snapshot_id)
+        events = self.history(group_snapshot_id)
+        if not events:
+            return ()
+        event_ids = [row.id for row in events]
+        partition_rows = self.db.query(
+            IdentityGroupReviewPartition, IdentityGroupReviewPartitionMember
+        ).join(
+            IdentityGroupReviewPartitionMember,
+            IdentityGroupReviewPartitionMember.partition_id
+            == IdentityGroupReviewPartition.id,
+        ).filter(
+            IdentityGroupReviewPartition.review_event_id.in_(event_ids)
+        ).order_by(
+            IdentityGroupReviewPartition.review_event_id,
+            IdentityGroupReviewPartition.partition_index,
+            IdentityGroupReviewPartitionMember.member_index,
+        ).all()
+        count_rows = self.db.query(
+            HumanIdentityConstraint.source_review_event_id,
+            HumanIdentityConstraint.constraint_type,
+            func.count(HumanIdentityConstraint.id),
+        ).filter(
+            HumanIdentityConstraint.source_review_event_id.in_(event_ids)
+        ).group_by(
+            HumanIdentityConstraint.source_review_event_id,
+            HumanIdentityConstraint.constraint_type,
+        ).all()
+        partitions = {}
+        for partition, member in partition_rows:
+            event_partitions = partitions.setdefault(partition.review_event_id, {})
+            event_partitions.setdefault(partition.partition_index, []).append(
+                member.record_ref_key
+            )
+        counts = {
+            (event_id, constraint_type): count
+            for event_id, constraint_type, count in count_rows
+        }
+        superseded_ids = {
+            row.supersedes_review_event_id
+            for row in events if row.supersedes_review_event_id is not None
+        }
+        return tuple({
+            "review_event_id": row.id,
+            "scan_id": row.scan_id,
+            "projection_run_id": row.projection_run_id,
+            "group_snapshot_id": row.group_snapshot_id,
+            "group_hypothesis_key": row.group_hypothesis_key,
+            "decision_type": row.decision_type,
+            "reviewer": row.reviewer,
+            "comment": row.comment,
+            "created_at": row.created_at,
+            "supersedes_review_event_id": row.supersedes_review_event_id,
+            "is_current": row.id not in superseded_ids,
+            "partitions": [
+                members for _, members in sorted(partitions.get(row.id, {}).items())
+            ],
+            "derived_constraint_counts": {
+                "must_link_count": counts.get((row.id, "MUST_LINK"), 0),
+                "cannot_link_count": counts.get((row.id, "CANNOT_LINK"), 0),
+            },
+        } for row in events)
+
+    def current_review_state(self, scan_id, group_snapshot_id):
+        history = self.review_history(scan_id, group_snapshot_id)
+        current = next((row for row in reversed(history) if row["is_current"]), None)
+        return {"reviewed": current is not None, "current_review": current}
 
     def create_review(
         self,
@@ -237,15 +342,18 @@ class IdentityGroupReviewService:
         )
         current = self.current_review(group.id)
         if current is None and supersedes_review_event_id is not None:
-            raise GroupReviewValidationError("no current review exists to supersede")
+            raise StaleGroupReviewError("review changed; reload the current review before saving")
         if current is not None and supersedes_review_event_id != current.id:
-            raise GroupReviewValidationError("new review must supersede the current review event")
+            raise StaleGroupReviewError("review changed; reload the current review before saving")
         try:
             event = IdentityGroupReviewEvent(
                 scan_id=scan_id, projection_run_id=projection_run_id,
                 group_snapshot_id=group.id, group_hypothesis_key=group.hypothesis_key,
                 decision_type=decision_type.value, reviewer=reviewer,
                 comment=comment, supersedes_review_event_id=supersedes_review_event_id,
+                initial_group_snapshot_id=(
+                    group.id if supersedes_review_event_id is None else None
+                ),
             )
             self.db.add(event)
             self.db.flush()
@@ -277,6 +385,11 @@ class IdentityGroupReviewService:
                 event.id, decision_type, len(blocks), len(constraints),
                 supersedes_review_event_id,
             )
+        except IntegrityError:
+            self.db.rollback()
+            raise StaleGroupReviewError(
+                "review changed; reload the current review before saving"
+            ) from None
         except Exception:
             self.db.rollback()
             raise

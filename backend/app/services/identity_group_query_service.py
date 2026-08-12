@@ -3,6 +3,7 @@
 import json
 
 from sqlalchemy import case, func
+from sqlalchemy.orm import aliased
 
 from app.db.models import (
     DuplicateScan,
@@ -11,6 +12,7 @@ from app.db.models import (
     IdentityGroupEdgeSnapshot,
     IdentityGroupMemberSnapshot,
     IdentityGroupProjectionRun,
+    IdentityGroupReviewEvent,
     IdentityGroupSnapshot,
     ScanRecordSnapshot,
 )
@@ -73,7 +75,17 @@ def _uom_json(group=None, aggregate=None):
     }}
 
 
-def _group_json(group):
+def _empty_review_state():
+    return {
+        "reviewed": False,
+        "current_decision_type": None,
+        "reviewer": None,
+        "reviewed_at": None,
+        "current_review_event_id": None,
+    }
+
+
+def _group_json(group, review_state=None):
     return {
         "group_snapshot_id": group.id,
         "hypothesis_key": group.hypothesis_key,
@@ -90,6 +102,7 @@ def _group_json(group):
         "uom_summary": _uom_json(group),
         "projection_algorithm_version": group.projection_algorithm_version,
         "created_at": group.created_at,
+        "review_state": review_state or _empty_review_state(),
     }
 
 
@@ -146,6 +159,28 @@ class IdentityGroupQueryService:
 
     def scan_exists(self, scan_id):
         return self.db.query(DuplicateScan.id).filter_by(id=scan_id).first() is not None
+
+    def _current_review_states(self, group_ids):
+        if not group_ids:
+            return {}
+        successor = aliased(IdentityGroupReviewEvent)
+        rows = self.db.query(IdentityGroupReviewEvent).outerjoin(
+            successor,
+            successor.supersedes_review_event_id == IdentityGroupReviewEvent.id,
+        ).filter(
+            IdentityGroupReviewEvent.group_snapshot_id.in_(group_ids),
+            successor.id.is_(None),
+        ).order_by(IdentityGroupReviewEvent.id).all()
+        return {
+            row.group_snapshot_id: {
+                "reviewed": True,
+                "current_decision_type": row.decision_type,
+                "reviewer": row.reviewer,
+                "reviewed_at": row.created_at,
+                "current_review_event_id": row.id,
+            }
+            for row in rows
+        }
 
     def list_runs(self, scan_id):
         return [
@@ -235,8 +270,11 @@ class IdentityGroupQueryService:
         rows = query.order_by(
             status_order, IdentityGroupSnapshot.group_size.desc(), IdentityGroupSnapshot.hypothesis_key
         ).offset(offset).limit(limit).all()
+        review_states = self._current_review_states([row.id for row in rows])
         return {"selected_projection": _run_json(run), "limit": limit, "offset": offset,
-                "total": total, "items": [_group_json(row) for row in rows]}
+                "total": total, "items": [
+                    _group_json(row, review_states.get(row.id)) for row in rows
+                ]}
 
     def group_detail(self, scan_id, group_snapshot_id, projection_run_id=None):
         run = self.resolve_run(scan_id, projection_run_id)
@@ -257,7 +295,8 @@ class IdentityGroupQueryService:
             IdentityGroupEdgeSnapshot.left_record_snapshot_id,
             IdentityGroupEdgeSnapshot.right_record_snapshot_id,
         ).all()
-        return {**_group_json(group), "projection": _run_json(run),
+        review_state = self._current_review_states([group.id]).get(group.id)
+        return {**_group_json(group, review_state), "projection": _run_json(run),
                 "members": [_member_json(member, record) for member, record in member_rows],
                 "internal_edges": [_edge_json(edge, refs_by_id) for edge in edges]}
 

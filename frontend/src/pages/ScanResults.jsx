@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import Score from '../components/Score'
 import CandidateLlmTools from '../components/CandidateLlmTools'
+import GroupReviewPanel from '../components/GroupReviewPanel'
 import LlmStatus from '../components/LlmStatus'
 import {
   AI_ENHANCEMENT_FILTERS,
@@ -26,6 +27,7 @@ import {
   mappingWarnings,
   reasonLabel,
 } from '../utils/identityGroupUi'
+import { groupReviewLabel } from '../utils/identityGroupReviewUi'
 
 function PairTable({ items, open, setOpen, comments, setComments, review }) {
   if (!items.length) {
@@ -310,18 +312,19 @@ function EdgeEvidence({ edges, diagnostic = false }) {
   )
 }
 
-function GroupDetail({ detail }) {
+function GroupDetail({ scanId, detail, onReviewSaved }) {
   if (hasCannotLink(detail)) return <div className="error" role="alert"><b>Snapshot inconsistency:</b> this accepted group contains cannot-link evidence and cannot be presented as safe.</div>
   return (
     <div className="group-detail">
       <section><h3>Identity evidence</h3><MemberTable members={detail.members || []} /></section>
+      <GroupReviewPanel scanId={scanId} detail={detail} onSaved={onReviewSaved} />
       <UomSummary value={detail.uom_summary} />
       <section><h3>Internal pair evidence</h3><EdgeEvidence edges={detail.internal_edges || []} /></section>
     </div>
   )
 }
 
-function IdentityGroupView({ snapshotAvailable, result, detailById, detailLoading, detailError, toggleDetail }) {
+function IdentityGroupView({ scanId, snapshotAvailable, result, detailById, detailLoading, detailError, toggleDetail, onReviewSaved }) {
   if (snapshotAvailable === false) return <div className="empty no-snapshot"><b>No identity-group snapshot is available for this scan.</b><span>Pair diagnostics are still available.</span></div>
   if (!result) return <p className="empty">Loading identity groups…</p>
   if (!result.items.length) return <p className="empty">This valid identity snapshot contains no accepted groups.</p>
@@ -331,11 +334,12 @@ function IdentityGroupView({ snapshotAvailable, result, detailById, detailLoadin
     const warnings = mappingWarnings(group.uom_summary)
     return <article className="group-card" key={group.group_snapshot_id}>
       <div className="group-head"><div><p className="eyebrow">Potential duplicate group</p><h2>{groupStatusLabel(group.group_status)}</h2><small>{group.group_size} records · {group.internal_pair_count} checked internal relationships</small></div><span className={`badge group-status ${group.group_status}`}>{groupStatusLabel(group.group_status)}</span></div>
+      <p className="review-indicator"><b>Human review:</b> {groupReviewLabel(group.review_state)}</p>
       <div className="member-preview" aria-label={`${group.group_size}-record group preview`}><span>Whole group contains {group.group_size} records. Open to view every member together.</span></div>
       {!!group.reason_codes?.length && <p><b>Evidence:</b> {group.reason_codes.slice(0, 4).map(reasonLabel).join(' · ')}</p>}
       {!!warnings.length && <p className="warning"><b>Mapping:</b> {warnings.join(' · ')}</p>}
       <button type="button" className="link" aria-expanded={expanded} aria-controls={`group-${group.group_snapshot_id}`} onClick={() => toggleDetail(group.group_snapshot_id, expanded)}>{expanded ? 'Close group details' : `Open all ${group.group_size} members and evidence`}</button>
-      {expanded && <div id={`group-${group.group_snapshot_id}`}>{detailLoading === group.group_snapshot_id && <p>Loading group detail…</p>}{detailError?.id === group.group_snapshot_id && <p className="error" role="alert">{detailError.message}</p>}{detail && <GroupDetail detail={detail} />}</div>}
+      {expanded && <div id={`group-${group.group_snapshot_id}`}>{detailLoading === group.group_snapshot_id && <p>Loading group detail…</p>}{detailError?.id === group.group_snapshot_id && <p className="error" role="alert">{detailError.message}</p>}{detail && <GroupDetail scanId={scanId} detail={detail} onReviewSaved={saved => onReviewSaved(group.group_snapshot_id, saved)} />}</div>}
     </article>
   })}</div>
 }
@@ -492,6 +496,24 @@ export default function ScanResults() {
     finally { setDiagnosticLoading(null) }
   }
 
+  const groupReviewSaved = (groupId, saved) => {
+    const reviewState = {
+      reviewed: true,
+      current_decision_type: saved.decision_type,
+      reviewer: saved.reviewer,
+      reviewed_at: saved.created_at,
+      current_review_event_id: saved.review_event_id,
+    }
+    setGroupDetails(previous => previous[groupId] ? {
+      ...previous, [groupId]: { ...previous[groupId], review_state: reviewState },
+    } : previous)
+    setGroupResult(previous => previous ? {
+      ...previous,
+      items: previous.items.map(group => group.group_snapshot_id === groupId
+        ? { ...group, review_state: reviewState } : group),
+    } : previous)
+  }
+
   return (
     <>
       <header>
@@ -550,7 +572,7 @@ export default function ScanResults() {
         </section>
         {groupError && <p className="error" role="alert">Identity groups could not be loaded: {groupError}</p>}
         <section className="panel" role="tabpanel" aria-label="Accepted identity groups">
-          {!groupError && <IdentityGroupView snapshotAvailable={summary?.snapshot_available} result={groupResult} detailById={groupDetails} detailLoading={groupDetailLoading} detailError={groupDetailError} toggleDetail={toggleGroupDetail} />}
+          {!groupError && <IdentityGroupView scanId={id} snapshotAvailable={summary?.snapshot_available} result={groupResult} detailById={groupDetails} detailLoading={groupDetailLoading} detailError={groupDetailError} toggleDetail={toggleGroupDetail} onReviewSaved={groupReviewSaved} />}
           {groupResult?.total > pageLimit && <nav className="pagination" aria-label="Identity group pages"><button type="button" className="secondary" disabled={groupPage === 0} onClick={() => setGroupPage(page => page - 1)}>Previous</button><span>Page {groupPage + 1} of {Math.ceil(groupResult.total / pageLimit)}</span><button type="button" className="secondary" disabled={(groupPage + 1) * pageLimit >= groupResult.total} onClick={() => setGroupPage(page => page + 1)}>Next</button></nav>}
         </section>
       </>}

@@ -326,7 +326,8 @@ def test_group_and_diagnostic_queries_have_bounded_select_counts(client, db):
         diagnostic_detail_count = len(selects)
     finally:
         event.remove(db.get_bind(), "before_cursor_execute", count)
-    assert (list_count, detail_count, diagnostic_list_count, diagnostic_detail_count) == (4, 5, 4, 5)
+    # G6B adds one bounded current-review-state query for accepted groups only.
+    assert (list_count, detail_count, diagnostic_list_count, diagnostic_detail_count) == (5, 6, 4, 5)
 
 
 def test_existing_pair_api_is_byte_compatible_across_snapshot_reads(client, db):
