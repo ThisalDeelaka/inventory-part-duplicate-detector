@@ -36,3 +36,13 @@ A persisted pair candidate is internal edge evidence, not a durable identity gro
 Connectedness alone is not sufficient for group identity. Any internal `CANNOT_LINK` edge prevents an automatic likely-duplicate group containing both records, even when an intermediate generic record supports each endpoint separately.
 
 Explicit affirmative opposite roles such as rotor/stator, drive-end/non-drive-end, serial/non-serial, inlet/outlet, left/right, top/component, and distinct explicitly named engine components are deterministic conflict evidence. A role present on only one record is not an opposite-role conflict. UOM differences remain separate mapping-quality evidence, LLM results remain advisory, and an explicit human non-duplicate decision remains authoritative.
+
+## Constrained group projection
+
+G0 supplies deterministic edge safety and classification. G1 consumes that contract to compute read-only constrained identity-group hypotheses in memory. Pairwise evidence remains internal. Group hypotheses are the emerging product-level identity abstraction.
+
+A connected support graph is necessary but not sufficient. Every bounded internal relationship is validated, and any `CANNOT_LINK` vetoes the group. Missing internal relationships are rescored locally without persistence or provider work; absence of conflict does not become positive identity evidence.
+
+G1 hypotheses and their stable keys are computed, scan-local, and non-persisted. Durable record and group snapshots arrive in G2. Provisional families above the 20-member validation bound are deferred, never silently truncated.
+
+The existing `grouping_service.build_duplicate_groups` connected-component projection remains transitional and conflict-unaware. It is retained only for backward compatibility and is not an input to G1.
