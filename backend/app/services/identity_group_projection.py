@@ -163,6 +163,11 @@ def _record_ref(scan_id: int, record: dict) -> RecordRef:
     )
 
 
+def scan_record_ref(scan_id: int, item, side: str | None = None) -> RecordRef:
+    """Return G1's deterministic, scan-local reference for persistence/audit use."""
+    return _record_ref(scan_id, _record_snapshot(item, side))
+
+
 def _pair_key(left: str, right: str) -> tuple[str, str]:
     return tuple(sorted((left, right)))
 
@@ -219,6 +224,11 @@ def _hypothesis_key(scan_id: int, member_keys: tuple[str, ...]) -> str:
         separators=(",", ":"),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def canonical_hypothesis_key(scan_id: int, member_keys: Iterable[str]) -> str:
+    """Return the canonical G1 hypothesis key for an unordered member set."""
+    return _hypothesis_key(scan_id, tuple(sorted(member_keys)))
 
 
 def _uom_summary(member_keys: tuple[str, ...], records: Mapping[str, dict]) -> GroupUomSummary:

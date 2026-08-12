@@ -82,3 +82,27 @@ def ensure_sqlite_demo_columns(engine):
             for name, ddl in columns:
                 if name not in existing:
                     connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def ensure_identity_group_snapshot_tables(engine):
+    """Add the immutable G2 snapshot tables without backfilling historical scans."""
+    from app.db.models import (
+        IdentityFamilyDiagnosticMemberSnapshot,
+        IdentityFamilyDiagnosticSnapshot,
+        IdentityGroupEdgeSnapshot,
+        IdentityGroupMemberSnapshot,
+        IdentityGroupProjectionRun,
+        IdentityGroupSnapshot,
+        ScanRecordSnapshot,
+    )
+
+    tables = [
+        IdentityGroupProjectionRun.__table__,
+        ScanRecordSnapshot.__table__,
+        IdentityGroupSnapshot.__table__,
+        IdentityGroupMemberSnapshot.__table__,
+        IdentityFamilyDiagnosticSnapshot.__table__,
+        IdentityFamilyDiagnosticMemberSnapshot.__table__,
+        IdentityGroupEdgeSnapshot.__table__,
+    ]
+    IdentityGroupProjectionRun.metadata.create_all(bind=engine, tables=tables, checkfirst=True)

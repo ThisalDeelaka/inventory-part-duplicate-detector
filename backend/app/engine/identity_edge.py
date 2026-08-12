@@ -5,6 +5,9 @@ from itertools import combinations
 from typing import Hashable, Mapping
 
 
+IDENTITY_EDGE_CLASSIFIER_VERSION = "identity-edge-classifier-v1"
+
+
 class IdentityEdgeClass(str, Enum):
     STRONG_SUPPORT = "STRONG_SUPPORT"
     REVIEW_SUPPORT = "REVIEW_SUPPORT"

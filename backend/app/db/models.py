@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -309,4 +309,190 @@ class RuleExclusionAudit(Base):
     rejection_reason = Column(String(120), nullable=False)
     critical_mismatches = Column(Text, default="[]")
     explanation = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityGroupProjectionRun(Base):
+    __tablename__ = "identity_group_projection_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "scan_id", "algorithm_version", "evidence_fingerprint",
+            name="uq_identity_projection_evidence",
+        ),
+        CheckConstraint("status IN ('COMPLETED', 'FAILED')", name="ck_identity_projection_status"),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    algorithm_version = Column(String(80), nullable=False)
+    edge_classifier_version = Column(String(80), nullable=False)
+    evidence_fingerprint = Column(String(64), nullable=False)
+    max_group_validation_members = Column(Integer, nullable=False)
+    engine_version = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, default="COMPLETED")
+    records_seen = Column(Integer, nullable=False)
+    seed_edges = Column(Integer, nullable=False)
+    provisional_components = Column(Integer, nullable=False)
+    accepted_groups = Column(Integer, nullable=False)
+    likely_groups = Column(Integer, nullable=False)
+    review_groups = Column(Integer, nullable=False)
+    conflicting_families = Column(Integer, nullable=False)
+    oversized_families = Column(Integer, nullable=False)
+    ambiguous_families = Column(Integer, nullable=False, default=0)
+    internal_pairs_total = Column(Integer, nullable=False)
+    internal_pairs_reused = Column(Integer, nullable=False)
+    internal_pairs_rescored = Column(Integer, nullable=False)
+    cannot_links_found = Column(Integer, nullable=False)
+    max_component_size = Column(Integer, nullable=False)
+    max_accepted_group_size = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ScanRecordSnapshot(Base):
+    __tablename__ = "scan_record_snapshot"
+    __table_args__ = (
+        UniqueConstraint("scan_id", "record_ref_key", name="uq_scan_record_ref"),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_ref_key = Column(String(64), nullable=False)
+    contract = Column(String(100))
+    part_no = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    normalized_part_no = Column(Text, nullable=False, default="")
+    normalized_description = Column(Text, nullable=False, default="")
+    uom = Column(String(128))
+    product_category_id = Column(String(128))
+    hsn_sac_code = Column(String(128))
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityGroupSnapshot(Base):
+    __tablename__ = "identity_group_snapshot"
+    __table_args__ = (
+        UniqueConstraint("projection_run_id", "hypothesis_key", name="uq_group_run_hypothesis"),
+        CheckConstraint(
+            "group_status IN ('LIKELY_DUPLICATE_GROUP', 'POSSIBLE_DUPLICATE_GROUP_REVIEW')",
+            name="ck_group_snapshot_status",
+        ),
+        CheckConstraint("group_size >= 2", name="ck_group_snapshot_min_size"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("identity_group_projection_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    hypothesis_key = Column(String(64), nullable=False, index=True)
+    projection_algorithm_version = Column(String(80), nullable=False)
+    group_status = Column(String(60), nullable=False, index=True)
+    group_size = Column(Integer, nullable=False)
+    supporting_edge_count = Column(Integer, nullable=False)
+    review_edge_count = Column(Integer, nullable=False)
+    non_groupable_internal_count = Column(Integer, nullable=False)
+    internal_pair_count = Column(Integer, nullable=False)
+    internal_pairs_reused = Column(Integer, nullable=False)
+    internal_pairs_rescored = Column(Integer, nullable=False)
+    evidence_completeness = Column(Float, nullable=False)
+    distinct_uoms_json = Column(Text, nullable=False, default="[]")
+    same_uom_pair_count = Column(Integer, nullable=False)
+    convertible_uom_pair_count = Column(Integer, nullable=False)
+    different_basis_pair_count = Column(Integer, nullable=False)
+    missing_or_wildcard_pair_count = Column(Integer, nullable=False)
+    malformed_or_unknown_pair_count = Column(Integer, nullable=False)
+    possible_mapping_error_count = Column(Integer, nullable=False)
+    reason_codes_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityGroupMemberSnapshot(Base):
+    __tablename__ = "identity_group_member_snapshot"
+    __table_args__ = (
+        UniqueConstraint("group_snapshot_id", "record_snapshot_id", name="uq_group_member_record"),
+        UniqueConstraint("group_snapshot_id", "member_index", name="uq_group_member_index"),
+        CheckConstraint("member_index >= 0", name="ck_group_member_index_nonnegative"),
+    )
+    id = Column(Integer, primary_key=True)
+    group_snapshot_id = Column(Integer, ForeignKey("identity_group_snapshot.id"), nullable=False, index=True)
+    record_snapshot_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    member_index = Column(Integer, nullable=False)
+    record_ref_key = Column(String(64), nullable=False)
+
+
+class IdentityFamilyDiagnosticSnapshot(Base):
+    __tablename__ = "identity_family_diagnostic_snapshot"
+    __table_args__ = (
+        UniqueConstraint("projection_run_id", "diagnostic_key", name="uq_family_run_key"),
+        CheckConstraint(
+            "diagnostic_status IN ('CONFLICTING_FAMILY', 'DEFERRED_OVERSIZED_FAMILY', "
+            "'DEFERRED_AMBIGUOUS_RECORD_FAMILY')",
+            name="ck_family_diagnostic_status",
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("identity_group_projection_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    diagnostic_key = Column(String(64), nullable=False)
+    diagnostic_status = Column(String(60), nullable=False, index=True)
+    member_count = Column(Integer, nullable=False)
+    seed_edge_count = Column(Integer, nullable=False)
+    internal_pair_count = Column(Integer, nullable=False, default=0)
+    internal_pairs_reused = Column(Integer, nullable=False, default=0)
+    internal_pairs_rescored = Column(Integer, nullable=False, default=0)
+    cannot_link_count = Column(Integer, nullable=False, default=0)
+    reason_codes_json = Column(Text, nullable=False, default="[]")
+    projection_algorithm_version = Column(String(80), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityFamilyDiagnosticMemberSnapshot(Base):
+    __tablename__ = "identity_family_diagnostic_member_snapshot"
+    __table_args__ = (
+        UniqueConstraint("diagnostic_snapshot_id", "record_snapshot_id", name="uq_family_member_record"),
+        UniqueConstraint("diagnostic_snapshot_id", "member_index", name="uq_family_member_index"),
+        CheckConstraint("member_index >= 0", name="ck_family_member_index_nonnegative"),
+    )
+    id = Column(Integer, primary_key=True)
+    diagnostic_snapshot_id = Column(Integer, ForeignKey("identity_family_diagnostic_snapshot.id"), nullable=False, index=True)
+    record_snapshot_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    member_index = Column(Integer, nullable=False)
+    record_ref_key = Column(String(64), nullable=False)
+
+
+class IdentityGroupEdgeSnapshot(Base):
+    __tablename__ = "identity_group_edge_snapshot"
+    __table_args__ = (
+        CheckConstraint(
+            "(group_snapshot_id IS NOT NULL AND diagnostic_snapshot_id IS NULL) OR "
+            "(group_snapshot_id IS NULL AND diagnostic_snapshot_id IS NOT NULL)",
+            name="ck_edge_one_snapshot_owner",
+        ),
+        CheckConstraint("left_record_snapshot_id < right_record_snapshot_id", name="ck_edge_record_order"),
+        CheckConstraint(
+            "edge_class IN ('STRONG_SUPPORT', 'REVIEW_SUPPORT', 'CANNOT_LINK', 'NON_GROUPABLE')",
+            name="ck_snapshot_edge_class",
+        ),
+        CheckConstraint(
+            "evidence_source IN ('PERSISTED_CANDIDATE', 'PERSISTED_EXCLUSION', "
+            "'HUMAN_FEEDBACK', 'G1_LOCAL_RESCORING')",
+            name="ck_snapshot_edge_source",
+        ),
+        UniqueConstraint(
+            "group_snapshot_id", "left_record_snapshot_id", "right_record_snapshot_id",
+            name="uq_group_internal_edge",
+        ),
+        UniqueConstraint(
+            "diagnostic_snapshot_id", "left_record_snapshot_id", "right_record_snapshot_id",
+            name="uq_family_internal_edge",
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    group_snapshot_id = Column(Integer, ForeignKey("identity_group_snapshot.id"), index=True)
+    diagnostic_snapshot_id = Column(Integer, ForeignKey("identity_family_diagnostic_snapshot.id"), index=True)
+    left_record_snapshot_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    right_record_snapshot_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    edge_class = Column(String(40), nullable=False)
+    reason_codes_json = Column(Text, nullable=False, default="[]")
+    evidence_source = Column(String(40), nullable=False)
+    candidate_id = Column(Integer, ForeignKey("duplicate_candidate.id"))
+    exclusion_id = Column(Integer, ForeignKey("rule_exclusion_audit.id"))
+    deterministic_score = Column(Float)
+    deterministic_status = Column(String(80))
+    critical_mismatches_json = Column(Text, nullable=False, default="[]")
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
