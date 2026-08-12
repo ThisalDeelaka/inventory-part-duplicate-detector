@@ -15,6 +15,7 @@ from app.engine.similarity_model import (
 from app.engine.variant_extractor import (
     extract_variant_attributes,
     find_critical_mismatches,
+    find_identity_role_mismatches,
     find_one_sided_qualifier,
     find_structural_role_mismatch,
 )
@@ -126,7 +127,10 @@ def evaluate_candidate(
         return _blocked_result(record_a, record_b, selected_fields, scan_mode, rule)
 
     matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
-    critical_mismatches = find_critical_mismatches(attributes_a, attributes_b)
+    critical_mismatches = (
+        find_critical_mismatches(attributes_a, attributes_b)
+        + find_identity_role_mismatches(attributes_a, attributes_b)
+    )
     structural_role_mismatch = find_structural_role_mismatch(attributes_a, attributes_b)
     if critical_mismatches:
         mismatch = critical_mismatches[0]

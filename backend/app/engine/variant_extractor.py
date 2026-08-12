@@ -15,7 +15,14 @@ SIZE_PHRASES = {
     "extra large": "extra large",
 }
 SENSOR_TYPE = {"temperature", "pressure", "flow", "level"}
-SIDE = {"left", "right", "front", "rear"}
+SIDE_MAP = {
+    "left": "left",
+    "lh": "left",
+    "right": "right",
+    "rh": "right",
+    "front": "front",
+    "rear": "rear",
+}
 CONNECTIVITY = {"wired", "wireless"}
 ENVIRONMENT = {"indoor", "outdoor"}
 OPERATION_MODE = {"manual", "automatic"}
@@ -33,6 +40,8 @@ STRUCTURAL_ROLE_MAP = {
     "base": "base",
     "module": "module",
     "kit": "kit",
+    "rotor": "rotor",
+    "stator": "stator",
 }
 
 VARIANT_GROUP_LABELS = {
@@ -50,6 +59,13 @@ VARIANT_GROUP_LABELS = {
     "PLACEMENT": "placement",
     "HIERARCHY": "hierarchy",
     "SIGNAL_TYPE": "signal type",
+}
+
+IDENTITY_ROLE_GROUP_LABELS = {
+    "END_POSITION": "bearing end position",
+    "SERIALIZATION_ROLE": "serialization role",
+    "FLOW_ROLE": "flow role",
+    "ENGINE_COMPONENT_ROLE": "engine component role",
 }
 
 ONE_SIDED_QUALIFIER_GROUPS = {
@@ -145,6 +161,60 @@ def _find_structural_roles(normalized: str) -> list[str]:
     return sorted(roles)
 
 
+def _find_sides(normalized: str) -> list[str]:
+    return sorted({SIDE_MAP[word] for word in normalized.split() if word in SIDE_MAP})
+
+
+def _find_end_positions(normalized: str) -> list[str]:
+    """Extract explicit DE/NDE placement without substring or one-sided inference."""
+    values = set()
+    protected = normalized
+    if re.search(r"\bnon drive end\b", protected):
+        values.add("non-drive-end")
+        protected = re.sub(r"\bnon drive end\b", " ", protected)
+    if re.search(r"\bdrive end\b", protected):
+        values.add("drive-end")
+    words = set(normalized.split())
+    if "nde" in words:
+        values.add("non-drive-end")
+    if "de" in words:
+        values.add("drive-end")
+    return sorted(values)
+
+
+def _find_serialization_roles(normalized: str) -> list[str]:
+    values = set()
+    protected = normalized
+    if re.search(r"\bnon serial\b", protected):
+        values.add("non-serial")
+        protected = re.sub(r"\bnon serial\b", " ", protected)
+    if re.search(r"\bserial\b", protected):
+        values.add("serial")
+    return sorted(values)
+
+
+def _find_flow_roles(normalized: str) -> list[str]:
+    words = set(normalized.split())
+    return sorted(words & {"inlet", "outlet"})
+
+
+def _find_engine_component_roles(normalized: str) -> list[str]:
+    """Recognize only explicit component roles within an engine description."""
+    words = set(normalized.split())
+    if "engine" not in words:
+        return []
+    roles = set()
+    if "block" in words:
+        roles.add("block")
+    if "head" in words:
+        roles.add("head")
+    if words & {"piston", "pistons"}:
+        roles.add("pistons")
+    if "fuel" in words and "pump" in words:
+        roles.add("fuel-pump")
+    return sorted(roles)
+
+
 def extract_variant_attributes(description) -> dict[str, list[str]]:
     raw = "" if description is None else str(description).lower()
     normalized = normalize_description(description)
@@ -158,13 +228,17 @@ def extract_variant_attributes(description) -> dict[str, list[str]]:
         "ELECTRICAL_RATING": _find_electrical(raw, normalized),
         "DIMENSION": _find_dimensions(raw, normalized),
         "SENSOR_TYPE": sorted(words & SENSOR_TYPE),
-        "SIDE": sorted(words & SIDE),
+        "SIDE": _find_sides(normalized),
         "CONNECTIVITY": sorted(words & CONNECTIVITY),
         "ENVIRONMENT": sorted(words & ENVIRONMENT),
         "OPERATION_MODE": sorted(words & OPERATION_MODE),
         "PLACEMENT": sorted(words & PLACEMENT),
         "HIERARCHY": sorted(words & HIERARCHY),
         "SIGNAL_TYPE": sorted(words & SIGNAL_TYPE),
+        "END_POSITION": _find_end_positions(normalized),
+        "SERIALIZATION_ROLE": _find_serialization_roles(normalized),
+        "FLOW_ROLE": _find_flow_roles(normalized),
+        "ENGINE_COMPONENT_ROLE": _find_engine_component_roles(normalized),
         "STRUCTURAL_ROLE": _find_structural_roles(normalized),
         "TRAILING_VARIANT_SUFFIX": trailing_suffix,
         "TRAILING_VARIANT_BASE": trailing_base,
@@ -194,6 +268,22 @@ def find_critical_mismatches(attributes_a: dict, attributes_b: dict) -> list[dic
             "values_a": sorted(suffix_a),
             "values_b": sorted(suffix_b),
         })
+    return mismatches
+
+
+def find_identity_role_mismatches(attributes_a: dict, attributes_b: dict) -> list[dict]:
+    """Return explicit two-sided identity-role conflicts for deterministic scoring."""
+    mismatches = []
+    for group, label in IDENTITY_ROLE_GROUP_LABELS.items():
+        values_a = set(attributes_a.get(group, []))
+        values_b = set(attributes_b.get(group, []))
+        if values_a and values_b and values_a != values_b:
+            mismatches.append({
+                "group": group,
+                "label": label,
+                "values_a": sorted(values_a),
+                "values_b": sorted(values_b),
+            })
     return mismatches
 
 

@@ -28,3 +28,11 @@ Sensitive Data Mode keeps processing local, avoids raw CSV persistence, calculat
 ## Scalability
 
 Grouping avoids unrestricted all-pairs comparison when business fields are selected. The API is stateless apart from database persistence. Larger deployments should use PostgreSQL, shared storage, a background worker, and measured block-size limits.
+
+## Identity edge safety foundation
+
+A persisted pair candidate is internal edge evidence, not a durable identity group. The canonical internal edge contract classifies existing deterministic and human evidence as `STRONG_SUPPORT`, `REVIEW_SUPPORT`, `CANNOT_LINK`, or `NON_GROUPABLE`. Future groups will be constrained identity hypotheses built from those edges.
+
+Connectedness alone is not sufficient for group identity. Any internal `CANNOT_LINK` edge prevents an automatic likely-duplicate group containing both records, even when an intermediate generic record supports each endpoint separately.
+
+Explicit affirmative opposite roles such as rotor/stator, drive-end/non-drive-end, serial/non-serial, inlet/outlet, left/right, top/component, and distinct explicitly named engine components are deterministic conflict evidence. A role present on only one record is not an opposite-role conflict. UOM differences remain separate mapping-quality evidence, LLM results remain advisory, and an explicit human non-duplicate decision remains authoritative.
