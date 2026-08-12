@@ -19,7 +19,9 @@ LLM_AUTO_TRIAGE_ENABLED=true
 
 `LLM_TRIAGE_CONCURRENCY` defaults to `1` and is bounded from 1 to 8. `LLM_TRIAGE_MAX_CANDIDATES_PER_SCAN` defaults to `250` and is bounded from 1 to 1000. Candidates above the cap are counted as skipped. The scan response does not wait for provider calls: a FastAPI background task opens independent SQLAlchemy sessions after the deterministic transaction has committed.
 
-Only candidates whose deterministic status is `POSSIBLE_DUPLICATE_REVIEW` and which pass the existing candidate-advisory eligibility are queued. Clear high-confidence duplicates, hard-rule exclusions, and every other ineligible result cause no provider work.
+Automatic triage and semantic-enrichment preparation reuse one centralized candidate gate. Only unresolved candidates whose deterministic status is `POSSIBLE_DUPLICATE_REVIEW`, whose stored deterministic evidence is valid, whose two sides contain identity evidence, and whose `critical_mismatches` list is empty may enter provider-facing work. Clear duplicates, hard-rule exclusions, cross-site results, data conflicts, insufficient-data results, related-but-not-duplicate results, invalid evidence, and critical mismatches cause no automatic provider work.
+
+Candidate source and retrieval metadata are never eligibility grants. `DETERMINISTIC_STANDARD` and `HYBRID_RETRIEVAL` candidates follow the same rule; retrieval tier, retrieval priority, retrieval sources, UOM relationship, UOM penalty, and mapping-quality warnings cannot independently make a candidate LLM-eligible. Differing or unknown UOM may leave an otherwise valid candidate unresolved and reviewable, but any critical deterministic identity mismatch remains an absolute LLM boundary.
 
 ## Durable state and restart behavior
 

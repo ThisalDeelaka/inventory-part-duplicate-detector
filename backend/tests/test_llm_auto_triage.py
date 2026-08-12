@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import Settings
 from app.db.models import (
+    CandidateDiscoveryMetadata,
     DuplicateCandidate,
     DuplicateScan,
     LlmAdvisorySnapshot,
@@ -41,6 +42,7 @@ from app.services.llm_triage_service import (
     triage_failure_categories,
 )
 from app.services.llm_snapshot_service import safe_error_category
+from app.services.llm_enhancement_service import LlmEnhancementProcessor
 
 
 def _settings(**overrides):
@@ -197,6 +199,107 @@ def test_existing_eligibility_is_reused_and_only_review_candidates_are_selected(
     assert candidate_is_triage_eligible(clear) is False
     assert candidate_is_triage_eligible(hard) is False
     assert eligible_candidate_ids(db, scan.id) == [review.id]
+
+
+@pytest.mark.parametrize(("overrides", "expected"), [
+    ({"business_status": "LIKELY_DUPLICATE", "confidence_level": "HIGH"}, False),
+    ({"business_status": "POSSIBLE_DUPLICATE_REVIEW"}, True),
+    ({"business_status": "INSUFFICIENT_DATA", "rule_decision": "DOWNGRADE",
+      "rejection_reason": "GENERIC_DESCRIPTION"}, False),
+    ({"business_status": "RELATED_BUT_NOT_DUPLICATE", "rule_decision": "DOWNGRADE"}, False),
+    ({"business_status": "DATA_CONFLICT_REVIEW", "rule_decision": "DATA_CONFLICT"}, False),
+    ({"business_status": "CROSS_SITE_STANDARDIZATION_CANDIDATE",
+      "rule_decision": "CROSS_SITE"}, False),
+    ({"business_status": "REJECTED_BY_BUSINESS_RULE", "rule_decision": "REJECT"}, False),
+])
+def test_automatic_triage_status_matrix(db, overrides, expected):
+    candidate = _candidate(db, _scan(db, str(overrides)), **overrides)
+    assert candidate_is_triage_eligible(candidate) is expected
+
+
+def test_automatic_gate_rejects_persisted_structural_mismatch_and_calls_no_provider(db):
+    scan = _scan(db, "legacy structural mismatch")
+    candidate = _candidate(
+        db,
+        scan,
+        part_no_a="MLR-TOP-02.28.2023",
+        description_a="MLR-TOP-02.28.2023",
+        part_no_b="MLR-COMPONENT-02.28.2023",
+        description_b="MLR-COMPONENT-02.28.2023",
+        business_status="POSSIBLE_DUPLICATE_REVIEW",
+        rule_decision="DOWNGRADE",
+        rejection_reason="STRUCTURAL_ROLE_MISMATCH",
+        critical_mismatches=json.dumps([{
+            "group": "STRUCTURAL_ROLE",
+            "label": "Structural role",
+            "values_a": ["top"],
+            "values_b": ["component"],
+        }]),
+    )
+    run, should_schedule = prepare_triage_run(db, scan.id, _settings())
+    provider = FakeProvider([])
+    assert candidate_is_triage_eligible(candidate) is False
+    assert eligible_candidate_ids(db, scan.id) == []
+    assert should_schedule is False and run.total_eligible == 0
+    assert provider.calls == []
+
+
+def test_candidate_source_and_retrieval_uom_metadata_never_grant_eligibility(db):
+    scan = _scan(db, "provenance independence")
+    standard = _candidate(db, scan, part_no_a="STANDARD-A")
+    hybrid = _candidate(db, scan, part_no_a="HYBRID-A")
+    db.add_all([
+        CandidateDiscoveryMetadata(candidate_id=standard.id, source="DETERMINISTIC_STANDARD"),
+        CandidateDiscoveryMetadata(
+            candidate_id=hybrid.id,
+            source="HYBRID_RETRIEVAL",
+            retrieval_tier="TIER_A",
+            retrieval_priority=99.99,
+            retrieval_sources_json='["EXACT_DESCRIPTION","CHAR_VECTOR"]',
+            uom_relationship="DIFFERENT_DIMENSION_OR_BASIS",
+            uom_penalty=20,
+            mapping_quality="POSSIBLE_MAPPING_ERROR",
+        ),
+    ])
+    db.commit()
+    assert candidate_is_triage_eligible(standard) is True
+    assert candidate_is_triage_eligible(hybrid) is True
+    hybrid.critical_mismatches = json.dumps([{
+        "group": "STRUCTURAL_ROLE", "label": "Structural role",
+        "values_a": ["top"], "values_b": ["component"],
+    }])
+    db.commit()
+    assert candidate_is_triage_eligible(hybrid) is False
+
+
+def test_semantic_enhancement_preparation_reuses_central_eligibility_gate(db):
+    scan = _scan(db, "semantic central gate")
+    clean = _candidate(db, scan, part_no_a="CLEAN-A", part_no_b="CLEAN-B")
+    blocked = _candidate(
+        db,
+        scan,
+        part_no_a="MLR-TOP-02.28.2023",
+        part_no_b="MLR-COMPONENT-02.28.2023",
+        critical_mismatches=json.dumps([{
+            "group": "STRUCTURAL_ROLE", "label": "Structural role",
+            "values_a": ["top"], "values_b": ["component"],
+        }]),
+    )
+    prepared_record_ids = []
+
+    async def capture_provider_batch(_service, records):
+        prepared_record_ids.extend(item.record_id for item in records)
+        raise RuntimeError("synthetic provider stub")
+
+    preparation = asyncio.run(
+        LlmEnhancementProcessor(_settings(), lambda _configuration: None).prepare(
+            db, scan.id, capture_provider_batch
+        )
+    )
+    assert preparation.standard_residual_ids == [clean.id]
+    assert prepared_record_ids
+    assert all(f"candidate-{clean.id}-" in item for item in prepared_record_ids)
+    assert all(f"candidate-{blocked.id}-" not in item for item in prepared_record_ids)
 
 
 def test_prepare_is_idempotent_one_run_per_scan_and_counts_cap(db):

@@ -22,6 +22,7 @@ from app.llm.services import (
     ColumnSuggestionService,
     DifficultValueInterpretationService,
     LLMStructuredOutputError,
+    candidate_is_automatic_llm_eligible,
     candidate_eligibility,
 )
 
@@ -417,6 +418,41 @@ def test_valid_empty_candidate_mismatch_evidence_remains_eligible():
     assert result.reason == CandidateGateReason.ELIGIBLE_REVIEW_STATUS
 
 
+def test_review_status_with_valid_critical_mismatch_is_never_llm_eligible():
+    mismatch = json.dumps([{
+        "group": "STRUCTURAL_ROLE",
+        "label": "Structural role",
+        "values_a": ["top"],
+        "values_b": ["component"],
+    }])
+    candidate = _candidate(
+        business_status="POSSIBLE_DUPLICATE_REVIEW",
+        rule_decision="DOWNGRADE",
+        rejection_reason="STRUCTURAL_ROLE_MISMATCH",
+        critical_mismatches=mismatch,
+    )
+    eligibility = candidate_eligibility(candidate)
+    assert eligibility.eligible is False
+    assert eligibility.reason == CandidateGateReason.INELIGIBLE_CRITICAL_MISMATCH
+    assert candidate_is_automatic_llm_eligible(candidate) is False
+
+
+def test_manual_advisory_critical_mismatch_bypasses_provider():
+    provider = FakeProvider([])
+    candidate = _candidate(critical_mismatches=json.dumps([{
+        "group": "STRUCTURAL_ROLE",
+        "label": "Structural role",
+        "values_a": ["top"],
+        "values_b": ["component"],
+    }]))
+    result = asyncio.run(
+        CandidateAdvisoryService(**_runtime(provider)).advise(candidate)
+    )
+    assert result.eligibility.reason == CandidateGateReason.INELIGIBLE_CRITICAL_MISMATCH
+    assert result.metadata.llm_used is False
+    assert provider.calls == []
+
+
 def test_candidate_bypass_calls_no_provider_and_is_audited():
     provider = FakeProvider([])
     audit = LLMAuditStore(enabled=True, max_entries=5)
@@ -510,30 +546,25 @@ def test_candidate_advisory_is_server_built_cached_and_non_mutating():
     assert candidate.__dict__ == before
 
 
-def test_candidate_data_conflict_is_preserved_in_provider_request():
+def test_candidate_data_conflict_with_critical_mismatch_bypasses_provider_unchanged():
     mismatch = [{
         "group": "HSN_SAC_CODE",
         "label": "HSN/SAC Code",
         "values_a": ["1000"],
         "values_b": ["2000"],
     }]
-    provider = FakeProvider(
-        [{
-            "assessment": "SUPPORTS_NON_DUPLICATE",
-            "confidence": 0.8,
-            "supporting_evidence": [],
-            "conflicting_evidence": ["Classification conflict."],
-            "recommended_action": "KEEP_DETERMINISTIC_RESULT",
-            "deterministic_result_authoritative": True,
-        }]
-    )
+    provider = FakeProvider([])
     candidate = _candidate(
         business_status="DATA_CONFLICT_REVIEW",
         rule_decision="DATA_CONFLICT",
         rejection_reason="HSN_SAC_CODE_MISMATCH",
         critical_mismatches=json.dumps(mismatch),
     )
-    asyncio.run(CandidateAdvisoryService(**_runtime(provider)).advise(candidate))
-    payload = json.loads(provider.calls[0][1])
-    assert payload["critical_mismatches"] == mismatch
-    assert payload["deterministic_rule_decision"] == "DATA_CONFLICT"
+    before = dict(candidate.__dict__)
+    result = asyncio.run(
+        CandidateAdvisoryService(**_runtime(provider)).advise(candidate)
+    )
+    assert result.eligibility.reason == CandidateGateReason.INELIGIBLE_CRITICAL_MISMATCH
+    assert result.metadata.llm_used is False
+    assert provider.calls == []
+    assert candidate.__dict__ == before

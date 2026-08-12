@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.engine.scoring import score_candidate
 from app.llm.contracts import InventoryRecordEvidence
+from app.llm.services import candidate_is_automatic_llm_eligible
 from app.llm.prompts import INVENTORY_RECORD_ENRICHMENT_PROMPT_VERSION
 from app.llm.service_contracts import LLMCapability
 from app.repositories.candidate_repository import CandidateRepository
@@ -161,7 +162,10 @@ class LlmEnhancementProcessor:
     async def prepare(self, db: Session, scan_id: int, send_batch) -> EnhancementPreparation:
         run = self._run_row(db, scan_id)
         standard = db.query(DuplicateCandidate).filter_by(scan_id=scan_id).order_by(DuplicateCandidate.id).all()
-        standard = [item for item in standard if item.business_status == "POSSIBLE_DUPLICATE_REVIEW"]
+        standard = [
+            item for item in standard
+            if candidate_is_automatic_llm_eligible(item)
+        ]
         standard = standard[:self.configuration.llm_triage_max_candidates_per_scan]
         pools = db.query(RecallRescuePair).filter_by(scan_id=scan_id, state="PENDING").order_by(RecallRescuePair.rank).all()
         evidence_by_fp = {}

@@ -26,7 +26,10 @@ from app.llm.cache import LLMCache
 from app.llm.provider import LLMProvider
 from app.llm.runtime import get_llm_audit, get_llm_cache, get_llm_provider_factory
 from app.llm.service_contracts import LLMCapability
-from app.llm.services import CandidateAdvisoryService, candidate_eligibility
+from app.llm.services import (
+    CandidateAdvisoryService,
+    candidate_is_automatic_llm_eligible,
+)
 from app.services.llm_snapshot_service import (
     SnapshotPersistenceError,
     persist_candidate_advisory_failure,
@@ -96,10 +99,8 @@ def automatic_triage_ready(configuration: Settings) -> bool:
 
 
 def candidate_is_triage_eligible(candidate) -> bool:
-    return bool(
-        candidate.business_status == "POSSIBLE_DUPLICATE_REVIEW"
-        and candidate_eligibility(candidate).eligible
-    )
+    """Compatibility name for the centralized automatic LLM eligibility gate."""
+    return candidate_is_automatic_llm_eligible(candidate)
 
 
 def effective_status(
