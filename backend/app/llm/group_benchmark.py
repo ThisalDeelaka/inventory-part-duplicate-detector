@@ -11,7 +11,17 @@ from itertools import combinations
 from typing import Any
 
 from app.core.config import Settings
-from app.llm.exceptions import LLMProviderHTTPError, LLMProviderNetworkError, LLMProviderTimeoutError
+from app.llm.exceptions import (
+    LLMProviderConfigurationError,
+    LLMProviderDisabledError,
+    LLMProviderEmptyResponseError,
+    LLMProviderError,
+    LLMProviderHTTPError,
+    LLMProviderMalformedJSONError,
+    LLMProviderNetworkError,
+    LLMProviderResponseStructureError,
+    LLMProviderTimeoutError,
+)
 from app.llm.group_contracts import (
     GROUP_ADVISORY_REQUEST_VERSION,
     GROUP_ADVISORY_RESULT_VERSION,
@@ -55,6 +65,56 @@ class BenchmarkUsefulness(str, Enum):
     INVALID_REJECTED = "INVALID_REJECTED"
 
 
+class BenchmarkFailureCategory(str, Enum):
+    AUTHENTICATION = "AUTHENTICATION"
+    PERMISSION = "PERMISSION"
+    INVALID_REQUEST = "INVALID_REQUEST"
+    MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    RATE_LIMIT = "RATE_LIMIT"
+    TIMEOUT = "TIMEOUT"
+    NETWORK = "NETWORK"
+    SERVER_ERROR = "SERVER_ERROR"
+    MALFORMED_RESPONSE = "MALFORMED_RESPONSE"
+    SEMANTIC_VALIDATION = "SEMANTIC_VALIDATION"
+    CIRCUIT_OPEN = "CIRCUIT_OPEN"
+    PROVIDER_DISABLED = "PROVIDER_DISABLED"
+    UNKNOWN_PROVIDER_ERROR = "UNKNOWN_PROVIDER_ERROR"
+
+
+def classify_benchmark_failure(exc: Exception) -> BenchmarkFailureCategory:
+    if isinstance(exc, (asyncio.TimeoutError, LLMProviderTimeoutError)):
+        return BenchmarkFailureCategory.TIMEOUT
+    if isinstance(exc, LLMProviderNetworkError):
+        return BenchmarkFailureCategory.NETWORK
+    if isinstance(exc, LLMProviderHTTPError):
+        return {
+            400: BenchmarkFailureCategory.INVALID_REQUEST,
+            401: BenchmarkFailureCategory.AUTHENTICATION,
+            403: BenchmarkFailureCategory.PERMISSION,
+            404: BenchmarkFailureCategory.MODEL_UNAVAILABLE,
+            429: BenchmarkFailureCategory.RATE_LIMIT,
+        }.get(
+            exc.status_code,
+            BenchmarkFailureCategory.SERVER_ERROR
+            if exc.status_code is not None and 500 <= exc.status_code <= 599
+            else BenchmarkFailureCategory.UNKNOWN_PROVIDER_ERROR,
+        )
+    if isinstance(exc, (
+        LLMProviderMalformedJSONError, LLMProviderResponseStructureError,
+        LLMProviderEmptyResponseError,
+    )):
+        return BenchmarkFailureCategory.MALFORMED_RESPONSE
+    if isinstance(exc, (LLMProviderDisabledError, LLMProviderConfigurationError)):
+        return BenchmarkFailureCategory.PROVIDER_DISABLED
+    return BenchmarkFailureCategory.UNKNOWN_PROVIDER_ERROR
+
+
+_SAFE_FAILURE_MESSAGES = {
+    category: f"Benchmark case failed safely: {category.value.lower()}."
+    for category in BenchmarkFailureCategory
+}
+
+
 def canonical_partition(partitions) -> tuple[tuple[str, ...], ...]:
     return tuple(sorted(
         (tuple(sorted(block)) for block in partitions),
@@ -85,17 +145,29 @@ class GroupAdvisoryBenchmarkCase:
 @dataclass(frozen=True)
 class GroupBenchmarkCaseResult:
     case_id: str
+    source_kind: BenchmarkSourceKind
+    group_size: int
     request_fingerprint: str
     expected_resolution: BenchmarkExpectedResolution
-    validated_outcome: str
+    provider_id: str
+    model_id: str | None
+    execution_status: str
+    attempt_count: int
+    transport_succeeded: bool
     structurally_valid: bool
     semantically_valid: bool
+    validated_outcome: str | None
     validity_class: str
-    usefulness_class: BenchmarkUsefulness
-    latency_ms: float
-    attempt_count: int
+    usefulness_class: BenchmarkUsefulness | None
+    safe_error_code: str | None
+    safe_error_category: BenchmarkFailureCategory | None
+    http_status: int | None
+    provider_error_type: str | None
+    provider_error_code: str | None
+    safe_error_message: str | None
     request_bytes: int
     response_bytes: int | None
+    latency_ms: float | None
     prompt_tokens: int | None
     completion_tokens: int | None
     total_tokens: int | None
@@ -138,6 +210,7 @@ class GroupBenchmarkReport:
     retry_count: int
     rate_limit_count: int
     timeout_count: int
+    failure_counts: dict[str, int]
     cache_hits: int
     cache_misses: int
     request_bytes: int
@@ -191,6 +264,49 @@ def _usefulness(case, validated, invalid: bool) -> BenchmarkUsefulness:
     )
 
 
+def _request_bytes(provider: GroupAdvisoryProvider, request: GroupAdvisoryRequest) -> int:
+    calculator = getattr(provider, "request_bytes", None)
+    if callable(calculator):
+        value = calculator(request)
+        if isinstance(value, int) and value > 0:
+            return value
+    return len(canonical_group_advisory_request_json(request).encode("utf-8"))
+
+
+def _failure_result(
+    case: GroupAdvisoryBenchmarkCase,
+    provider: GroupAdvisoryProvider,
+    exc: Exception,
+    *, attempts: int,
+    request_bytes: int,
+    latency_ms: float,
+) -> GroupBenchmarkCaseResult:
+    category = classify_benchmark_failure(exc)
+    status = getattr(exc, "status_code", None)
+    return GroupBenchmarkCaseResult(
+        case_id=case.case_id, source_kind=case.source_kind,
+        group_size=case.group_size,
+        request_fingerprint=case.request_fingerprint,
+        expected_resolution=case.expected_resolution,
+        provider_id=provider.provider_id, model_id=provider.provider_model,
+        execution_status="TRANSPORT_FAILED", attempt_count=attempts,
+        transport_succeeded=False, structurally_valid=False,
+        semantically_valid=False, validated_outcome=None,
+        validity_class="TRANSPORT_FAILED", usefulness_class=None,
+        safe_error_code=category.value, safe_error_category=category,
+        http_status=status if isinstance(status, int) else None,
+        provider_error_type=type(exc).__name__[:120],
+        provider_error_code=None,
+        safe_error_message=_SAFE_FAILURE_MESSAGES[category],
+        request_bytes=request_bytes, response_bytes=None,
+        latency_ms=latency_ms, prompt_tokens=None,
+        completion_tokens=None, total_tokens=None,
+        provider_declared_inconclusive=False,
+        invalid_normalized_to_inconclusive=False,
+        unsafe_cannot_link_rejected=False,
+    )
+
+
 class GroupAdvisoryBenchmarkRunner:
     """Explicit bounded runner; no production path imports or invokes it."""
 
@@ -220,8 +336,10 @@ class GroupAdvisoryBenchmarkRunner:
                 break
             attempted_cases.append(case)
             started = time.perf_counter()
+            request_bytes = _request_bytes(self.provider, case.request)
             raw = None
             attempts = 0
+            last_error = None
             for attempt in range(self.max_retries + 1):
                 if provider_calls >= self.max_calls:
                     break
@@ -234,9 +352,13 @@ class GroupAdvisoryBenchmarkRunner:
                     )
                     break
                 except (asyncio.TimeoutError, LLMProviderTimeoutError):
+                    last_error = LLMProviderTimeoutError(
+                        "Benchmark provider request timed out"
+                    )
                     timeouts += 1
                     retryable = True
                 except Exception as exc:
+                    last_error = exc
                     status = getattr(exc, "status_code", None)
                     if status == 429:
                         rate_limits += 1
@@ -250,6 +372,12 @@ class GroupAdvisoryBenchmarkRunner:
                 retries += 1
                 await asyncio.sleep(0)
             if raw is None:
+                results.append(_failure_result(
+                    case, self.provider,
+                    last_error or LLMProviderError("Benchmark provider failed"),
+                    attempts=attempts, request_bytes=request_bytes,
+                    latency_ms=max(0.0, (time.perf_counter() - started) * 1000),
+                ))
                 continue
             successful += 1
             latency = max(0.0, (time.perf_counter() - started) * 1000)
@@ -269,19 +397,34 @@ class GroupAdvisoryBenchmarkRunner:
                 raw.content, sort_keys=True, separators=(",", ":"), ensure_ascii=True
             ).encode("utf-8"))
             results.append(GroupBenchmarkCaseResult(
-                case_id=case.case_id,
+                case_id=case.case_id, source_kind=case.source_kind,
+                group_size=case.group_size,
                 request_fingerprint=case.request_fingerprint,
                 expected_resolution=case.expected_resolution,
+                provider_id=self.provider.provider_id,
+                model_id=self.provider.provider_model,
+                execution_status=(
+                    "INVALID_PROVIDER_OUTPUT" if invalid else "SUCCEEDED"
+                ),
+                attempt_count=attempts, transport_succeeded=True,
                 validated_outcome=validated.outcome.value,
                 structurally_valid=structurally_valid,
                 semantically_valid=not invalid,
                 validity_class=("INVALID_REJECTED" if invalid else "VALID"),
                 usefulness_class=_usefulness(case, validated, invalid),
-                latency_ms=latency, attempt_count=attempts,
-                request_bytes=len(canonical_group_advisory_request_json(
-                    case.request
-                ).encode("utf-8")),
+                safe_error_code=("SEMANTIC_VALIDATION" if invalid else None),
+                safe_error_category=(
+                    BenchmarkFailureCategory.SEMANTIC_VALIDATION if invalid else None
+                ),
+                http_status=None, provider_error_type=None,
+                provider_error_code=None,
+                safe_error_message=(
+                    _SAFE_FAILURE_MESSAGES[BenchmarkFailureCategory.SEMANTIC_VALIDATION]
+                    if invalid else None
+                ),
+                request_bytes=request_bytes,
                 response_bytes=response_bytes,
+                latency_ms=latency,
                 prompt_tokens=usage.prompt_tokens if usage else None,
                 completion_tokens=usage.completion_tokens if usage else None,
                 total_tokens=usage.total_tokens if usage else None,
@@ -295,8 +438,17 @@ class GroupAdvisoryBenchmarkRunner:
         }
         valid_results = [r for r in results if r.validity_class == "VALID"]
         def optional_sum(name):
-            values = [getattr(result, name) for result in results]
-            return sum(values) if values and all(value is not None for value in values) else None
+            values = [
+                getattr(result, name) for result in results
+                if getattr(result, name) is not None
+            ]
+            return sum(values) if values else None
+        failure_counts = {
+            category.value: sum(
+                result.safe_error_category == category for result in results
+            )
+            for category in BenchmarkFailureCategory
+        }
         return GroupBenchmarkReport(
             benchmark_version=GROUP_BENCHMARK_VERSION,
             provider_id=self.provider.provider_id,
@@ -339,10 +491,15 @@ class GroupAdvisoryBenchmarkRunner:
             unsafe_cannot_link_proposals_rejected=sum(
                 r.unsafe_cannot_link_rejected for r in results
             ),
-            latency_p50_ms=_percentile([r.latency_ms for r in results], .5),
-            latency_p95_ms=_percentile([r.latency_ms for r in results], .95),
+            latency_p50_ms=_percentile([
+                r.latency_ms for r in results if r.latency_ms is not None
+            ], .5),
+            latency_p95_ms=_percentile([
+                r.latency_ms for r in results if r.latency_ms is not None
+            ], .95),
             retry_count=retries,
             rate_limit_count=rate_limits, timeout_count=timeouts,
+            failure_counts=failure_counts,
             cache_hits=0, cache_misses=len(attempted_cases),
             request_bytes=sum(r.request_bytes for r in results),
             response_bytes=optional_sum("response_bytes"),

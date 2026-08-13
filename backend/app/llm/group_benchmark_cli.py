@@ -36,6 +36,18 @@ def main() -> int:
         json.dumps(report.model_dump(), indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    print(
+        f"Cases attempted: {report.total_cases_attempted}; "
+        f"transport successes: {report.successful_transport_responses}"
+    )
+    failures = {
+        category: count for category, count in report.failure_counts.items()
+        if count
+    }
+    if failures:
+        print("Failure categories:")
+        for category, count in sorted(failures.items()):
+            print(f"  {category}: {count}")
     print(f"Benchmark report written: {args.output}")
     return 0
 

@@ -7,18 +7,20 @@ from pydantic import SecretStr
 
 from app.core.config import Settings
 from app.llm.exceptions import (
-    LLMProviderConfigurationError, LLMProviderHTTPError,
+    LLMProviderConfigurationError, LLMProviderError, LLMProviderHTTPError,
     LLMProviderMalformedJSONError, LLMProviderNetworkError,
-    LLMProviderTimeoutError,
+    LLMProviderResponseStructureError, LLMProviderTimeoutError,
 )
 from app.llm.groq_group_provider import (
     GroqGroupAdvisoryProvider, create_group_advisory_provider,
 )
 from app.llm.groq_provider import GroqLLMProvider
 from app.llm.group_benchmark import (
-    BenchmarkExpectedResolution, BenchmarkSourceKind, BenchmarkUsefulness,
+    BenchmarkExpectedResolution, BenchmarkFailureCategory,
+    BenchmarkSourceKind, BenchmarkUsefulness,
     GroupAdvisoryBenchmarkRunner, canonical_partition,
-    curated_group_benchmark_cases, live_group_benchmark_enabled,
+    classify_benchmark_failure, curated_group_benchmark_cases,
+    live_group_benchmark_enabled,
 )
 from app.llm.group_contracts import GROUP_ADVISORY_RESULT_VERSION
 from app.llm.group_execution import (
@@ -298,3 +300,148 @@ def test_benchmark_bounded_retry_metrics_then_success():
     assert report.retry_count == 1
     assert report.successful_transport_responses == 1
     assert report.cases[0].attempt_count == 2
+
+
+@pytest.mark.parametrize("exception,category,status", [
+    (LLMProviderHTTPError(status_code=401), BenchmarkFailureCategory.AUTHENTICATION, 401),
+    (LLMProviderHTTPError(status_code=403), BenchmarkFailureCategory.PERMISSION, 403),
+    (LLMProviderHTTPError(status_code=400), BenchmarkFailureCategory.INVALID_REQUEST, 400),
+    (LLMProviderHTTPError(status_code=404), BenchmarkFailureCategory.MODEL_UNAVAILABLE, 404),
+    (LLMProviderHTTPError(status_code=429), BenchmarkFailureCategory.RATE_LIMIT, 429),
+    (LLMProviderHTTPError(status_code=503), BenchmarkFailureCategory.SERVER_ERROR, 503),
+    (LLMProviderTimeoutError("timeout"), BenchmarkFailureCategory.TIMEOUT, None),
+    (LLMProviderNetworkError("network"), BenchmarkFailureCategory.NETWORK, None),
+    (LLMProviderMalformedJSONError("bad json"), BenchmarkFailureCategory.MALFORMED_RESPONSE, None),
+])
+def test_transport_failures_are_one_safe_first_class_case(exception, category, status):
+    case = curated_group_benchmark_cases()[0]
+
+    class FailingProvider(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            raise exception
+
+    provider = FailingProvider()
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        provider, max_calls=1, max_retries=0
+    ).run((case,)))
+    assert report.total_cases_attempted == len(report.cases) == 1
+    result = report.cases[0]
+    assert result.case_id == case.case_id
+    assert result.source_kind == case.source_kind
+    assert result.group_size == case.group_size
+    assert result.transport_succeeded is False
+    assert result.execution_status == "TRANSPORT_FAILED"
+    assert result.attempt_count == 1
+    assert result.safe_error_category == category
+    assert result.safe_error_code == category.value
+    assert result.http_status == status
+    assert result.request_bytes > 0
+    assert result.response_bytes is None
+    assert report.request_bytes == result.request_bytes
+    assert report.failure_counts[category.value] == 1
+    assert classify_benchmark_failure(exception) == category
+
+
+def test_retry_then_terminal_failure_is_one_case_with_two_attempts():
+    case = curated_group_benchmark_cases()[0]
+
+    class RetryThenTerminal(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise LLMProviderNetworkError("synthetic retry")
+            raise LLMProviderHTTPError(status_code=401)
+
+    provider = RetryThenTerminal()
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        provider, max_calls=2, max_retries=1
+    ).run((case,)))
+    assert report.provider_calls == 2 and report.retry_count == 1
+    assert report.total_cases_attempted == len(report.cases) == 1
+    assert report.cases[0].attempt_count == 2
+    assert report.cases[0].safe_error_category == BenchmarkFailureCategory.AUTHENTICATION
+
+
+def test_all_transport_failures_retain_every_attempted_case_and_aggregate_bytes():
+    cases = curated_group_benchmark_cases()[:5]
+
+    class TerminalProvider(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            raise LLMProviderHTTPError(status_code=403)
+
+    provider = TerminalProvider()
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        provider, max_calls=5, max_retries=0
+    ).run(cases))
+    assert report.total_cases_attempted == len(report.cases) == 5
+    assert report.provider_calls == provider.calls == 5
+    assert report.successful_transport_responses == 0
+    assert report.request_bytes == sum(case.request_bytes for case in report.cases)
+    assert all(case.request_bytes > 0 for case in report.cases)
+    assert report.failure_counts["PERMISSION"] == 5
+
+
+def test_failure_report_serialization_is_secret_and_header_free():
+    case = curated_group_benchmark_cases()[0]
+    sentinel = "synthetic-sensitive-sentinel"
+
+    class SecretBearingFailure(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            raise LLMProviderError(f"Authorization Bearer {sentinel}")
+
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        SecretBearingFailure(), max_calls=1, max_retries=0
+    ).run((case,)))
+    encoded = json.dumps(report.model_dump(), sort_keys=True)
+    assert sentinel not in encoded
+    assert "Authorization" not in encoded
+    assert "Bearer" not in encoded
+    assert report.cases[0].provider_error_type == "LLMProviderError"
+    assert report.cases[0].safe_error_message == (
+        "Benchmark case failed safely: unknown_provider_error."
+    )
+
+
+def test_malformed_and_semantic_failures_are_not_transport_failures():
+    case = curated_group_benchmark_cases()[0]
+    malformed = BenchmarkProvider("invalid")
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        malformed, max_calls=1
+    ).run((case,)))
+    result = report.cases[0]
+    assert result.transport_succeeded is True
+    assert result.execution_status == "INVALID_PROVIDER_OUTPUT"
+    assert result.safe_error_category == BenchmarkFailureCategory.SEMANTIC_VALIDATION
+    assert result.usefulness_class == BenchmarkUsefulness.INVALID_REJECTED
+    assert report.failure_counts["SEMANTIC_VALIDATION"] == 1
+    assert classify_benchmark_failure(
+        LLMProviderResponseStructureError("bad envelope")
+    ) == BenchmarkFailureCategory.MALFORMED_RESPONSE
+
+
+def test_groq_request_byte_accounting_excludes_authorization_header():
+    request = curated_group_benchmark_cases()[0].request
+    transport = GroqLLMProvider(
+        api_key=SecretStr("synthetic-secret"), model="benchmark-model",
+        timeout_seconds=3,
+    )
+    provider = GroqGroupAdvisoryProvider(transport)
+    assert provider.request_bytes(request) > 0
+    messages = build_group_advisory_messages(request)
+    expected_payload = {
+        "model": "benchmark-model",
+        "messages": [
+            {"role": "system", "content": messages.system_prompt},
+            {"role": "user", "content": messages.user_prompt},
+        ],
+        "stream": False, "response_format": {"type": "json_object"},
+        "temperature": 0,
+    }
+    expected = len(json.dumps(
+        expected_payload, ensure_ascii=True, sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8"))
+    assert provider.request_bytes(request) == expected

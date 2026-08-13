@@ -296,3 +296,29 @@ Group advisory persistence, API, UI, automatic triage, and default provider
 selection remain deferred. A future Cerebras adapter must be evaluated against
 the same cases, fingerprints, contracts, and safety metrics before any provider
 choice is considered.
+
+### Benchmark failure observability
+
+A benchmark with zero successful transport responses is not a semantic model
+benchmark. Every case that enters the runner remains a first-class report record
+even when authentication, permission, invalid-request, model, rate-limit,
+timeout, network, server, malformed-response, or other provider execution fails.
+Diagnostics retain only bounded safe categories, HTTP status where available,
+exception type, fixed sanitized messages, attempts, timing, and byte counts.
+They never retain headers, credentials, raw exception text, or arbitrary provider
+response bodies.
+
+Request bytes are measured before transport from the secret-free serialized
+provider payload. Failed responses may legitimately have no response-byte or
+token measurements. The existing shared Groq transport exposes safe HTTP status
+but intentionally discards provider response bodies, so provider error-body
+type/code/message fields remain unavailable rather than being guessed. A 404 is
+treated as model-unavailable; an otherwise undifferentiated 400 remains an
+invalid request.
+
+Provider-call count and benchmark-case count are different: a bounded retry is
+another transport call attached to the same case and may consume the call cap
+before every corpus case begins. For example, 30 calls can represent 29 cases
+and one retry. The existing hard maximum remains 35 so a later explicit run can
+cover the fixed 30-case corpus with a small retry allowance. Benchmark
+diagnostics do not change any provider default.

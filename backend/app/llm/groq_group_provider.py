@@ -1,5 +1,7 @@
 """Experimental Groq adapter for the bounded whole-group advisory contract."""
 
+import json
+
 import httpx
 
 from app.core.config import Settings
@@ -22,6 +24,23 @@ class GroqGroupAdvisoryProvider:
     def __init__(self, transport: GroqLLMProvider) -> None:
         self._transport = transport
         self.provider_model = transport.model
+
+    def request_bytes(self, request: GroupAdvisoryRequest) -> int:
+        """Size the secret-free Groq JSON payload before transport."""
+        messages = build_group_advisory_messages(request)
+        payload = {
+            "model": self.provider_model,
+            "messages": [
+                {"role": "system", "content": messages.system_prompt},
+                {"role": "user", "content": messages.user_prompt},
+            ],
+            "stream": False,
+            "response_format": {"type": "json_object"},
+            "temperature": 0,
+        }
+        return len(json.dumps(
+            payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8"))
 
     async def execute(
         self, request: GroupAdvisoryRequest
