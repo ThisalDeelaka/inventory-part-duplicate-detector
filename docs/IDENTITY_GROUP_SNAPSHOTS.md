@@ -239,3 +239,29 @@ G7A performs no provider invocation and adds no advisory persistence, API, or
 UI. Existing pair-level LLM code remains transitional advisory infrastructure
 and is unchanged while whole-group execution is deferred to a provider-neutral
 future phase.
+
+## G7B provider-neutral group execution
+
+G7A decides whether a group may reach AI. G7B only executes an already-approved,
+bounded request. Production orchestration builds the request through the G7A
+gate, fingerprints it, rechecks eligibility and the immutable fingerprint
+immediately before invocation, and then passes the whole request to a
+group-capable provider adapter. Provider selection is downstream of eligibility
+and cannot alter deterministic evidence or human authority.
+
+One 2..N group is one provider inference unit. Internal edge summaries remain
+evidence inside that one request; they are never expanded into N-choose-2
+provider calls. The provider-neutral message and structured-output contracts use
+only the G7A-minimized fields. Semantic result validation remains central and
+cannot be replaced by an adapter.
+
+Runtime execution distinguishes provider-disabled, rate-limited, timed-out,
+retryable failure, terminal failure, circuit-open, invalid output, model
+inconclusive, and successful validated advisory states. None is identity truth.
+Only centrally validated results may enter the process-local group cache, whose
+key includes the immutable request fingerprint, provider, model, and prompt
+contract version. Pair candidate cache and persistence are not reused.
+
+G7B includes only a disabled provider and test providers. It performs no real
+network request and adds no group advisory persistence, API, or UI. Those remain
+deferred until a real group-capable provider is independently benchmarked.
