@@ -2,10 +2,13 @@
 
 import hashlib
 import json
+from dataclasses import dataclass, fields
 from enum import Enum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel, ConfigDict, Field, StrictInt, StringConstraints, ValidationError,
+)
 
 
 GROUP_ADVISORY_REQUEST_VERSION = "group-advisory-request-v1"
@@ -144,20 +147,20 @@ class GroupAdvisoryConfidenceBand(str, Enum):
 class GroupAdvisoryResult(StrictContract):
     contract_version: Literal[GROUP_ADVISORY_RESULT_VERSION]
     request_fingerprint: Annotated[str, StringConstraints(min_length=64, max_length=64)]
-    group_snapshot_id: int = Field(gt=0)
+    group_snapshot_id: StrictInt = Field(gt=0)
     group_hypothesis_key: RecordRef
     outcome: GroupAdvisoryOutcome
     proposed_partitions: tuple[tuple[RecordRef, ...], ...] = Field(
-        default=(), max_length=20
+        max_length=20
     )
     confidence_band: GroupAdvisoryConfidenceBand
-    reason_codes: tuple[ReasonCode, ...] = Field(default=(), max_length=16)
-    rationale: Annotated[str, StringConstraints(max_length=1200)] = ""
+    reason_codes: tuple[ReasonCode, ...] = Field(max_length=16)
+    rationale: Annotated[str, StringConstraints(max_length=1200)]
     mapping_observations: tuple[
         Annotated[str, StringConstraints(max_length=300)], ...
-    ] = Field(default=(), max_length=10)
-    requires_human_review: Literal[True] = True
-    deterministic_result_authoritative: Literal[True] = True
+    ] = Field(max_length=10)
+    requires_human_review: Literal[True]
+    deterministic_result_authoritative: Literal[True]
     validation_reasons: tuple[ReasonCode, ...] = Field(default=(), max_length=16)
 
 
@@ -176,42 +179,102 @@ def _inconclusive(request: GroupAdvisoryRequest, reasons: list[str]) -> GroupAdv
     )
 
 
-def _safe_schema_validation_reasons(exc: ValidationError) -> list[str]:
-    """Reduce Pydantic detail to stable codes without retaining provider data."""
-    reasons = set()
-    for error in exc.errors(include_url=False, include_context=False, include_input=False):
+MAX_SCHEMA_DIAGNOSTIC_ENTRIES = 16
+MAX_SCHEMA_DIAGNOSTIC_PATH_LENGTH = 120
+
+
+@dataclass(frozen=True)
+class GroupResultSchemaDiagnostic:
+    """Bounded Pydantic field paths only; never provider values or messages."""
+
+    missing_fields: tuple[str, ...] = ()
+    unexpected_fields: tuple[str, ...] = ()
+    wrong_type_fields: tuple[str, ...] = ()
+    invalid_literal_fields: tuple[str, ...] = ()
+    invalid_length_fields: tuple[str, ...] = ()
+    invalid_format_fields: tuple[str, ...] = ()
+    other_schema_paths: tuple[str, ...] = ()
+
+    @property
+    def is_empty(self) -> bool:
+        return not any(getattr(self, item.name) for item in fields(self))
+
+
+def _safe_schema_path(location: Any) -> str:
+    parts = []
+    for part in location if isinstance(location, (tuple, list)) else ():
+        if isinstance(part, str):
+            safe = "".join(character for character in part if character.isalnum() or character == "_")
+            if safe:
+                parts.append(safe)
+        elif isinstance(part, int):
+            parts.append("[]")
+    path = ".".join(parts) or "$"
+    return path[:MAX_SCHEMA_DIAGNOSTIC_PATH_LENGTH]
+
+
+def group_result_schema_diagnostic(
+    exc: ValidationError | Exception,
+) -> GroupResultSchemaDiagnostic:
+    """Map authoritative parser errors to deterministic field-name categories."""
+    buckets = {item.name: set() for item in fields(GroupResultSchemaDiagnostic)}
+    try:
+        errors = exc.errors(
+            include_url=False, include_context=False, include_input=False
+        ) if isinstance(exc, ValidationError) else ()
+    except Exception:
+        errors = ()
+    if not errors:
+        buckets["other_schema_paths"].add("$")
+    for error in errors:
+        path = _safe_schema_path(error.get("loc", ()))
         error_type = error.get("type", "")
-        location = error.get("loc", ())
-        field = location[0] if location else None
         if error_type == "missing":
-            reasons.add("MISSING_REQUIRED_FIELD")
+            bucket = "missing_fields"
         elif error_type == "extra_forbidden":
-            reasons.add("EXTRA_AUTHORITY_FIELD")
+            bucket = "unexpected_fields"
+        elif error_type in {"literal_error", "enum"}:
+            bucket = "invalid_literal_fields"
         elif error_type in {
-            "string_too_long", "too_long", "list_too_long", "tuple_too_long",
+            "string_too_long", "string_too_short", "too_long", "too_short",
         }:
-            reasons.add("FIELD_TOO_LONG")
-        elif field == "outcome" and error_type in {
-            "enum", "literal_error",
+            bucket = "invalid_length_fields"
+        elif error_type in {"string_pattern_mismatch"}:
+            bucket = "invalid_format_fields"
+        elif error_type.endswith("_type") or error_type in {
+            "bool_parsing", "int_parsing", "string_unicode",
         }:
-            reasons.add("UNSUPPORTED_OUTCOME")
+            bucket = "wrong_type_fields"
         else:
-            reasons.add("SCHEMA_MISMATCH")
-    return sorted(reasons or {"SCHEMA_MISMATCH"})
+            bucket = "other_schema_paths"
+        buckets[bucket].add(path)
+    return GroupResultSchemaDiagnostic(**{
+        name: tuple(sorted(values))[:MAX_SCHEMA_DIAGNOSTIC_ENTRIES]
+        for name, values in buckets.items()
+    })
+
+
+def parse_group_advisory_result(
+    raw_result: GroupAdvisoryResult | dict[str, Any],
+) -> tuple[GroupAdvisoryResult | None, GroupResultSchemaDiagnostic]:
+    """Use the authoritative result model and return value-free diagnostics."""
+    if isinstance(raw_result, GroupAdvisoryResult):
+        return raw_result, GroupResultSchemaDiagnostic()
+    try:
+        return GroupAdvisoryResult.model_validate(raw_result), GroupResultSchemaDiagnostic()
+    except ValidationError as exc:
+        return None, group_result_schema_diagnostic(exc)
+    except Exception as exc:
+        return None, group_result_schema_diagnostic(exc)
 
 
 def validate_group_advisory_result(
     request: GroupAdvisoryRequest, raw_result: GroupAdvisoryResult | dict[str, Any]
 ) -> GroupAdvisoryResult:
     """Validate untrusted provider output; every failure becomes safe abstention."""
-    try:
-        result = raw_result if isinstance(raw_result, GroupAdvisoryResult) else (
-            GroupAdvisoryResult.model_validate(raw_result)
-        )
-    except ValidationError as exc:
-        return _inconclusive(request, _safe_schema_validation_reasons(exc))
-    except Exception:
-        return _inconclusive(request, ["OTHER_VALIDATION_ERROR"])
+    result, _diagnostic = parse_group_advisory_result(raw_result)
+    if result is None:
+        return _inconclusive(request, ["SCHEMA_MISMATCH"])
     reasons = []
     expected_fingerprint = group_advisory_request_fingerprint(request)
     if result.request_fingerprint != expected_fingerprint:

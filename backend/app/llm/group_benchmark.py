@@ -29,11 +29,11 @@ from app.llm.group_contracts import (
     GroupAdvisoryMember,
     GroupAdvisoryOutcome,
     GroupAdvisoryRequest,
-    GroupAdvisoryResult,
     GroupIdentityEvidenceSummary,
     GroupUomMappingSummary,
     canonical_group_advisory_request_json,
     group_advisory_request_fingerprint,
+    parse_group_advisory_result,
     validate_group_advisory_result,
 )
 from app.llm.group_execution import (
@@ -166,6 +166,13 @@ class GroupBenchmarkCaseResult:
     provider_error_code: str | None
     safe_error_message: str | None
     validation_reason_codes: tuple[str, ...]
+    schema_missing_fields: tuple[str, ...]
+    schema_unexpected_fields: tuple[str, ...]
+    schema_wrong_type_fields: tuple[str, ...]
+    schema_invalid_literal_fields: tuple[str, ...]
+    schema_invalid_length_fields: tuple[str, ...]
+    schema_invalid_format_fields: tuple[str, ...]
+    schema_other_paths: tuple[str, ...]
     request_bytes: int
     response_bytes: int | None
     latency_ms: float | None
@@ -212,6 +219,7 @@ class GroupBenchmarkReport:
     rate_limit_count: int
     timeout_count: int
     failure_counts: dict[str, int]
+    schema_mismatch_field_counts: dict[str, dict[str, int]]
     cache_hits: int
     cache_misses: int
     request_bytes: int
@@ -300,6 +308,10 @@ def _failure_result(
         provider_error_code=None,
         safe_error_message=_SAFE_FAILURE_MESSAGES[category],
         validation_reason_codes=(),
+        schema_missing_fields=(), schema_unexpected_fields=(),
+        schema_wrong_type_fields=(), schema_invalid_literal_fields=(),
+        schema_invalid_length_fields=(), schema_invalid_format_fields=(),
+        schema_other_paths=(),
         request_bytes=request_bytes, response_bytes=None,
         latency_ms=latency_ms, prompt_tokens=None,
         completion_tokens=None, total_tokens=None,
@@ -394,11 +406,8 @@ class GroupAdvisoryBenchmarkRunner:
                 continue
             successful += 1
             latency = max(0.0, (time.perf_counter() - started) * 1000)
-            try:
-                GroupAdvisoryResult.model_validate(raw.content)
-                structurally_valid = True
-            except Exception:
-                structurally_valid = False
+            parsed, schema_diagnostic = parse_group_advisory_result(raw.content)
+            structurally_valid = parsed is not None
             validated = validate_group_advisory_result(case.request, raw.content)
             invalid = bool(validated.validation_reasons)
             declared_inconclusive = raw.content.get("outcome") == "INCONCLUSIVE"
@@ -436,6 +445,13 @@ class GroupAdvisoryBenchmarkRunner:
                     if invalid else None
                 ),
                 validation_reason_codes=tuple(validated.validation_reasons),
+                schema_missing_fields=schema_diagnostic.missing_fields,
+                schema_unexpected_fields=schema_diagnostic.unexpected_fields,
+                schema_wrong_type_fields=schema_diagnostic.wrong_type_fields,
+                schema_invalid_literal_fields=schema_diagnostic.invalid_literal_fields,
+                schema_invalid_length_fields=schema_diagnostic.invalid_length_fields,
+                schema_invalid_format_fields=schema_diagnostic.invalid_format_fields,
+                schema_other_paths=schema_diagnostic.other_schema_paths,
                 request_bytes=request_bytes,
                 response_bytes=response_bytes,
                 latency_ms=latency,
@@ -462,6 +478,24 @@ class GroupAdvisoryBenchmarkRunner:
                 result.safe_error_category == category for result in results
             )
             for category in BenchmarkFailureCategory
+        }
+        schema_fields = {
+            "missing": "schema_missing_fields",
+            "unexpected": "schema_unexpected_fields",
+            "wrong_type": "schema_wrong_type_fields",
+            "invalid_literal": "schema_invalid_literal_fields",
+            "invalid_length": "schema_invalid_length_fields",
+            "invalid_format": "schema_invalid_format_fields",
+            "other": "schema_other_paths",
+        }
+        schema_mismatch_field_counts = {
+            category: {
+                path: sum(path in getattr(result, attribute) for result in results)
+                for path in sorted({
+                    path for result in results for path in getattr(result, attribute)
+                })
+            }
+            for category, attribute in schema_fields.items()
         }
         return GroupBenchmarkReport(
             benchmark_version=GROUP_BENCHMARK_VERSION,
@@ -514,6 +548,7 @@ class GroupAdvisoryBenchmarkRunner:
             retry_count=retries,
             rate_limit_count=rate_limits, timeout_count=timeouts,
             failure_counts=failure_counts,
+            schema_mismatch_field_counts=schema_mismatch_field_counts,
             cache_hits=0, cache_misses=len(attempted_cases),
             request_bytes=sum(r.request_bytes for r in results),
             response_bytes=optional_sum("response_bytes"),

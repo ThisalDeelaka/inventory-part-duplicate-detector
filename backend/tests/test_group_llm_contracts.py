@@ -296,6 +296,7 @@ def result(request, outcome, partitions, **overrides):
         outcome=outcome, proposed_partitions=partitions,
         confidence_band=GroupAdvisoryConfidenceBand.MEDIUM,
         reason_codes=("SEMANTIC_AMBIGUITY_REVIEWED",), rationale="Advisory only",
+        mapping_observations=(),
         requires_human_review=True, deterministic_result_authoritative=True,
     )
     data.update(overrides); return data
@@ -362,9 +363,7 @@ def test_schema_extra_unknown_outcome_and_oversized_rationale_fail_closed():
     bad = result(request, "UNKNOWN", (), automatic_merge=True, rationale="x" * 5000)
     validated = validate_group_advisory_result(request, bad)
     assert validated.outcome == GroupAdvisoryOutcome.INCONCLUSIVE
-    assert validated.validation_reasons == (
-        "EXTRA_AUTHORITY_FIELD", "FIELD_TOO_LONG", "UNSUPPORTED_OUTCOME",
-    )
+    assert validated.validation_reasons == ("SCHEMA_MISMATCH",)
     assert validated.requires_human_review and validated.deterministic_result_authoritative
 
 

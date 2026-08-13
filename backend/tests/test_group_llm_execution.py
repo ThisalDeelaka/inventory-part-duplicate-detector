@@ -34,6 +34,7 @@ from app.llm.group_execution import (
     InMemoryGroupAdvisoryCache,
     RawGroupProviderResponse,
     build_group_advisory_messages,
+    group_advisory_result_json_skeleton,
     group_advisory_structured_output_schema,
     group_execution_key,
 )
@@ -158,6 +159,8 @@ def output_for(request, outcome="SUPPORTS_SINGLE_IDENTITY", partitions=None, **u
         "reason_codes": ["SEMANTIC_IDENTITY_REVIEW"],
         "rationale": "Advisory only.",
         "mapping_observations": [],
+        "requires_human_review": True,
+        "deterministic_result_authoritative": True,
     }
     value.update(updates)
     return value
@@ -358,7 +361,7 @@ def test_cache_uses_request_provider_model_and_prompt_identity():
     assert group_execution_key(fingerprint, "future:groq", "a") != group_execution_key(
         fingerprint, "future:ollama", "a"
     )
-    assert GROUP_PROMPT_CONTRACT_VERSION == "group-advisory-prompt-v2"
+    assert GROUP_PROMPT_CONTRACT_VERSION == "group-advisory-prompt-v3"
 
 
 def test_invalid_provider_output_is_never_cached_as_valid():
@@ -372,7 +375,7 @@ def test_invalid_provider_output_is_never_cached_as_valid():
 def test_messages_and_schema_are_minimal_provider_independent_and_action_free():
     request = request_for(7, marker=" FORBIDDEN_SENTINEL_ONLY_IN_ALLOWED_DESCRIPTION")
     messages = build_group_advisory_messages(request)
-    payload = json.loads(messages.user_prompt.split("request=", 1)[1])
+    payload = json.loads(messages.user_prompt.split("\nrequest=", 1)[1])
     assert set(payload) == set(GroupAdvisoryRequest.model_fields)
     serialized = json.dumps({
         "system": messages.system_prompt,
@@ -395,6 +398,10 @@ def test_messages_and_schema_are_minimal_provider_independent_and_action_free():
     assert "UOM and mapping" in messages.system_prompt
     assert "every request record_ref_key exactly once" in messages.system_prompt
     assert "Do not regenerate" in messages.user_prompt
+    skeleton = group_advisory_result_json_skeleton(request)
+    assert set(skeleton) == set(schema["properties"]) == set(schema["required"])
+    serialized_skeleton = json.dumps(skeleton, sort_keys=True, separators=(",", ":"))
+    assert f"result_skeleton={serialized_skeleton}" in messages.user_prompt
 
 
 def test_registry_reserves_future_identities_without_pair_fallback():

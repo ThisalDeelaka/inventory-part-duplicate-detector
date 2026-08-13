@@ -74,6 +74,17 @@ def main() -> int:
         print("Failure categories:")
         for category, count in sorted(failures.items()):
             print(f"  {category}: {count}")
+    field_diagnostics = [
+        (category, path, count)
+        for category, paths in report.schema_mismatch_field_counts.items()
+        for path, count in paths.items() if count
+    ]
+    if field_diagnostics:
+        print("Schema field diagnostics:")
+        for category, path, count in sorted(
+            field_diagnostics, key=lambda item: (-item[2], item[0], item[1])
+        ):
+            print(f"  {path} {category}: {count}")
     print(f"Benchmark report written: {args.output}")
     return 0
 

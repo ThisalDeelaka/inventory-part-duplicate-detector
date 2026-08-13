@@ -40,7 +40,7 @@ from app.services.group_llm_eligibility import (
 )
 
 
-GROUP_PROMPT_CONTRACT_VERSION = "group-advisory-prompt-v2"
+GROUP_PROMPT_CONTRACT_VERSION = "group-advisory-prompt-v3"
 SUPPORTED_GROUP_PROVIDER_IDS = frozenset({
     "none", "groq", "future:cerebras", "future:groq", "future:ollama",
 })
@@ -134,9 +134,36 @@ def group_advisory_structured_output_schema() -> dict[str, Any]:
     properties = schema.get("properties", {})
     for name in ("validation_reasons",):
         properties.pop(name, None)
-    schema["required"] = list(properties)
+    schema["required"] = [
+        name for name, field in GroupAdvisoryResult.model_fields.items()
+        if name in properties and field.is_required()
+    ]
     schema["additionalProperties"] = False
     return schema
+
+
+def group_advisory_result_json_skeleton(
+    request: GroupAdvisoryRequest,
+) -> dict[str, Any]:
+    """Provider-neutral shape guidance derived from the authoritative fields."""
+    skeleton = {
+        "contract_version": GROUP_ADVISORY_RESULT_VERSION,
+        "request_fingerprint": group_advisory_request_fingerprint(request),
+        "group_snapshot_id": request.group_snapshot_id,
+        "group_hypothesis_key": request.group_hypothesis_key,
+        "outcome": "INCONCLUSIVE",
+        "proposed_partitions": [],
+        "confidence_band": "LOW",
+        "reason_codes": [],
+        "rationale": "",
+        "mapping_observations": [],
+        "requires_human_review": True,
+        "deterministic_result_authoritative": True,
+    }
+    expected = set(group_advisory_structured_output_schema()["properties"])
+    if set(skeleton) != expected:
+        raise AssertionError("group result skeleton drifted from authoritative schema")
+    return skeleton
 
 
 @dataclass(frozen=True)
@@ -176,6 +203,8 @@ def build_group_advisory_messages(
         "shown below. Do not regenerate, shorten, summarize, hash again, or alter "
         "them.\n"
         f"request_fingerprint={group_advisory_request_fingerprint(request)}\n"
+        "result_skeleton="
+        f"{json.dumps(group_advisory_result_json_skeleton(request), ensure_ascii=True, sort_keys=True, separators=(',', ':'))}\n"
         f"request={canonical_group_advisory_request_json(request)}"
     )
     return GroupAdvisoryMessages(

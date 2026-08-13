@@ -23,7 +23,10 @@ from app.llm.group_benchmark import (
     live_group_benchmark_enabled,
 )
 from app.llm.group_benchmark_cli import build_parser, select_benchmark_cases
-from app.llm.group_contracts import GROUP_ADVISORY_RESULT_VERSION
+from app.llm.group_contracts import (
+    GROUP_ADVISORY_RESULT_VERSION, GroupResultSchemaDiagnostic,
+    group_result_schema_diagnostic,
+)
 from app.llm.group_execution import (
     DisabledGroupAdvisoryProvider, RawGroupProviderResponse,
     build_group_advisory_messages,
@@ -75,7 +78,7 @@ def test_one_whole_group_maps_to_one_groq_transport_call(size):
         payload = json.loads(http_request.content)
         captured.append((http_request, payload))
         user = payload["messages"][1]["content"]
-        request_payload = json.loads(user.split("request=", 1)[1])
+        request_payload = json.loads(user.split("\nrequest=", 1)[1])
         request = next(
             case.request for case in curated_group_benchmark_cases()
             if case.request.group_snapshot_id == request_payload["group_snapshot_id"]
@@ -514,7 +517,8 @@ def test_benchmark_schema_diagnostics_are_bounded_and_provider_prose_free():
         SchemaFailure(), max_calls=1
     ).run((case,)))
     result = report.cases[0]
-    assert result.validation_reason_codes == ("MISSING_REQUIRED_FIELD",)
+    assert result.validation_reason_codes == ("SCHEMA_MISMATCH",)
+    assert result.schema_missing_fields
     encoded_result = json.dumps(result.__dict__, sort_keys=True)
     assert sentinel not in encoded_result
 
@@ -591,7 +595,8 @@ def test_mocked_groq_correct_partition_with_missing_fingerprint_still_fails():
     body.pop("request_fingerprint")
     result = run_mocked_groq_case(case, body).cases[0]
     assert not result.structurally_valid and not result.semantically_valid
-    assert result.validation_reason_codes == ("MISSING_REQUIRED_FIELD",)
+    assert result.validation_reason_codes == ("SCHEMA_MISMATCH",)
+    assert result.schema_missing_fields == ("request_fingerprint",)
 
 
 def test_mocked_groq_changed_member_ref_still_fails():
@@ -676,3 +681,114 @@ def test_retry_after_and_case_pacing_share_bounded_benchmark_sleeper():
     assert report.total_cases_attempted == len(report.cases) == 2
     assert report.retry_count == 1
     assert delays == [2.0, 0.5]
+
+
+@pytest.mark.parametrize("mutate,category,paths", [
+    (lambda body, _request: body.pop("request_fingerprint"),
+     "schema_missing_fields", ("request_fingerprint",)),
+    (lambda body, request: body.update(group_snapshot_id=str(request.group_snapshot_id)),
+     "schema_wrong_type_fields", ("group_snapshot_id",)),
+    (lambda body, _request: body.update(requires_human_review="true"),
+     "schema_invalid_literal_fields", ("requires_human_review",)),
+    (lambda body, _request: body.update(outcome="supports_single_identity"),
+     "schema_invalid_literal_fields", ("outcome",)),
+    (lambda body, _request: body.update(proposed_partitions={"members": []}),
+     "schema_wrong_type_fields", ("proposed_partitions",)),
+    (lambda body, _request: (
+        body.__setitem__("partitions", body.pop("proposed_partitions"))
+    ), "schema_missing_fields", ("proposed_partitions",)),
+    (lambda body, _request: body.update(merge_now=True),
+     "schema_unexpected_fields", ("merge_now",)),
+    (lambda body, _request: (
+        body.pop("requires_human_review"),
+        body.pop("deterministic_result_authoritative"),
+    ), "schema_missing_fields", (
+        "deterministic_result_authoritative", "requires_human_review",
+    )),
+    (lambda body, _request: body.update(contract_version="wrong-version"),
+     "schema_invalid_literal_fields", ("contract_version",)),
+])
+def test_mocked_schema_deviations_report_field_paths_only(mutate, category, paths):
+    case = curated_group_benchmark_cases()[0]
+    body = valid_content(case.request)
+    mutate(body, case.request)
+    result = run_mocked_groq_case(case, body).cases[0]
+    assert result.validation_reason_codes == ("SCHEMA_MISMATCH",)
+    assert getattr(result, category) == paths
+    assert not result.structurally_valid and not result.semantically_valid
+
+
+def test_renamed_field_reports_both_missing_and_unexpected_without_value():
+    case = curated_group_benchmark_cases()[0]
+    body = valid_content(case.request)
+    secret_like = "gsk_synthetic_rejected_value"
+    body["partitions"] = secret_like
+    body.pop("proposed_partitions")
+    report = run_mocked_groq_case(case, body)
+    result = report.cases[0]
+    assert result.schema_missing_fields == ("proposed_partitions",)
+    assert result.schema_unexpected_fields == ("partitions",)
+    assert report.schema_mismatch_field_counts["missing"] == {
+        "proposed_partitions": 1
+    }
+    assert report.schema_mismatch_field_counts["unexpected"] == {
+        "partitions": 1
+    }
+    encoded = json.dumps(report.model_dump(), sort_keys=True)
+    assert secret_like not in encoded
+
+
+def test_invalid_length_and_nested_partition_paths_are_safe_and_bounded():
+    case = curated_group_benchmark_cases()[0]
+    short_fingerprint = valid_content(case.request)
+    short_fingerprint["request_fingerprint"] = "private-value"
+    top = run_mocked_groq_case(case, short_fingerprint).cases[0]
+    assert top.schema_invalid_length_fields == ("request_fingerprint",)
+
+    nested_body = valid_content(case.request)
+    nested_body["proposed_partitions"] = [
+        list(block) for block in nested_body["proposed_partitions"]
+    ]
+    nested_body["proposed_partitions"][0][0] = "private-member-value"
+    nested = run_mocked_groq_case(case, nested_body).cases[0]
+    assert nested.schema_invalid_length_fields == (
+        "proposed_partitions.[].[]",
+    )
+    assert all(len(path) <= 120 for path in nested.schema_invalid_length_fields)
+    encoded = json.dumps(nested.__dict__, sort_keys=True)
+    assert "private-member-value" not in encoded
+
+
+def test_unknown_schema_error_falls_back_without_exception_text():
+    sentinel = "gsk_unknown_parser_secret"
+    diagnostic = group_result_schema_diagnostic(RuntimeError(sentinel))
+    assert diagnostic == GroupResultSchemaDiagnostic(other_schema_paths=("$",))
+    assert sentinel not in repr(diagnostic)
+
+
+def test_schema_diagnostics_are_deduplicated_sorted_and_bounded():
+    case = curated_group_benchmark_cases()[0]
+    body = valid_content(case.request)
+    for index in range(25):
+        body[f"extra_{index:02d}"] = f"private-{index}"
+    result = run_mocked_groq_case(case, body).cases[0]
+    assert len(result.schema_unexpected_fields) == 16
+    assert result.schema_unexpected_fields == tuple(sorted(result.schema_unexpected_fields))
+    encoded = json.dumps(result.__dict__, sort_keys=True)
+    assert "private-" not in encoded
+
+
+def test_valid_result_has_no_schema_diagnostics_or_aggregate_counts():
+    case = curated_group_benchmark_cases()[0]
+    report = run_mocked_groq_case(case, valid_content(case.request))
+    result = report.cases[0]
+    assert result.structurally_valid and result.semantically_valid
+    assert result.validation_reason_codes == ()
+    for name in (
+        "schema_missing_fields", "schema_unexpected_fields",
+        "schema_wrong_type_fields", "schema_invalid_literal_fields",
+        "schema_invalid_length_fields", "schema_invalid_format_fields",
+        "schema_other_paths",
+    ):
+        assert getattr(result, name) == ()
+    assert all(not values for values in report.schema_mismatch_field_counts.values())

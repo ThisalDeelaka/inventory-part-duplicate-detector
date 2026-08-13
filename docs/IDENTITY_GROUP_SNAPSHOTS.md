@@ -353,3 +353,24 @@ Benchmark pacing and subsetting exist only to make controlled provider
 evaluation reliable; they do not alter production group execution or pair LLM
 execution. Groq remains a reference provider. Claude and future providers must
 use the same G7A/G7B contracts, central validation, and benchmark semantics.
+
+### G7C-D5 safe schema diagnostics
+
+G7C-D5 adds field-name-only schema diagnostics for rejected provider JSON while
+intentionally withholding provider values and raw response bodies. The broad
+`SCHEMA_MISMATCH` outcome remains stable, while supplemental bounded categories
+identify missing, unexpected, wrong-type, invalid-literal, invalid-length,
+invalid-format, and otherwise unclassified schema paths. Paths are sanitized,
+deduplicated, sorted, and capped; parser messages and rejected values are never
+stored in case records, aggregate reports, logs, or CLI summaries.
+
+The diagnostic layer is derived from the authoritative G7A
+`GroupAdvisoryResult` parser and is provider-neutral, so it will also support
+future Claude and Cerebras integration. A generated provider-facing JSON
+skeleton and consistency tests keep the prompt-visible required fields aligned
+with that result model. This does not coerce rejected values or relax identifier,
+partition, authority, or cannot-link validation.
+
+Groq remains a reference provider; G7C-D5 does not attempt broad Groq
+optimization or change any provider default, production execution, persistence,
+API, or UI behavior.
