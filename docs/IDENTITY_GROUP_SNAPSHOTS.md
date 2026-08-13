@@ -45,10 +45,22 @@ transaction. Validation rejects inconsistent counts, non-canonical membership,
 incomplete internal-pair evidence, or a cannot-link inside an accepted group
 before commit. Any persistence failure rolls back the complete graph.
 
-G2 is invoked explicitly through the internal snapshot service. It is not added
-to the normal scan path. The additive migration
-creates empty snapshot tables for historical databases and does not fabricate or
-backfill groups for older scans.
+G2 is invoked through the internal snapshot service. Normal scans call that
+service once after committing their deterministic evidence and before becoming
+`COMPLETED`. The additive migration creates empty snapshot tables for historical
+databases and does not fabricate or backfill groups for older scans.
+
+## Normal scan orchestration
+
+A normal completed scan now creates its initial immutable G2 identity-group
+projection automatically after deterministic evidence persistence. This initial
+projection is required for the group-centric UI, API, export, and review
+workflow. Human review does not automatically mutate or recompute historical G2
+projections; a future projection remains an explicit operation.
+
+`snapshot_available=false` means that no projection exists. A valid projection
+with zero accepted groups is different: its projection run exists and
+`snapshot_available=true`.
 
 ## G3 read-only API
 

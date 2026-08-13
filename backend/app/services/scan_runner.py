@@ -18,6 +18,9 @@ from app.services.validation_service import validate_dataframe
 from app.services.hybrid_retrieval import (
     HybridCandidateRetriever, SqlAlchemyEmbeddingVectorCache, canonical_record_pair,
 )
+from app.services.identity_group_snapshot_service import (
+    project_and_persist_identity_groups,
+)
 
 
 class ScanRunner:
@@ -28,6 +31,22 @@ class ScanRunner:
         self.candidates = CandidateRepository(db)
         self.warnings = WarningRepository(db)
         self.rejections = RejectionRepository(db)
+
+    def persist_initial_identity_group_projection(
+        self,
+        scan,
+        records: pd.DataFrame,
+        selected_fields: list[str],
+    ):
+        """Persist the scan's initial immutable G2 projection from stored evidence."""
+        return project_and_persist_identity_groups(
+            self.db,
+            scan=scan,
+            records=records.to_dict(orient="records"),
+            candidates=self.candidates.list_for_scan(scan.id),
+            exclusions=self.rejections.list_for_scan(scan.id),
+            selected_fields=selected_fields,
+        )
 
     def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
         scan_mode = normalize_scan_mode(scan_mode)
@@ -169,7 +188,11 @@ class ScanRunner:
                 ))
                 candidates_found += added
 
+            # G2 consumes the complete persisted deterministic evidence set. Its
+            # own transaction is atomic and fingerprint-idempotent, and the scan
+            # is exposed as COMPLETED only after that snapshot is available.
             self.db.commit()
+            self.persist_initial_identity_group_projection(scan, usable, selected_fields)
             warning_count = self.warnings.count_for_scan(scan.id)
             return self.scans.update_status(
                 scan,

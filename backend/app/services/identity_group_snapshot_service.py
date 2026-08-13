@@ -589,7 +589,7 @@ def project_and_persist_identity_groups(
     feedback_by_candidate_id: Mapping[int, object] | None = None,
     selected_fields: Iterable[str] = (),
 ) -> SnapshotPersistenceResult:
-    """Explicit G2 orchestration; normal scan execution does not call this function."""
+    """Authoritative G1 projection and atomic, idempotent G2 persistence."""
     records = tuple(records)
     candidates = tuple(candidates)
     exclusions = tuple(exclusions)

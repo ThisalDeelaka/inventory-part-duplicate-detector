@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.db.models import DuplicateCandidate
+from app.db.models import DuplicateCandidate, IdentityGroupProjectionRun
+from app.services.identity_group_query_service import IdentityGroupQueryService
 from app.llm.services import candidate_eligibility
 from app.services.scan_runner import ScanRunner
 from app.services.validation_service import apply_column_mapping, validate_dataframe
@@ -45,6 +46,9 @@ def test_demo_csv_completes_deterministically_without_llm_provider_calls(db, mon
         .all()
     )
     eligibility = [candidate_eligibility(candidate) for candidate in candidates]
+    projection_run = (
+        db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
+    )
 
     assert scan.status == "COMPLETED"
     assert pair_count == 8
@@ -53,4 +57,6 @@ def test_demo_csv_completes_deterministically_without_llm_provider_calls(db, mon
     assert any(item.eligible for item in eligibility)
     assert any(not item.eligible for item in eligibility)
     assert any(candidate.rejection_reason == "HSN_SAC_CODE_MISMATCH" for candidate in candidates)
+    assert projection_run.accepted_groups > 0
+    assert IdentityGroupQueryService(db).summary(scan.id)["snapshot_available"] is True
     assert provider_calls == 0
