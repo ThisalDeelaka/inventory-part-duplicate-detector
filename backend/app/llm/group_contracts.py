@@ -5,7 +5,7 @@ import json
 from enum import Enum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 
 GROUP_ADVISORY_REQUEST_VERSION = "group-advisory-request-v1"
@@ -176,6 +176,30 @@ def _inconclusive(request: GroupAdvisoryRequest, reasons: list[str]) -> GroupAdv
     )
 
 
+def _safe_schema_validation_reasons(exc: ValidationError) -> list[str]:
+    """Reduce Pydantic detail to stable codes without retaining provider data."""
+    reasons = set()
+    for error in exc.errors(include_url=False, include_context=False, include_input=False):
+        error_type = error.get("type", "")
+        location = error.get("loc", ())
+        field = location[0] if location else None
+        if error_type == "missing":
+            reasons.add("MISSING_REQUIRED_FIELD")
+        elif error_type == "extra_forbidden":
+            reasons.add("EXTRA_AUTHORITY_FIELD")
+        elif error_type in {
+            "string_too_long", "too_long", "list_too_long", "tuple_too_long",
+        }:
+            reasons.add("FIELD_TOO_LONG")
+        elif field == "outcome" and error_type in {
+            "enum", "literal_error",
+        }:
+            reasons.add("UNSUPPORTED_OUTCOME")
+        else:
+            reasons.add("SCHEMA_MISMATCH")
+    return sorted(reasons or {"SCHEMA_MISMATCH"})
+
+
 def validate_group_advisory_result(
     request: GroupAdvisoryRequest, raw_result: GroupAdvisoryResult | dict[str, Any]
 ) -> GroupAdvisoryResult:
@@ -184,8 +208,10 @@ def validate_group_advisory_result(
         result = raw_result if isinstance(raw_result, GroupAdvisoryResult) else (
             GroupAdvisoryResult.model_validate(raw_result)
         )
+    except ValidationError as exc:
+        return _inconclusive(request, _safe_schema_validation_reasons(exc))
     except Exception:
-        return _inconclusive(request, ["INVALID_RESULT_SCHEMA"])
+        return _inconclusive(request, ["OTHER_VALIDATION_ERROR"])
     reasons = []
     expected_fingerprint = group_advisory_request_fingerprint(request)
     if result.request_fingerprint != expected_fingerprint:

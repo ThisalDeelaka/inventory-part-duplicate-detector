@@ -22,6 +22,7 @@ from app.llm.group_benchmark import (
     classify_benchmark_failure, curated_group_benchmark_cases,
     live_group_benchmark_enabled,
 )
+from app.llm.group_benchmark_cli import build_parser, select_benchmark_cases
 from app.llm.group_contracts import GROUP_ADVISORY_RESULT_VERSION
 from app.llm.group_execution import (
     DisabledGroupAdvisoryProvider, RawGroupProviderResponse,
@@ -61,6 +62,8 @@ def valid_content(request, outcome="SUPPORTS_SINGLE_IDENTITY", partitions=None):
         "confidence_band": "MEDIUM", "reason_codes": ["CURATED_TEST"],
         "rationale": "Synthetic benchmark response.",
         "mapping_observations": [],
+        "requires_human_review": True,
+        "deterministic_result_authoritative": True,
     }
 
 
@@ -258,10 +261,10 @@ def test_abstention_wrong_invalid_and_cannot_link_are_distinct():
 
 def test_benchmark_call_cap_and_live_guard_require_explicit_group_enablement():
     provider = BenchmarkProvider()
-    with pytest.raises(ValueError):
-        asyncio.run(GroupAdvisoryBenchmarkRunner(provider, max_calls=5).run(
-            curated_group_benchmark_cases()[:6]
-        ))
+    capped = asyncio.run(GroupAdvisoryBenchmarkRunner(provider, max_calls=5).run(
+        curated_group_benchmark_cases()[:6]
+    ))
+    assert capped.provider_calls == capped.total_cases_attempted == 5
     pair_only = Settings(
         llm_provider="groq", llm_demo_enabled=True,
         groq_api_key="synthetic-secret", group_llm_provider="none",
@@ -445,3 +448,231 @@ def test_groq_request_byte_accounting_excludes_authorization_header():
         separators=(",", ":"),
     ).encode("utf-8"))
     assert provider.request_bytes(request) == expected
+
+
+@pytest.mark.parametrize("mutate,reason", [
+    (lambda body, _request: body.update(request_fingerprint="f" * 64),
+     "REQUEST_FINGERPRINT_MISMATCH"),
+    (lambda body, request: body.update(group_snapshot_id=request.group_snapshot_id + 1),
+     "GROUP_SNAPSHOT_MISMATCH"),
+    (lambda body, _request: body.update(group_hypothesis_key="e" * 64),
+     "GROUP_HYPOTHESIS_MISMATCH"),
+    (lambda body, request: body.update(proposed_partitions=[
+        [member.record_ref_key for member in request.members[:-1]]
+    ]), "INCOMPLETE_PARTITION_MEMBERSHIP"),
+    (lambda body, request: body.update(proposed_partitions=[[
+        *(member.record_ref_key for member in request.members),
+        request.members[0].record_ref_key,
+    ]]), "DUPLICATE_PARTITION_MEMBER"),
+    (lambda body, request: body.update(proposed_partitions=[[
+        *(member.record_ref_key for member in request.members[:-1]), "f" * 64,
+    ]]), "UNKNOWN_PARTITION_MEMBER"),
+    (lambda body, request: body.update(proposed_partitions=[
+        [request.members[0].record_ref_key],
+        [member.record_ref_key for member in request.members[1:]],
+    ]), "SINGLE_IDENTITY_REQUIRES_ONE_SET"),
+    (lambda body, request: body.update(
+        outcome="INCONCLUSIVE",
+        proposed_partitions=[[member.record_ref_key for member in request.members]],
+    ), "INCONCLUSIVE_MUST_NOT_PARTITION"),
+])
+def test_benchmark_retains_exact_safe_validation_reasons(mutate, reason):
+    case = curated_group_benchmark_cases()[0]
+
+    class InvalidSemanticProvider(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            body = valid_content(request)
+            mutate(body, request)
+            return RawGroupProviderResponse(
+                provider_id=self.provider_id, provider_model=self.provider_model,
+                content=body,
+            )
+
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        InvalidSemanticProvider(), max_calls=1
+    ).run((case,)))
+    result = report.cases[0]
+    assert result.safe_error_category == BenchmarkFailureCategory.SEMANTIC_VALIDATION
+    assert reason in result.validation_reason_codes
+    assert report.failure_counts["SEMANTIC_VALIDATION"] == 1
+
+
+def test_benchmark_schema_diagnostics_are_bounded_and_provider_prose_free():
+    case = curated_group_benchmark_cases()[0]
+    sentinel = "provider-private-prose-sentinel"
+
+    class SchemaFailure(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            return RawGroupProviderResponse(
+                provider_id=self.provider_id, provider_model=self.provider_model,
+                content={"rationale": sentinel},
+            )
+
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        SchemaFailure(), max_calls=1
+    ).run((case,)))
+    result = report.cases[0]
+    assert result.validation_reason_codes == ("MISSING_REQUIRED_FIELD",)
+    encoded_result = json.dumps(result.__dict__, sort_keys=True)
+    assert sentinel not in encoded_result
+
+
+def test_cannot_link_reason_is_retained_without_unsafe_acceptance():
+    case = next(c for c in curated_group_benchmark_cases() if c.protected_cannot_links)
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        BenchmarkProvider("unsafe"), max_calls=1
+    ).run((case,)))
+    result = report.cases[0]
+    assert result.validation_reason_codes == ("PROTECTED_CANNOT_LINK_VIOLATION",)
+    assert report.unsafe_cannot_link_proposals_rejected == 1
+    assert report.semantically_valid_responses == 0
+
+
+def run_mocked_groq_case(case, content, *, fenced=False):
+    async def run():
+        def handler(_request):
+            encoded = json.dumps(content)
+            if fenced:
+                encoded = f"```json\n{encoded}\n```"
+            return httpx.Response(200, json={
+                "id": "mocked-group-request",
+                "choices": [{"message": {"content": encoded}}],
+            })
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = GroqGroupAdvisoryProvider(GroqLLMProvider(
+                api_key=SecretStr("synthetic-key"), model="benchmark-model",
+                timeout_seconds=3, client=client,
+            ))
+            return await GroupAdvisoryBenchmarkRunner(
+                provider, max_calls=1
+            ).run((case,))
+    return asyncio.run(run())
+
+
+def test_mocked_groq_exact_single_identity_contract_passes():
+    case = next(c for c in curated_group_benchmark_cases()
+                if c.expected_resolution == BenchmarkExpectedResolution.SINGLE_IDENTITY)
+    report = run_mocked_groq_case(case, valid_content(case.request))
+    result = report.cases[0]
+    assert result.structurally_valid and result.semantically_valid
+    assert result.validated_outcome == "SUPPORTS_SINGLE_IDENTITY"
+
+
+@pytest.mark.parametrize("partition_sizes", [(1, 4), (1, 2, 2)])
+def test_mocked_groq_exact_multi_partition_contract_passes(partition_sizes):
+    case = next(
+        c for c in curated_group_benchmark_cases()
+        if sorted(map(len, c.expected_partitions)) == list(partition_sizes)
+    )
+    body = valid_content(
+        case.request, "PROPOSES_PARTITION", case.expected_partitions
+    )
+    result = run_mocked_groq_case(case, body).cases[0]
+    assert result.structurally_valid and result.semantically_valid
+    assert result.validated_outcome == "PROPOSES_PARTITION"
+
+
+def test_mocked_groq_exact_inconclusive_and_fenced_json_pass():
+    case = next(c for c in curated_group_benchmark_cases()
+                if c.expected_resolution == BenchmarkExpectedResolution.INCONCLUSIVE_ACCEPTABLE)
+    body = valid_content(case.request, "INCONCLUSIVE", ())
+    result = run_mocked_groq_case(case, body, fenced=True).cases[0]
+    assert result.structurally_valid and result.semantically_valid
+    assert result.validated_outcome == "INCONCLUSIVE"
+
+
+def test_mocked_groq_correct_partition_with_missing_fingerprint_still_fails():
+    case = next(c for c in curated_group_benchmark_cases()
+                if c.expected_resolution == BenchmarkExpectedResolution.PARTITION)
+    body = valid_content(case.request, "PROPOSES_PARTITION", case.expected_partitions)
+    body.pop("request_fingerprint")
+    result = run_mocked_groq_case(case, body).cases[0]
+    assert not result.structurally_valid and not result.semantically_valid
+    assert result.validation_reason_codes == ("MISSING_REQUIRED_FIELD",)
+
+
+def test_mocked_groq_changed_member_ref_still_fails():
+    case = next(c for c in curated_group_benchmark_cases()
+                if c.expected_resolution == BenchmarkExpectedResolution.PARTITION)
+    partitions = [list(block) for block in case.expected_partitions]
+    partitions[0][0] = "f" * 64
+    body = valid_content(case.request, "PROPOSES_PARTITION", partitions)
+    result = run_mocked_groq_case(case, body).cases[0]
+    assert result.structurally_valid and not result.semantically_valid
+    assert {"UNKNOWN_PARTITION_MEMBER", "INCOMPLETE_PARTITION_MEMBERSHIP"}.issubset(
+        result.validation_reason_codes
+    )
+
+
+def test_benchmark_case_pacing_defaults_zero_and_occurs_only_between_cases():
+    cases = curated_group_benchmark_cases()[:3]
+    delays = []
+
+    async def sleeper(delay):
+        delays.append(delay)
+
+    default = GroupAdvisoryBenchmarkRunner(BenchmarkProvider(), max_calls=3)
+    assert default.case_delay_ms == 0
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        BenchmarkProvider(), max_calls=3, case_delay_ms=250, sleeper=sleeper,
+    ).run(cases))
+    assert report.total_cases_attempted == 3
+    assert delays == [0.25, 0.25]
+    with pytest.raises(ValueError):
+        GroupAdvisoryBenchmarkRunner(BenchmarkProvider(), case_delay_ms=-1)
+
+
+def test_cli_pacing_and_deterministic_max_case_subset():
+    parser = build_parser()
+    defaults = parser.parse_args([
+        "--corpus", "curated-v1", "--output", "report.json",
+    ])
+    assert defaults.case_delay_ms == 0 and defaults.max_cases is None
+    explicit = parser.parse_args([
+        "--corpus", "curated-v1", "--max-cases", "6",
+        "--case-delay-ms", "500", "--output", "report.json",
+    ])
+    assert explicit.max_cases == 6 and explicit.case_delay_ms == 500
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "--corpus", "curated-v1", "--case-delay-ms", "-1",
+            "--output", "report.json",
+        ])
+    corpus = curated_group_benchmark_cases()
+    selected = select_benchmark_cases(corpus, 6)
+    assert selected == corpus[:6]
+    assert [case.request_fingerprint for case in selected] == [
+        case.request_fingerprint for case in corpus[:6]
+    ]
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        BenchmarkProvider(), max_calls=10
+    ).run(selected))
+    assert report.total_cases_attempted == 6
+
+
+def test_retry_after_and_case_pacing_share_bounded_benchmark_sleeper():
+    cases = curated_group_benchmark_cases()[:2]
+    delays = []
+
+    async def sleeper(delay):
+        delays.append(delay)
+
+    class OnceRateLimited(BenchmarkProvider):
+        async def execute(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise LLMProviderHTTPError(
+                    status_code=429, retry_after_seconds=2,
+                )
+            return await super().execute(request)
+
+    report = asyncio.run(GroupAdvisoryBenchmarkRunner(
+        OnceRateLimited(), max_calls=3, max_retries=1,
+        case_delay_ms=500, sleeper=sleeper,
+    ).run(cases))
+    assert report.total_cases_attempted == len(report.cases) == 2
+    assert report.retry_count == 1
+    assert delays == [2.0, 0.5]

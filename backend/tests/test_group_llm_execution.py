@@ -358,7 +358,7 @@ def test_cache_uses_request_provider_model_and_prompt_identity():
     assert group_execution_key(fingerprint, "future:groq", "a") != group_execution_key(
         fingerprint, "future:ollama", "a"
     )
-    assert GROUP_PROMPT_CONTRACT_VERSION == "group-advisory-prompt-v1"
+    assert GROUP_PROMPT_CONTRACT_VERSION == "group-advisory-prompt-v2"
 
 
 def test_invalid_provider_output_is_never_cached_as_valid():
@@ -386,11 +386,15 @@ def test_messages_and_schema_are_minimal_provider_independent_and_action_free():
     ):
         assert forbidden not in serialized
     schema = group_advisory_structured_output_schema()
-    assert "requires_human_review" not in schema["properties"]
-    assert "deterministic_result_authoritative" not in schema["properties"]
+    assert schema["properties"]["requires_human_review"]["const"] is True
+    assert schema["properties"]["deterministic_result_authoritative"]["const"] is True
+    assert "validation_reasons" not in schema["properties"]
+    assert set(schema["required"]) == set(schema["properties"])
     assert schema["additionalProperties"] is False
     assert "one bounded candidate identity group" in messages.system_prompt
     assert "UOM and mapping" in messages.system_prompt
+    assert "every request record_ref_key exactly once" in messages.system_prompt
+    assert "Do not regenerate" in messages.user_prompt
 
 
 def test_registry_reserves_future_identities_without_pair_fallback():

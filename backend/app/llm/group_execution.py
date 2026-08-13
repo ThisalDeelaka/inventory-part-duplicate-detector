@@ -24,6 +24,7 @@ from app.llm.exceptions import (
     LLMProviderTimeoutError,
 )
 from app.llm.group_contracts import (
+    GROUP_ADVISORY_RESULT_VERSION,
     GroupAdvisoryOutcome,
     GroupAdvisoryRequest,
     GroupAdvisoryResult,
@@ -39,7 +40,7 @@ from app.services.group_llm_eligibility import (
 )
 
 
-GROUP_PROMPT_CONTRACT_VERSION = "group-advisory-prompt-v1"
+GROUP_PROMPT_CONTRACT_VERSION = "group-advisory-prompt-v2"
 SUPPORTED_GROUP_PROVIDER_IDS = frozenset({
     "none", "groq", "future:cerebras", "future:groq", "future:ollama",
 })
@@ -131,14 +132,9 @@ def group_advisory_structured_output_schema() -> dict[str, Any]:
     """Derive the provider-visible subset from the authoritative G7A result."""
     schema = copy.deepcopy(GroupAdvisoryResult.model_json_schema())
     properties = schema.get("properties", {})
-    for name in (
-        "requires_human_review", "deterministic_result_authoritative",
-        "validation_reasons",
-    ):
+    for name in ("validation_reasons",):
         properties.pop(name, None)
-    schema["required"] = [
-        name for name in schema.get("required", []) if name in properties
-    ]
+    schema["required"] = list(properties)
     schema["additionalProperties"] = False
     return schema
 
@@ -159,12 +155,26 @@ def build_group_advisory_messages(
         "differences are context, not identity authority. Allowed outcomes are "
         "SUPPORTS_SINGLE_IDENTITY, PROPOSES_PARTITION, or INCONCLUSIVE. Every "
         "answer requires human review; never merge, delete, write back, or "
-        "override deterministic or human authority. Return only the requested "
-        "structured JSON object."
+        "override deterministic or human authority. Return JSON only, with no "
+        "markdown, prose outside JSON, or additional fields. The object must "
+        "contain exactly: contract_version, request_fingerprint, "
+        "group_snapshot_id, group_hypothesis_key, outcome, proposed_partitions, "
+        "confidence_band, reason_codes, rationale, mapping_observations, "
+        "requires_human_review, and deterministic_result_authoritative. Set "
+        f"contract_version to {GROUP_ADVISORY_RESULT_VERSION}; set "
+        "requires_human_review=true and deterministic_result_authoritative=true. "
+        "For SUPPORTS_SINGLE_IDENTITY, proposed_partitions must be exactly one "
+        "array containing every request record_ref_key exactly once. For "
+        "PROPOSES_PARTITION, return at least two non-empty arrays and include "
+        "every request record_ref_key exactly once across them. For INCONCLUSIVE, "
+        "return proposed_partitions as an empty array. Never invent, alter, "
+        "shorten, omit, or duplicate a record_ref_key."
     )
     user_prompt = (
-        "Evaluate this complete 2..N group as one inference unit. Echo the exact "
-        "request fingerprint and immutable group identifiers.\n"
+        "Evaluate this complete 2..N group as one inference unit. Copy the exact "
+        "request_fingerprint, group_snapshot_id, and group_hypothesis_key values "
+        "shown below. Do not regenerate, shorten, summarize, hash again, or alter "
+        "them.\n"
         f"request_fingerprint={group_advisory_request_fingerprint(request)}\n"
         f"request={canonical_group_advisory_request_json(request)}"
     )

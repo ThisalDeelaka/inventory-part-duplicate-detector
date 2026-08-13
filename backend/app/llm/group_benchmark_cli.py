@@ -14,13 +14,38 @@ from app.llm.group_benchmark import (
 )
 
 
-def main() -> int:
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if not 0 <= parsed <= 300_000:
+        raise argparse.ArgumentTypeError("value must be between 0 and 300000")
+    return parsed
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--corpus", choices=("curated-v1",), required=True)
     parser.add_argument("--max-calls", type=int, default=30)
+    parser.add_argument("--max-cases", type=_positive_int)
+    parser.add_argument("--case-delay-ms", type=_non_negative_int, default=0)
     parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+    return parser
+
+
+def select_benchmark_cases(cases, max_cases: int | None):
+    """Select a deterministic prefix without changing corpus case objects."""
+    return cases if max_cases is None else cases[:max_cases]
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     configuration = Settings()
     if not live_group_benchmark_enabled(
         configuration, explicit_live=args.live, corpus_selected=bool(args.corpus)
@@ -28,10 +53,11 @@ def main() -> int:
         print("LIVE_BENCHMARK_NOT_RUN: explicit group benchmark enablement unavailable")
         return 2
     cases = curated_group_benchmark_cases()
+    cases = select_benchmark_cases(cases, args.max_cases)
     provider = create_group_advisory_provider(configuration)
     report = asyncio.run(GroupAdvisoryBenchmarkRunner(
-        provider, max_calls=args.max_calls
-    ).run(cases[:args.max_calls]))
+        provider, max_calls=args.max_calls, case_delay_ms=args.case_delay_ms,
+    ).run(cases))
     args.output.write_text(
         json.dumps(report.model_dump(), indent=2, sort_keys=True),
         encoding="utf-8",

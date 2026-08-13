@@ -165,6 +165,7 @@ class GroupBenchmarkCaseResult:
     provider_error_type: str | None
     provider_error_code: str | None
     safe_error_message: str | None
+    validation_reason_codes: tuple[str, ...]
     request_bytes: int
     response_bytes: int | None
     latency_ms: float | None
@@ -298,6 +299,7 @@ def _failure_result(
         provider_error_type=type(exc).__name__[:120],
         provider_error_code=None,
         safe_error_message=_SAFE_FAILURE_MESSAGES[category],
+        validation_reason_codes=(),
         request_bytes=request_bytes, response_bytes=None,
         latency_ms=latency_ms, prompt_tokens=None,
         completion_tokens=None, total_tokens=None,
@@ -313,6 +315,8 @@ class GroupAdvisoryBenchmarkRunner:
     def __init__(
         self, provider: GroupAdvisoryProvider, *, max_calls: int = 30,
         timeout_seconds: float = 30, max_retries: int = 1,
+        case_delay_ms: int = 0,
+        sleeper=asyncio.sleep,
     ) -> None:
         if not 1 <= max_calls <= 35:
             raise ValueError("benchmark call cap must be between 1 and 35")
@@ -322,18 +326,22 @@ class GroupAdvisoryBenchmarkRunner:
         if not 0 <= max_retries <= 2:
             raise ValueError("benchmark retries must be between zero and two")
         self.max_retries = max_retries
+        if not 0 <= case_delay_ms <= 300_000:
+            raise ValueError("benchmark case delay must be between 0 and 300000 ms")
+        self.case_delay_ms = case_delay_ms
+        self.sleeper = sleeper
 
     async def run(
         self, cases: tuple[GroupAdvisoryBenchmarkCase, ...]
     ) -> GroupBenchmarkReport:
-        if len(cases) > self.max_calls:
-            raise ValueError("benchmark corpus exceeds explicit provider call cap")
         results = []
         attempted_cases = []
         provider_calls = successful = rate_limits = timeouts = retries = 0
         for case in cases:
             if provider_calls >= self.max_calls:
                 break
+            if attempted_cases and self.case_delay_ms:
+                await self.sleeper(self.case_delay_ms / 1000)
             attempted_cases.append(case)
             started = time.perf_counter()
             request_bytes = _request_bytes(self.provider, case.request)
@@ -370,7 +378,12 @@ class GroupAdvisoryBenchmarkRunner:
                 if not retryable or attempt >= self.max_retries:
                     break
                 retries += 1
-                await asyncio.sleep(0)
+                retry_after = getattr(last_error, "retry_after_seconds", 0.0)
+                delay = (
+                    min(300.0, max(0.0, float(retry_after)))
+                    if isinstance(retry_after, (int, float)) else 0.0
+                )
+                await self.sleeper(delay)
             if raw is None:
                 results.append(_failure_result(
                     case, self.provider,
@@ -422,6 +435,7 @@ class GroupAdvisoryBenchmarkRunner:
                     _SAFE_FAILURE_MESSAGES[BenchmarkFailureCategory.SEMANTIC_VALIDATION]
                     if invalid else None
                 ),
+                validation_reason_codes=tuple(validated.validation_reasons),
                 request_bytes=request_bytes,
                 response_bytes=response_bytes,
                 latency_ms=latency,

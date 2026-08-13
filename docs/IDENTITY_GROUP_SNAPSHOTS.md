@@ -322,3 +322,34 @@ before every corpus case begins. For example, 30 calls can represent 29 cases
 and one retry. The existing hard maximum remains 35 so a later explicit run can
 cover the fixed 30-case corpus with a small retry allowance. Benchmark
 diagnostics do not change any provider default.
+
+### G7C-D3 contract alignment and controlled evaluation
+
+The first live Groq run confirmed transport reachability but exposed strict
+result-contract mismatches and material rate limiting. All eleven returned JSON
+objects failed the authoritative result schema and therefore normalized safely;
+the sanitized D2 artifact did not retain raw provider prose or field-level
+Pydantic detail, so no narrower historical schema error is inferred. G7C-D3
+aligns the provider-facing output instructions with the exact G7A result fields,
+immutable identifier echoes, outcome-specific partition rules, human-review
+requirement, and deterministic-authority requirement without weakening central
+validation.
+
+Invalid benchmark responses retain only bounded G7A validation reason codes.
+Raw model prose and validation inputs are not diagnostic fields. Wrong request
+fingerprints or group identifiers, missing, unknown, or duplicate members,
+invalid partition shapes, extra fields, field bounds, and protected cannot-link
+violations remain invalid and normalize to inconclusive.
+
+The explicit benchmark CLI accepts `--case-delay-ms` (default `0`, bounded from
+0 through 300000) to pause between logical whole-group cases. It also accepts
+`--max-cases` to select a deterministic prefix of the fixed corpus; by default
+the whole selected corpus remains eligible. Subsetting never changes case truth,
+labels, requests, or fingerprints, and `--max-calls` remains the hard transport
+cap. Retry counts remain bounded, and safe provider Retry-After delays share the
+benchmark sleeper with logical-case pacing.
+
+Benchmark pacing and subsetting exist only to make controlled provider
+evaluation reliable; they do not alter production group execution or pair LLM
+execution. Groq remains a reference provider. Claude and future providers must
+use the same G7A/G7B contracts, central validation, and benchmark semantics.
