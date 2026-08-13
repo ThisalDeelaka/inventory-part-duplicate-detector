@@ -205,3 +205,37 @@ preserving the original five-member group snapshot identifiers. Superseded
 review events remain available through review history but do not drive this
 current-state export. Exporting performs no scoring, retrieval, projection,
 provider call, inventory writeback, or automatic regrouping.
+
+## G7A group LLM safety boundary and contracts
+
+G7A defines the central, provider-independent safety boundary for future
+whole-group advisory. Only unresolved accepted
+`POSSIBLE_DUPLICATE_GROUP_REVIEW` snapshots with complete evidence, real
+identity ambiguity, no cannot-link or terminal identity conflict, and no current
+human review may enter automatic group LLM advisory. Likely groups, diagnostic
+families, mapping-only uncertainty, and scope or administrative uncertainty are
+ineligible. Provider choice occurs strictly downstream of this gate.
+
+An eligible snapshot produces one bounded `group-advisory-request-v1` contract
+for the complete 2..N group, not N-choose-2 provider calls. The request contains
+only canonical persisted member identity fields, every checked internal edge,
+separate identity and UOM/mapping summaries, and bounded unresolved identity
+questions. UOM and mapping differences are contextual evidence and never have
+identity authority. Canonical JSON and SHA-256 provide an order-independent
+request fingerprint without provider, credential, timestamp, retry, or random
+runtime data.
+
+`group-advisory-result-v1` permits only `SUPPORTS_SINGLE_IDENTITY`,
+`PROPOSES_PARTITION`, or `INCONCLUSIVE`. A resolved proposal must cover every
+immutable member exactly once; an inconclusive result must contain no partition.
+Untrusted output is strictly parsed and checked against the exact group and
+request fingerprint. Unknown, duplicate, missing, or empty members, invalid
+outcome structure, extra authority fields, or a partition that crosses a
+protected cannot-link normalize to a clean `INCONCLUSIVE` result. Every result
+keeps deterministic evidence authoritative and requires human review; it never
+merges, deletes, writes back, or changes G2/G6 state.
+
+G7A performs no provider invocation and adds no advisory persistence, API, or
+UI. Existing pair-level LLM code remains transitional advisory infrastructure
+and is unchanged while whole-group execution is deferred to a provider-neutral
+future phase.
