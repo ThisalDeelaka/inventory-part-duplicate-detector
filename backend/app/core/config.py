@@ -55,6 +55,17 @@ class Settings(BaseModel):
         min_length=1,
         max_length=200,
     )
+    group_llm_provider: Literal["none", "groq"] = Field(
+        default_factory=lambda: os.getenv("GROUP_LLM_PROVIDER", "none")
+    )
+    group_llm_model: str = Field(
+        default_factory=lambda: os.getenv(
+            "GROUP_LLM_MODEL",
+            os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        ),
+        min_length=1,
+        max_length=200,
+    )
     llm_timeout_seconds: float = Field(
         default_factory=lambda: os.getenv("LLM_TIMEOUT_SECONDS", "20"), gt=0, le=120
     )

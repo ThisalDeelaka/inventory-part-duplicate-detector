@@ -31,6 +31,7 @@ from app.llm.group_contracts import (
     group_advisory_request_fingerprint,
     validate_group_advisory_result,
 )
+from app.llm.provider import LLMUsageMetadata
 from app.services.group_llm_eligibility import (
     GroupAdvisoryContractService,
     GroupLlmEligibilityReason,
@@ -40,7 +41,7 @@ from app.services.group_llm_eligibility import (
 
 GROUP_PROMPT_CONTRACT_VERSION = "group-advisory-prompt-v1"
 SUPPORTED_GROUP_PROVIDER_IDS = frozenset({
-    "none", "future:cerebras", "future:groq", "future:ollama",
+    "none", "groq", "future:cerebras", "future:groq", "future:ollama",
 })
 
 
@@ -72,6 +73,7 @@ class RawGroupProviderResponse(BaseModel):
     provider_model: str | None = Field(default=None, max_length=200)
     content: dict[str, Any]
     request_id: str | None = Field(default=None, max_length=200)
+    usage: LLMUsageMetadata | None = None
 
 
 class GroupAdvisoryProvider(Protocol):
@@ -321,6 +323,9 @@ class GroupAdvisoryExecutionResult:
     safe_error_code: str | None
     safe_error_message: str | None
     duration_ms: float = field(compare=False)
+    provider_request_id: str | None = None
+    usage: LLMUsageMetadata | None = None
+    response_bytes: int | None = None
 
 
 def _safe_failure(exc: Exception) -> tuple[str, bool, GroupExecutionStatus]:
@@ -378,6 +383,9 @@ class GroupAdvisoryExecutionService:
         *, advisory: GroupAdvisoryResult | None = None, attempts: int = 0,
         cache_status: GroupCacheStatus = GroupCacheStatus.DISABLED,
         error_code: str | None = None, error_message: str | None = None,
+        provider_request_id: str | None = None,
+        usage: LLMUsageMetadata | None = None,
+        response_bytes: int | None = None,
     ) -> GroupAdvisoryExecutionResult:
         return GroupAdvisoryExecutionResult(
             execution_status=status, eligibility=eligibility,
@@ -387,6 +395,8 @@ class GroupAdvisoryExecutionService:
             validated_advisory=advisory, attempt_count=attempts,
             cache_status=cache_status, safe_error_code=error_code,
             safe_error_message=error_message,
+            provider_request_id=provider_request_id, usage=usage,
+            response_bytes=response_bytes,
             duration_ms=max(0.0, (self.clock() - started) * 1000),
         )
 
@@ -530,6 +540,10 @@ class GroupAdvisoryExecutionService:
                 )
 
             normalized = validate_group_advisory_result(request, raw.content)
+            response_bytes = len(json.dumps(
+                raw.content, ensure_ascii=True, sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8"))
             if normalized.validation_reasons:
                 self.metrics.invalid_provider_outputs += 1
                 self.metrics.normalized_inconclusive += 1
@@ -539,6 +553,8 @@ class GroupAdvisoryExecutionService:
                     attempts=attempts, cache_status=cache_status,
                     error_code="INVALID_PROVIDER_OUTPUT",
                     error_message="Provider output failed central group validation.",
+                    provider_request_id=raw.request_id, usage=raw.usage,
+                    response_bytes=response_bytes,
                 )
 
             self.circuit_breaker.record_success(self.provider.provider_id)
@@ -553,6 +569,8 @@ class GroupAdvisoryExecutionService:
                 started, status, eligibility, initial_fingerprint,
                 advisory=normalized, attempts=attempts,
                 cache_status=cache_status,
+                provider_request_id=raw.request_id, usage=raw.usage,
+                response_bytes=response_bytes,
             )
 
         raise AssertionError("bounded group execution retry loop exhausted")

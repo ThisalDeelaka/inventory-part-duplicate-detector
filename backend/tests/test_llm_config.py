@@ -12,6 +12,8 @@ LLM_ENVIRONMENT_VARIABLES = (
     "LLM_PROVIDER",
     "GROQ_API_KEY",
     "GROQ_MODEL",
+    "GROUP_LLM_PROVIDER",
+    "GROUP_LLM_MODEL",
     "LLM_TIMEOUT_SECONDS",
     "LLM_CACHE_ENABLED",
     "LLM_CACHE_MAX_ENTRIES",
@@ -50,6 +52,8 @@ def test_llm_settings_defaults_are_disabled_and_secret_safe():
     assert configuration.llm_demo_enabled is False
     assert configuration.llm_provider == "none"
     assert configuration.groq_model == "llama-3.3-70b-versatile"
+    assert configuration.group_llm_provider == "none"
+    assert configuration.group_llm_model == configuration.groq_model
     assert configuration.llm_timeout_seconds == 20
     assert configuration.groq_api_key.get_secret_value() == ""
     assert configuration.llm_cache_enabled is True

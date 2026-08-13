@@ -265,3 +265,34 @@ contract version. Pair candidate cache and persistence are not reused.
 G7B includes only a disabled provider and test providers. It performs no real
 network request and adds no group advisory persistence, API, or UI. Those remain
 deferred until a real group-capable provider is independently benchmarked.
+
+## G7C experimental Groq group benchmark adapter
+
+G7C adds Groq only as an experimental whole-group benchmark adapter. The
+default `GROUP_LLM_PROVIDER` remains `none`, independently of pair-level LLM
+configuration. Existing Groq transport was chosen first to reduce integration
+uncertainty—not because Groq has been selected as the best model or provider.
+The adapter composes the existing tested JSON transport without changing its
+pair behavior, while eligibility, retries, fingerprint guards, and semantic
+validation remain in G7A/G7B.
+
+The benchmark uses 30 fixed, fingerprinted, explicitly curated synthetic cases:
+12 single-identity cases, 8 ordinary partition cases, 4 safe-abstention cases,
+and 6 validator safety challenges. Sizes 2, 3, 4, 5, and 7 are represented,
+including 4+1 and 2+2+1 partitions. Safety challenges cover rotor/stator,
+top/component, DE/NDE, inlet/outlet, serial/non-serial, and Circuit Board
+01/02. Their labels are benchmark truth separate from production snapshots and
+are never inferred from model output or G1 review status.
+
+Live execution is available only through the explicit command
+`python -m app.llm.group_benchmark_cli --live --corpus curated-v1 --max-calls 30
+--output <ephemeral-report.json>` while group-specific runtime configuration is
+explicitly `groq`. Ordinary startup and tests never import that command or call
+the provider. Reports contain case IDs, fingerprints, expected and validated
+outcomes, validity/usefulness classes, timing, attempts, byte counts, and token
+usage when returned; they contain no credentials and do not invent cost.
+
+Group advisory persistence, API, UI, automatic triage, and default provider
+selection remain deferred. A future Cerebras adapter must be evaluated against
+the same cases, fingerprints, contracts, and safety metrics before any provider
+choice is considered.
