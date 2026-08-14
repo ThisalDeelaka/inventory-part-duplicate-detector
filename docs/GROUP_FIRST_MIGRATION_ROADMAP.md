@@ -38,7 +38,7 @@ Approve the ADR, domain contracts, terminology, product authority, G2 versioning
 - `docs/GROUP_FIRST_IDENTITY_ARCHITECTURE_ADR.md`
 - `docs/GROUP_FIRST_DOMAIN_CONTRACTS.md`
 - `docs/GROUP_FIRST_MIGRATION_ROADMAP.md`
-- A later repository-approved requirements authority file, if the owner creates or designates one
+- `PROJECT_SSOT.md`, the repository product-requirements authority
 
 ### Invariants
 
@@ -697,4 +697,4 @@ Table deletion is not part of this roadmap and requires a separate destructive-m
 
 ## Recommended first implementation phase
 
-Only **GF-0 — Governance and contract freeze** should start next. Its deliverable is explicit approval or correction of these three documents and designation of the repository requirements authority. GF-1 must not begin until GF-0 is accepted.
+GF-0 is the prerequisite governance and contract-freeze phase. Once its documentation commit is reviewed and accepted, **GF-1 — Canonical scan-record catalog** is the first production implementation phase. No later phase may start by skipping its prerequisites.

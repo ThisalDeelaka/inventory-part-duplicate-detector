@@ -12,7 +12,7 @@ The target product answers one question: which sets of inventory-master records 
 
 This ADR supersedes the pair-centered target architecture in `MVP_LLM_DEMO_SSOT.md` for new group-first design work. That file remains historical MVP context and is not modified here. `docs/IDENTITY_GROUP_SNAPSHOTS.md` remains authoritative for the behavior of the currently implemented G0-G7 layers until a later implementation phase changes and versions those contracts.
 
-The repository does not currently contain `PROJECT_SSOT.md`, `docs/CURRENT_PROJECT_ASSESSMENT.md`, or `docs/CHATGPT_ARCHITECT_WORKFLOW.md`. This ADR does not assume that those missing documents exist.
+`PROJECT_SSOT.md` is the product-requirements authority. This ADR is the architecture authority, `GROUP_FIRST_DOMAIN_CONTRACTS.md` defines target domain contracts, and `GROUP_FIRST_MIGRATION_ROADMAP.md` defines phase order. `CURRENT_PROJECT_ASSESSMENT.md` and `CHATGPT_ARCHITECT_WORKFLOW.md` are descriptive and procedural respectively and cannot override those authorities.
 
 ## Context
 
@@ -509,4 +509,4 @@ Benchmark suites are required at 5,000, 20,000, and 100,000 records. Before impl
 
 ## Implementation sequencing
 
-Implementation is governed by `GROUP_FIRST_MIGRATION_ROADMAP.md`. The first implementation phase is GF-0, a governance and contract freeze; no resolver code should begin before its acceptance checks pass.
+Implementation is governed by `GROUP_FIRST_MIGRATION_ROADMAP.md`. GF-0 is the prerequisite governance and contract-freeze phase. GF-1 is the first production implementation phase; no production implementation or resolver code should begin before GF-0 acceptance checks pass.
