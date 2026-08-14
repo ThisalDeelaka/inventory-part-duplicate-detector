@@ -65,6 +65,10 @@ def create_group_advisory_provider(
     """Explicit group factory; pair provider settings never activate this path."""
     if configuration.group_llm_provider == "none":
         return DisabledGroupAdvisoryProvider()
+    if configuration.group_llm_provider != "groq":
+        raise LLMProviderConfigurationError(
+            "Requested group provider is not handled by the Groq adapter"
+        )
     if not configuration.groq_api_key.get_secret_value().strip():
         raise LLMProviderConfigurationError(
             "Groq group benchmark is enabled but provider configuration is unavailable"

@@ -1,4 +1,4 @@
-"""Explicit opt-in command for the synthetic G7C Groq benchmark corpus."""
+"""Explicit opt-in command for the provider-neutral synthetic group benchmark."""
 
 import argparse
 import asyncio
@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 
 from app.core.config import Settings
-from app.llm.groq_group_provider import create_group_advisory_provider
 from app.llm.group_benchmark import (
     GroupAdvisoryBenchmarkRunner,
     curated_group_benchmark_cases,
     live_group_benchmark_enabled,
 )
+from app.llm.group_provider_factory import create_group_advisory_provider
 
 
 def _non_negative_int(value: str) -> int:

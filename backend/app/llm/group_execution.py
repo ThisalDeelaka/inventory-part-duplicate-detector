@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import RLock
-from typing import Any, Awaitable, Callable, Protocol
+from typing import Any, Awaitable, Callable, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -42,7 +42,7 @@ from app.services.group_llm_eligibility import (
 
 GROUP_PROMPT_CONTRACT_VERSION = "group-advisory-prompt-v3"
 SUPPORTED_GROUP_PROVIDER_IDS = frozenset({
-    "none", "groq", "future:cerebras", "future:groq", "future:ollama",
+    "none", "groq", "claude", "future:cerebras", "future:groq", "future:ollama",
 })
 
 
@@ -77,6 +77,7 @@ class RawGroupProviderResponse(BaseModel):
     usage: LLMUsageMetadata | None = None
 
 
+@runtime_checkable
 class GroupAdvisoryProvider(Protocol):
     """Execute one already-approved whole-group request as one inference unit."""
 

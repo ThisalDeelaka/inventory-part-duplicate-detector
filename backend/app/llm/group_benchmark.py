@@ -179,6 +179,8 @@ class GroupBenchmarkCaseResult:
     prompt_tokens: int | None
     completion_tokens: int | None
     total_tokens: int | None
+    cache_creation_input_tokens: int | None
+    cache_read_input_tokens: int | None
     provider_declared_inconclusive: bool
     invalid_normalized_to_inconclusive: bool
     unsafe_cannot_link_rejected: bool
@@ -227,6 +229,8 @@ class GroupBenchmarkReport:
     prompt_tokens: int | None
     completion_tokens: int | None
     total_tokens: int | None
+    cache_creation_input_tokens: int | None
+    cache_read_input_tokens: int | None
     estimated_cost: None
     usefulness_counts: dict[str, int]
     cases: tuple[GroupBenchmarkCaseResult, ...]
@@ -315,6 +319,7 @@ def _failure_result(
         request_bytes=request_bytes, response_bytes=None,
         latency_ms=latency_ms, prompt_tokens=None,
         completion_tokens=None, total_tokens=None,
+        cache_creation_input_tokens=None, cache_read_input_tokens=None,
         provider_declared_inconclusive=False,
         invalid_normalized_to_inconclusive=False,
         unsafe_cannot_link_rejected=False,
@@ -458,6 +463,12 @@ class GroupAdvisoryBenchmarkRunner:
                 prompt_tokens=usage.prompt_tokens if usage else None,
                 completion_tokens=usage.completion_tokens if usage else None,
                 total_tokens=usage.total_tokens if usage else None,
+                cache_creation_input_tokens=(
+                    usage.cache_creation_input_tokens if usage else None
+                ),
+                cache_read_input_tokens=(
+                    usage.cache_read_input_tokens if usage else None
+                ),
                 provider_declared_inconclusive=declared_inconclusive,
                 invalid_normalized_to_inconclusive=invalid,
                 unsafe_cannot_link_rejected=unsafe_rejected,
@@ -554,7 +565,10 @@ class GroupAdvisoryBenchmarkRunner:
             response_bytes=optional_sum("response_bytes"),
             prompt_tokens=optional_sum("prompt_tokens"),
             completion_tokens=optional_sum("completion_tokens"),
-            total_tokens=optional_sum("total_tokens"), estimated_cost=None,
+            total_tokens=optional_sum("total_tokens"),
+            cache_creation_input_tokens=optional_sum("cache_creation_input_tokens"),
+            cache_read_input_tokens=optional_sum("cache_read_input_tokens"),
+            estimated_cost=None,
             usefulness_counts=usefulness, cases=tuple(results),
         )
 
@@ -565,7 +579,7 @@ def live_group_benchmark_enabled(
     """No secret access: caller/factory separately validates provider configuration."""
     return bool(
         explicit_live and corpus_selected
-        and configuration.group_llm_provider == "groq"
+        and configuration.group_llm_provider in {"groq", "claude"}
     )
 
 

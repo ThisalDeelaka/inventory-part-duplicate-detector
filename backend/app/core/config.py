@@ -55,7 +55,7 @@ class Settings(BaseModel):
         min_length=1,
         max_length=200,
     )
-    group_llm_provider: Literal["none", "groq"] = Field(
+    group_llm_provider: Literal["none", "groq", "claude"] = Field(
         default_factory=lambda: os.getenv("GROUP_LLM_PROVIDER", "none")
     )
     group_llm_model: str = Field(
@@ -65,6 +65,19 @@ class Settings(BaseModel):
         ),
         min_length=1,
         max_length=200,
+    )
+    anthropic_api_key: SecretStr = Field(
+        default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", "")
+    )
+    claude_group_model: str | None = Field(
+        default_factory=lambda: os.getenv("CLAUDE_GROUP_MODEL") or None,
+        min_length=1,
+        max_length=200,
+    )
+    claude_group_max_tokens: int = Field(
+        default_factory=lambda: os.getenv("CLAUDE_GROUP_MAX_TOKENS", "4096"),
+        ge=256,
+        le=16384,
     )
     llm_timeout_seconds: float = Field(
         default_factory=lambda: os.getenv("LLM_TIMEOUT_SECONDS", "20"), gt=0, le=120

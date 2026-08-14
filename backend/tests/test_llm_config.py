@@ -14,6 +14,9 @@ LLM_ENVIRONMENT_VARIABLES = (
     "GROQ_MODEL",
     "GROUP_LLM_PROVIDER",
     "GROUP_LLM_MODEL",
+    "ANTHROPIC_API_KEY",
+    "CLAUDE_GROUP_MODEL",
+    "CLAUDE_GROUP_MAX_TOKENS",
     "LLM_TIMEOUT_SECONDS",
     "LLM_CACHE_ENABLED",
     "LLM_CACHE_MAX_ENTRIES",
@@ -54,6 +57,9 @@ def test_llm_settings_defaults_are_disabled_and_secret_safe():
     assert configuration.groq_model == "llama-3.3-70b-versatile"
     assert configuration.group_llm_provider == "none"
     assert configuration.group_llm_model == configuration.groq_model
+    assert configuration.anthropic_api_key.get_secret_value() == ""
+    assert configuration.claude_group_model is None
+    assert configuration.claude_group_max_tokens == 4096
     assert configuration.llm_timeout_seconds == 20
     assert configuration.groq_api_key.get_secret_value() == ""
     assert configuration.llm_cache_enabled is True
@@ -165,6 +171,19 @@ def test_llm_settings_read_environment_for_each_new_instance(monkeypatch):
 def test_unsupported_provider_is_rejected():
     with pytest.raises(ValidationError):
         Settings(llm_provider="unsupported")
+
+
+def test_claude_group_configuration_is_explicit_and_pair_provider_is_unchanged():
+    configuration = Settings(
+        group_llm_provider="claude",
+        anthropic_api_key="synthetic-test-key",
+        claude_group_model="claude-test-model",
+        llm_provider="none",
+    )
+    assert configuration.group_llm_provider == "claude"
+    assert configuration.claude_group_model == "claude-test-model"
+    assert configuration.llm_provider == "none"
+    assert "synthetic-test-key" not in repr(configuration)
 
 
 @pytest.mark.parametrize("timeout", [0, -1, 121])

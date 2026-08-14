@@ -386,3 +386,28 @@ partition, authority, or cannot-link validation.
 Groq remains a reference provider; G7C-D5 does not attempt broad Groq
 optimization or change any provider default, production execution, persistence,
 API, or UI behavior.
+
+## G7D Claude group advisory adapter
+
+Claude is a second provider adapter behind the provider-neutral group advisory
+boundary. `GROUP_LLM_PROVIDER` still defaults to `none`; selecting `claude`
+requires both `ANTHROPIC_API_KEY` and an explicit `CLAUDE_GROUP_MODEL`.
+`CLAUDE_GROUP_MAX_TOKENS` defaults to 4096 as a transport bound, not a provider
+or model-selection decision. Pair-provider configuration remains independent.
+
+The adapter uses the Anthropic Messages API and its current
+`output_config.format` JSON Schema envelope. Its provider-facing schema is
+derived from `GroupAdvisoryResult`. Unsupported grammar bounds (`minimum`,
+`maximum`, exclusive numeric bounds, string lengths, and array lengths) are
+removed only from a copied provider-facing schema and retained as descriptions.
+The unmodified local `GroupAdvisoryResult` parser and G7A semantic, partition,
+identity-echo, authority, and cannot-link validation remain authoritative.
+Structured outputs improve schema conformance but do not create identity truth.
+
+Groq remains the reference provider and Claude is a candidate, not a final
+selection. Both use the identical fingerprinted `curated-v1` corpus, truth
+labels, pacing, call caps, field-name-only diagnostics, and usefulness metrics.
+No live Claude call is part of G7D. Normal staging remains AI-disabled until
+provider benchmarking and real human-reviewed evaluation justify a future
+manual advisory workflow. G7D adds no advisory persistence, API, UI, automatic
+triage, or inventory writeback.
