@@ -9,6 +9,7 @@ import {
   isCurrentValidationToken,
   nextValidationToken,
 } from '../utils/llmUi'
+import { customFieldCreatePayload, customFieldModeLabel, mergeCustomFields } from '../utils/customFieldUi'
 
 const FALLBACK_FIELDS = [
   { field: 'CONTRACT', display: 'Site' },
@@ -24,19 +25,23 @@ const FALLBACK_FIELDS = [
   { field: 'HSN_SAC_CODE', display: 'HSN/SAC Code' },
 ]
 
+const SCAN_MODE = 'SAME_SITE_DUPLICATE'
+const SENSITIVE_MODE = true
+const MAX_THRESHOLD = 90
+
 export default function NewScan() {
-  const [fields, setFields] = useState([])
-  const [mappingFields, setMappingFields] = useState([
+  const [builtInFields, setBuiltInFields] = useState([
     { field: 'PART_NO', display: 'Part No', required: true },
     { field: 'DESCRIPTION', display: 'Item Description', required: true },
   ])
+  const [customFields, setCustomFields] = useState([])
+  const [customFieldDrafts, setCustomFieldDrafts] = useState({})
+  const [customFieldState, setCustomFieldState] = useState({})
   const [selected, setSelected] = useState(['CONTRACT', 'UNIT_MEAS'])
   const [columnMapping, setColumnMapping] = useState({})
   const [file, setFile] = useState(null)
   const [name, setName] = useState('Inventory duplicate scan')
   const [threshold, setThreshold] = useState(75)
-  const [scanMode, setScanMode] = useState('SAME_SITE_DUPLICATE')
-  const [sensitiveMode, setSensitiveMode] = useState(true)
   const [validation, setValidation] = useState(null)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
@@ -46,27 +51,29 @@ export default function NewScan() {
   const fileGeneration = useRef(0)
   const nav = useNavigate()
 
+  const refreshCustomFields = () => api.listCustomFields().then(setCustomFields).catch(() => {})
+
   useEffect(() => {
     api.get('/api/config/fields')
-      .then(x => {
-        setFields(x.filter(f => !f.required))
-        setMappingFields(x)
-      })
+      .then(setBuiltInFields)
       .catch(() => {
-        setFields(FALLBACK_FIELDS)
+        setBuiltInFields(current => [...current, ...FALLBACK_FIELDS])
         setError(`Backend is not reachable at ${api.baseUrl}. Start the FastAPI backend, then refresh this page.`)
       })
+    refreshCustomFields()
   }, [])
+
+  const { mappingFields, checklistFields } = mergeCustomFields(builtInFields, customFields)
 
   const form = (submittedFile = file) => {
     const f = new FormData()
     f.append('file', submittedFile)
     f.append('scan_name', name)
-    f.append('threshold', threshold)
+    f.append('threshold', Math.min(threshold, MAX_THRESHOLD))
     f.append('selected_fields', JSON.stringify(selected))
     f.append('column_mapping', JSON.stringify(columnMapping))
-    f.append('sensitive_mode', sensitiveMode)
-    f.append('scan_mode', scanMode)
+    f.append('sensitive_mode', SENSITIVE_MODE)
+    f.append('scan_mode', SCAN_MODE)
     return f
   }
 
@@ -137,6 +144,33 @@ export default function NewScan() {
     }
   }
 
+  const customFieldDraft = column => customFieldDrafts[column] || { label: column, mode: 'SUPPORTING' }
+
+  const updateCustomFieldDraft = (column, patch) => {
+    setCustomFieldDrafts(current => ({ ...current, [column]: { ...customFieldDraft(column), ...patch } }))
+  }
+
+  const saveCustomField = async column => {
+    const draft = customFieldDraft(column)
+    setCustomFieldState(current => ({ ...current, [column]: { phase: 'saving', error: '' } }))
+    try {
+      const payload = customFieldCreatePayload(draft.label, draft.mode, column)
+      const created = await api.createCustomField(payload)
+      setCustomFields(current => [...current, created])
+      updateMapping(created.field_key, column)
+      setCustomFieldState(current => ({ ...current, [column]: { phase: 'idle', error: '' } }))
+    } catch (e) {
+      setCustomFieldState(current => ({ ...current, [column]: { phase: 'error', error: e.message } }))
+    }
+  }
+
+  const removeCustomField = async id => {
+    try {
+      await api.deleteCustomField(id)
+      setCustomFields(current => current.filter(field => field.id !== id))
+    } catch (e) { setError(e.message) }
+  }
+
   const resolvedSources = new Set([
     ...Object.values(validation?.resolved_column_mapping || {}),
     ...Object.values(columnMapping).filter(Boolean),
@@ -150,6 +184,8 @@ export default function NewScan() {
     setValidation(null)
     setColumnMapping({})
     setColumnAssistance({})
+    setCustomFieldDrafts({})
+    setCustomFieldState({})
     setError('')
     setBusy(current => current === 'validate' ? '' : current)
   }
@@ -162,18 +198,9 @@ export default function NewScan() {
         <section className="panel form">
           <label>Scan name<input value={name} onChange={e => setName(e.target.value)} /></label>
           <label>Inventory CSV<input type="file" accept=".csv,text/csv" onChange={event => selectFile(event.target.files[0] || null)} /></label>
-          <label>Scan mode
-            <select value={scanMode} onChange={e => setScanMode(e.target.value)}>
-              <option value="SAME_SITE_DUPLICATE">Same-site duplicate scan</option>
-              <option value="CROSS_SITE_STANDARDIZATION">Cross-site standardization scan</option>
-              <option value="DISCOVERY">Discovery scan</option>
-            </select>
-            <small>Same-site mode is strict. Cross-site mode is for standardizing equivalent parts across sites.</small>
-          </label>
-          <label className="inline-check"><input type="checkbox" checked={sensitiveMode} onChange={e => setSensitiveMode(e.target.checked)} /><span><b>Sensitive Data Mode</b><small>No raw CSV persistence, local-only NLP, file fingerprint, and sensitive-pattern warnings.</small></span></label>
-          <div><label>Review strictness <b>{threshold}</b></label><input type="range" min="60" max="95" value={threshold} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
+          <div><label>Review strictness <b>{threshold}</b></label><input type="range" min="60" max={MAX_THRESHOLD} value={threshold} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
         </section>
-        <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{fields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{f.field}</small></span></label>)}</div></section>
+        <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{checklistFields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{f.field}</small></span></label>)}</div></section>
       </div>
       <div className="actions"><button type="button" className="secondary" onClick={validate} disabled={!!busy}>{busy === 'validate' ? 'Validating...' : 'Validate only'}</button><button type="button" onClick={run} disabled={!!busy}>{busy === 'scan' ? 'Scanning...' : 'Run scan'}</button></div>
       {validation && <section className="panel"><h2>Validation result <span className={validation.valid ? 'badge HIGH' : 'badge LOW'}>{validation.valid ? 'VALID' : 'BLOCKED'}</span></h2><div className="metrics"><span>{validation.record_count} records</span><span>{validation.empty_descriptions_count} empty descriptions</span><span>{validation.duplicate_part_number_count} repeated part rows</span><span>{validation.warnings.length} warnings</span></div>{validation.privacy && <div className="security-summary"><b>Security transparency</b><span>Raw CSV stored: {validation.privacy.raw_csv_stored ? 'Yes' : 'No'}</span><span>External AI used: {validation.privacy.external_ai_used ? 'Yes' : 'No'}</span><span>Local processing: {validation.privacy.local_processing_only ? 'Yes' : 'No'}</span><small>SHA-256: {validation.privacy.file_sha256}</small></div>}{validation.warnings.map((w, i) => <p className="warning" key={i}>{w.message}</p>)}</section>}
@@ -189,6 +216,20 @@ export default function NewScan() {
                   <option value="">Automatic / not available</option>
                   {validation.available_columns.map(column => <option value={column} key={column}>{column}</option>)}
                 </select>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+      {!!customFields.length && (
+        <section className="panel" aria-label="Custom business fields">
+          <h2>Custom business fields</h2>
+          <p>Saved for this environment and auto-applied on future uploads when a matching header is seen again.</p>
+          <div className="checks">
+            {customFields.map(field => (
+              <label key={field.id}>
+                <span>{field.display_label}<small>{field.field_key} · {customFieldModeLabel(field.mode)}</small></span>
+                <button type="button" className="secondary" onClick={() => removeCustomField(field.id)}>Remove</button>
               </label>
             ))}
           </div>
@@ -241,6 +282,32 @@ export default function NewScan() {
                       )}
                     </div>
                   )}
+                  <div className="custom-field-form">
+                    <input
+                      type="text"
+                      value={customFieldDraft(column).label}
+                      onChange={event => updateCustomFieldDraft(column, { label: event.target.value })}
+                      placeholder="Custom field label"
+                    />
+                    <select
+                      value={customFieldDraft(column).mode}
+                      onChange={event => updateCustomFieldDraft(column, { mode: event.target.value })}
+                    >
+                      <option value="SUPPORTING">Supporting</option>
+                      <option value="STRICT">Strict</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => saveCustomField(column)}
+                      disabled={customFieldState[column]?.phase === 'saving'}
+                    >
+                      {customFieldState[column]?.phase === 'saving' ? 'Saving…' : 'Save as custom field'}
+                    </button>
+                    {customFieldState[column]?.phase === 'error' && (
+                      <p className="llm-error" role="alert">{customFieldState[column].error}</p>
+                    )}
+                  </div>
                 </article>
               )
             })}

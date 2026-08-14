@@ -83,6 +83,10 @@ export const getLlmTriageStatus = scanId => triageRequest(scanId, 'status')
 export const startLlmTriage = scanId => triageRequest(scanId, 'start')
 export const retryFailedLlmTriage = scanId => triageRequest(scanId, 'retryFailed')
 
+export const listCustomFields = () => api.get('/api/config/custom-fields')
+export const createCustomField = payload => api.postJson('/api/config/custom-fields', payload)
+export const deleteCustomField = id => api.json(`/api/config/custom-fields/${id}`, { method: 'DELETE' })
+
 export const api = {
   json: async (path, options) => (await request(path, options)).json(),
   get: (path) => api.json(path),
@@ -100,4 +104,7 @@ export const api = {
   getLlmTriageStatus,
   startLlmTriage,
   retryFailedLlmTriage,
+  listCustomFields,
+  createCustomField,
+  deleteCustomField,
 }

@@ -8,6 +8,7 @@ from app.db.database import get_db
 from app.core.config import Settings
 from app.db.models import LlmAdvisorySnapshot, utcnow
 from app.engine.column_semantics import normalize_scan_mode
+from app.repositories.custom_field_repository import CustomFieldRepository
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
 from app.services.llm_export_service import (
@@ -35,6 +36,26 @@ from app.services.validation_service import parse_column_mapping, parse_selected
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
 
+def _load_custom_fields(db: Session):
+    return CustomFieldRepository(db).list_all()
+
+
+def _custom_field_selection(custom_fields, resolved_column_mapping):
+    """Split the custom fields actually resolved on this upload by participation mode."""
+    by_key = {field.field_key: field for field in custom_fields}
+    supporting_keys, strict_fields, used = [], [], []
+    for key in resolved_column_mapping:
+        field = by_key.get(key)
+        if not field:
+            continue
+        used.append({"field_key": field.field_key, "display_label": field.display_label, "mode": field.mode})
+        if field.mode == "STRICT":
+            strict_fields.append({"field_key": field.field_key, "display_label": field.display_label})
+        else:
+            supporting_keys.append(field.field_key)
+    return supporting_keys, strict_fields, used
+
+
 def _json_attr(obj, name, default):
     try:
         return json.loads(getattr(obj, name, None) or default)
@@ -54,6 +75,7 @@ def scan_json(scan, privacy=None):
         "rejections_count": getattr(scan, "rejections_count", 0) or 0,
         "started_at": scan.started_at, "completed_at": scan.completed_at, "model_version": scan.model_version,
         "scan_mode": getattr(scan, "scan_mode", "SAME_SITE_DUPLICATE"),
+        "custom_fields_used": _json_attr(scan, "custom_fields_used", "[]"),
     }
     if privacy:
         payload["privacy"] = privacy
@@ -153,10 +175,16 @@ def rejections(scan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/validate-only")
-async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True)):
-    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
+async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True), db: Session = Depends(get_db)):
+    custom_fields = _load_custom_fields(db)
+    custom_field_keys = {field.field_key for field in custom_fields}
+    df, metadata = await read_csv_upload_with_metadata(
+        file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+    )
     result = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples")})
+    _supporting, _strict, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
+    result["custom_fields_used"] = custom_fields_used
     for target, sources in metadata["column_mapping_conflicts"].items():
         result["warnings"].append({
             "warning_type": "AMBIGUOUS_COLUMN_MAPPING",
@@ -169,12 +197,25 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 @router.post("/upload")
 async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
-    if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
-    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
-    validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
+    if threshold < 0 or threshold > 90: raise HTTPException(400, "threshold must be between 0 and 90")
+    custom_fields = _load_custom_fields(db)
+    custom_field_keys = {field.field_key for field in custom_fields}
+    df, metadata = await read_csv_upload_with_metadata(
+        file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+    )
+    resolved_selected_fields = parse_selected_fields(selected_fields)
+    validation = validate_dataframe(df, resolved_selected_fields, sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
+    supporting_keys, strict_custom_fields, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
+    for key in supporting_keys:
+        if key not in resolved_selected_fields:
+            resolved_selected_fields.append(key)
     try:
-        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode))
+        scan, _ = run_scan(
+            db, df, scan_name.strip() or "Inventory duplicate scan", resolved_selected_fields, threshold,
+            sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode),
+            strict_custom_fields=strict_custom_fields, custom_fields_used=custom_fields_used,
+        )
         try:
             schedule_automatic_triage(
                 db, background_tasks, scan.id, configuration, triage_scheduler

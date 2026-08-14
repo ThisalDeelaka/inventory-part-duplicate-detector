@@ -323,6 +323,39 @@ def test_failure_continues_and_retry_only_replaces_failed_snapshot(db):
     assert len(retry_provider.calls) == 1
 
 
+def test_start_resume_continues_unattempted_candidates_after_retrying_failures(db):
+    scan = _scan(db)
+    [_candidate(db, scan, part_no_a=f"RESUME-{index}") for index in range(6)]
+    configuration = _settings(
+        llm_triage_max_retries=0,
+        llm_triage_consecutive_failure_limit=2,
+    )
+    prepare_triage_run(db, scan.id, configuration)
+    asyncio.run(_runner(db, FakeProvider([
+        LLMProviderTimeoutError("private one"),
+        LLMProviderNetworkError("private two"),
+    ]), configuration).run(scan.id))
+
+    retry_run, should_retry = prepare_triage_run(
+        db, scan.id, configuration, retry_failed=True
+    )
+    assert retry_run.state == "QUEUED" and should_retry is True
+    asyncio.run(_runner(db, FakeProvider([_advisory(), _advisory()]), configuration).run(
+        scan.id, retry_failed=True
+    ))
+
+    db.expire_all()
+    resumed, should_resume = prepare_triage_run(db, scan.id, configuration)
+    assert resumed.state == "QUEUED" and should_resume is True
+    provider = FakeProvider([_advisory()] * 4)
+    asyncio.run(_runner(db, provider, configuration).run(scan.id))
+
+    db.expire_all()
+    run = db.query(LlmTriageRun).filter_by(scan_id=scan.id).one()
+    assert run.state == "COMPLETED"
+    assert run.processed_count == 6
+    assert db.query(LlmAdvisorySnapshot).count() == 6
+    assert len(provider.calls) == 4
 def test_resume_skips_success_and_processes_missing_in_stable_id_order(db):
     scan = _scan(db)
     first = _candidate(db, scan)

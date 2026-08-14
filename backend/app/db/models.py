@@ -23,6 +23,7 @@ class DuplicateScan(Base):
     warnings_count = Column(Integer, default=0)
     rejections_count = Column(Integer, default=0)
     scan_mode = Column(String(60), default="SAME_SITE_DUPLICATE", nullable=False)
+    custom_fields_used = Column(Text, default="[]", nullable=False)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at = Column(DateTime(timezone=True))
     model_version = Column(String(50), nullable=False)
@@ -123,6 +124,17 @@ class LlmTriageRun(Base):
     completed_at = Column(DateTime(timezone=True))
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     last_safe_error_category = Column(String(80))
+
+
+class CustomField(Base):
+    __tablename__ = "custom_field"
+    id = Column(Integer, primary_key=True)
+    field_key = Column(String(120), unique=True, nullable=False)
+    display_label = Column(String(200), nullable=False)
+    mode = Column(String(20), nullable=False, default="SUPPORTING")
+    aliases = Column(Text, default="[]", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class DuplicateFeedback(Base):

@@ -15,6 +15,7 @@ def ensure_sqlite_demo_columns(engine):
         "duplicate_scan": [
             ("scan_mode", "VARCHAR(60) NOT NULL DEFAULT 'SAME_SITE_DUPLICATE'"),
             ("rejections_count", "INTEGER DEFAULT 0"),
+            ("custom_fields_used", "TEXT DEFAULT '[]' NOT NULL"),
         ],
         "duplicate_candidate": [
             ("business_status", "VARCHAR(80) NOT NULL DEFAULT 'POSSIBLE_DUPLICATE_REVIEW'"),

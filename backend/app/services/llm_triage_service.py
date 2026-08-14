@@ -225,6 +225,7 @@ def prepare_triage_run(
     candidate_ids = eligible_candidate_ids(db, scan_id)
     total = len(candidate_ids)
     cap = configuration.llm_triage_max_candidates_per_scan
+    capped_candidate_ids = candidate_ids[:cap]
     run = get_triage_run(db, scan_id)
     if run is None:
         run = LlmTriageRun(scan_id=scan_id, state="QUEUED")
@@ -251,7 +252,24 @@ def prepare_triage_run(
             run.state = "QUEUED"
             run.completed_at = None
     elif run.state in RUN_TERMINAL_STATES:
-        should_schedule = False
+        # A retry-failed run may finish successfully while candidates that were
+        # never attempted still have no snapshot.  Treat Start/Resume as a real
+        # continuation in that case instead of leaving the scan terminal at a
+        # partial processed count.
+        attempted_ids = {
+            candidate_id
+            for (candidate_id,) in db.query(LlmAdvisorySnapshot.candidate_id)
+            .filter(
+                LlmAdvisorySnapshot.candidate_id.in_(capped_candidate_ids),
+                LlmAdvisorySnapshot.capability == TRIAGE_CAPABILITY.value,
+            )
+            .all()
+        } if capped_candidate_ids else set()
+        if any(candidate_id not in attempted_ids for candidate_id in capped_candidate_ids):
+            run.state = "QUEUED"
+            run.completed_at = None
+        else:
+            should_schedule = False
     else:
         run.state = "QUEUED"
         run.completed_at = None

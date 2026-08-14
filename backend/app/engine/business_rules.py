@@ -1,3 +1,4 @@
+from app.core.constants import CUSTOM_STRICT_SCORE_CAP
 from app.engine.column_semantics import clean_field_value, normalize_scan_mode
 
 
@@ -7,7 +8,30 @@ def _differs(record_a, record_b, field: str) -> tuple[bool, str, str]:
     return bool(value_a and value_b and value_a.lower() != value_b.lower()), value_a, value_b
 
 
-def evaluate_hard_business_rules(record_a, record_b, scan_mode: str):
+def _strict_custom_field_rule(record_a, record_b, strict_custom_fields):
+    for custom_field in strict_custom_fields or []:
+        field_key = custom_field["field_key"]
+        display_label = custom_field.get("display_label", field_key)
+        differs, value_a, value_b = _differs(record_a, record_b, field_key)
+        if differs:
+            return {
+                "blocked": True,
+                "business_status": "REJECTED_BY_BUSINESS_RULE",
+                "rule_decision": "REJECT",
+                "rejection_reason": f"{field_key}_MISMATCH",
+                "score_cap": CUSTOM_STRICT_SCORE_CAP,
+                "explanation": f"{display_label} differs ({value_a} vs {value_b}).",
+                "critical_mismatches": [{
+                    "group": field_key,
+                    "label": display_label,
+                    "values_a": [value_a],
+                    "values_b": [value_b],
+                }],
+            }
+    return None
+
+
+def evaluate_hard_business_rules(record_a, record_b, scan_mode: str, strict_custom_fields=None):
     scan_mode = normalize_scan_mode(scan_mode)
     part_a = clean_field_value(record_a.get("PART_NO"))
     part_b = clean_field_value(record_b.get("PART_NO"))
@@ -93,6 +117,10 @@ def evaluate_hard_business_rules(record_a, record_b, scan_mode: str):
                 "values_b": [contract_b],
             }],
         }
+
+    custom_rule = _strict_custom_field_rule(record_a, record_b, strict_custom_fields)
+    if custom_rule:
+        return custom_rule
 
     return {
         "blocked": False,
