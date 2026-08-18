@@ -26,8 +26,8 @@ from app.engine.candidate_generator import MAX_CANDIDATE_PAIRS
 from app.repositories.discovery_repository import DiscoveryRepository
 
 
-DISCOVERY_ALGORITHM_VERSION = "identity-discovery-v1"
-DISCOVERY_CONFIGURATION_VERSION = "identity-discovery-config-v1"
+DISCOVERY_ALGORITHM_VERSION = "identity-discovery-v2-neighborhoods"
+DISCOVERY_CONFIGURATION_VERSION = "identity-discovery-config-v2"
 NEIGHBOR_PROPOSAL_VERSION = "neighbor-proposal-v1"
 _MAX_WARNING_CODES = 20
 _MAX_CONTEXT_ITEMS = 20
@@ -61,6 +61,9 @@ def _configuration_payload(configuration, scan_mode: str, selected_fields: list[
         "selected_fields": sorted(set(selected_fields)),
         "standard_pair_cap": MAX_CANDIDATE_PAIRS,
         "hybrid_enabled": hybrid_enabled,
+        "neighborhood_max_members": int(
+            getattr(configuration, "identity_neighborhood_max_members", 20)
+        ),
     }
     if not hybrid_enabled:
         return payload
@@ -122,6 +125,14 @@ def _run_contract(row) -> IdentityDiscoveryRun:
         warning_codes=tuple(json.loads(row.warning_codes_json or "[]")),
         provider_request_count=row.provider_request_count,
         safe_error_category=row.safe_error_category,
+        neighborhood_count=row.neighborhood_count,
+        records_in_at_least_one_neighborhood=row.records_in_at_least_one_neighborhood,
+        records_with_proposals_but_no_neighborhood=(
+            row.records_with_proposals_but_no_neighborhood
+        ),
+        truncated_neighborhood_count=row.truncated_neighborhood_count,
+        max_candidate_neighbor_count=row.max_candidate_neighbor_count,
+        max_included_member_count=row.max_included_member_count,
     )
 
 
@@ -242,7 +253,7 @@ def _hybrid_adapter(aggregates, retrieval, engine_records, by_source):
         })
 
 
-def persist_and_complete_discovery(
+def persist_discovery_proposals(
     db, *, discovery_run_id, scan_id, catalog_records, standard_pairs,
     hybrid_result, engine_records
 ):
@@ -330,8 +341,6 @@ def persist_and_complete_discovery(
     run.deferred_family_count = None
     run.degraded = bool(warning_codes)
     run.warning_codes_json = _canonical_json(sorted(warning_codes)[:_MAX_WARNING_CODES])
-    run.status = DiscoveryRunStatus.COMPLETED.value
-    run.completed_at = datetime.now(timezone.utc)
     db.flush()
     return _run_contract(run)
 
@@ -347,6 +356,12 @@ def mark_discovery_failed(db, discovery_run_id: int, error: Exception) -> None:
     row.records_with_any_proposal = 0
     row.records_without_proposal = row.records_total
     row.proposal_count = 0
+    row.neighborhood_count = 0
+    row.records_in_at_least_one_neighborhood = 0
+    row.records_with_proposals_but_no_neighborhood = 0
+    row.truncated_neighborhood_count = 0
+    row.max_candidate_neighbor_count = 0
+    row.max_included_member_count = 0
     db.flush()
 
 

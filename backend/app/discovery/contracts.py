@@ -26,6 +26,11 @@ class DiscoveryChannel(str, Enum):
     TECHNICAL_IDENTITY = "TECHNICAL_IDENTITY"
 
 
+class NeighborhoodMemberRole(str, Enum):
+    ANCHOR = "ANCHOR"
+    DIRECT_NEIGHBOR = "DIRECT_NEIGHBOR"
+
+
 @dataclass(frozen=True)
 class ChannelProvenance:
     channel: DiscoveryChannel
@@ -55,6 +60,12 @@ class IdentityDiscoveryRun:
     warning_codes: tuple[str, ...]
     provider_request_count: int
     safe_error_category: str | None
+    neighborhood_count: int
+    records_in_at_least_one_neighborhood: int
+    records_with_proposals_but_no_neighborhood: int
+    truncated_neighborhood_count: int
+    max_candidate_neighbor_count: int
+    max_included_member_count: int
 
 
 @dataclass(frozen=True)
@@ -74,3 +85,36 @@ class NeighborProposal:
     discovery_context_json: str
     truncated: bool
     degraded: bool
+
+
+@dataclass(frozen=True)
+class IdentityNeighborhood:
+    neighborhood_id: int
+    discovery_run_id: int
+    scan_id: int
+    anchor_record_id: int
+    algorithm_version: str
+    configuration_fingerprint: str
+    max_members: int
+    candidate_neighbor_count: int
+    included_neighbor_count: int
+    member_count: int
+    is_truncated: bool
+    degraded: bool
+    warning_codes: tuple[str, ...]
+    created_at: datetime
+    neighborhood_fingerprint: str
+
+
+@dataclass(frozen=True)
+class IdentityNeighborhoodMember:
+    member_id: int
+    neighborhood_id: int
+    scan_id: int
+    record_id: int
+    role: NeighborhoodMemberRole
+    member_order: int
+    source_proposal_id: int | None
+    discovery_priority: float | None
+    proposal_order: int | None
+    source_channels: tuple[DiscoveryChannel, ...]

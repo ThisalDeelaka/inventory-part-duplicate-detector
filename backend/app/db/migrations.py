@@ -181,11 +181,40 @@ def ensure_group_review_tables(engine):
 
 
 def ensure_identity_discovery_tables(engine):
-    """Add GF-2 discovery tables without backfilling historical scans."""
-    from app.db.models import IdentityDiscoveryRun, IdentityNeighborProposal
+    """Add GF-2/GF-3 discovery tables without backfilling historical scans."""
+    from app.db.models import (
+        IdentityDiscoveryRun,
+        IdentityNeighborProposal,
+        IdentityNeighborhoodMember,
+        IdentityNeighborhoodSnapshot,
+    )
 
     IdentityDiscoveryRun.metadata.create_all(
         bind=engine,
-        tables=[IdentityDiscoveryRun.__table__, IdentityNeighborProposal.__table__],
+        tables=[
+            IdentityDiscoveryRun.__table__,
+            IdentityNeighborProposal.__table__,
+            IdentityNeighborhoodSnapshot.__table__,
+            IdentityNeighborhoodMember.__table__,
+        ],
         checkfirst=True,
     )
+    if engine.url.get_backend_name().startswith("sqlite"):
+        additions = [
+            ("neighborhood_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("records_in_at_least_one_neighborhood", "INTEGER NOT NULL DEFAULT 0"),
+            ("records_with_proposals_but_no_neighborhood", "INTEGER NOT NULL DEFAULT 0"),
+            ("truncated_neighborhood_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("max_candidate_neighbor_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("max_included_member_count", "INTEGER NOT NULL DEFAULT 0"),
+        ]
+        existing = {
+            column["name"]
+            for column in inspect(engine).get_columns("identity_discovery_run")
+        }
+        with engine.begin() as connection:
+            for name, ddl in additions:
+                if name not in existing:
+                    connection.execute(text(
+                        f"ALTER TABLE identity_discovery_run ADD COLUMN {name} {ddl}"
+                    ))

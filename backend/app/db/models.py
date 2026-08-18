@@ -305,6 +305,12 @@ class IdentityDiscoveryRun(Base):
     warning_codes_json = Column(Text, nullable=False, default="[]")
     provider_request_count = Column(Integer, nullable=False, default=0)
     safe_error_category = Column(String(80))
+    neighborhood_count = Column(Integer, nullable=False, default=0)
+    records_in_at_least_one_neighborhood = Column(Integer, nullable=False, default=0)
+    records_with_proposals_but_no_neighborhood = Column(Integer, nullable=False, default=0)
+    truncated_neighborhood_count = Column(Integer, nullable=False, default=0)
+    max_candidate_neighbor_count = Column(Integer, nullable=False, default=0)
+    max_included_member_count = Column(Integer, nullable=False, default=0)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at = Column(DateTime(timezone=True))
 
@@ -345,6 +351,94 @@ class IdentityNeighborProposal(Base):
     truncated = Column(Boolean, nullable=False, default=False)
     degraded = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityNeighborhoodSnapshot(Base):
+    __tablename__ = "identity_neighborhood_snapshot"
+    __table_args__ = (
+        UniqueConstraint(
+            "discovery_run_id", "anchor_record_id", "algorithm_version",
+            "configuration_fingerprint", name="uq_identity_neighborhood_anchor",
+        ),
+        UniqueConstraint(
+            "discovery_run_id", "neighborhood_fingerprint",
+            name="uq_identity_neighborhood_fingerprint",
+        ),
+        CheckConstraint("member_count >= 2", name="ck_identity_neighborhood_min_members"),
+        CheckConstraint("max_members >= 2", name="ck_identity_neighborhood_max_members"),
+        CheckConstraint(
+            "member_count <= max_members", name="ck_identity_neighborhood_bounded"
+        ),
+        CheckConstraint(
+            "candidate_neighbor_count >= included_neighbor_count",
+            name="ck_identity_neighborhood_candidate_count",
+        ),
+        CheckConstraint(
+            "member_count = included_neighbor_count + 1",
+            name="ck_identity_neighborhood_member_count",
+        ),
+        Index("ix_identity_neighborhood_scan_anchor", "scan_id", "anchor_record_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    discovery_run_id = Column(
+        Integer, ForeignKey("identity_discovery_run.id"), nullable=False, index=True
+    )
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    anchor_record_id = Column(
+        Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True
+    )
+    algorithm_version = Column(String(80), nullable=False)
+    configuration_fingerprint = Column(String(64), nullable=False)
+    max_members = Column(Integer, nullable=False)
+    candidate_neighbor_count = Column(Integer, nullable=False)
+    included_neighbor_count = Column(Integer, nullable=False)
+    member_count = Column(Integer, nullable=False)
+    is_truncated = Column(Boolean, nullable=False, default=False, index=True)
+    degraded = Column(Boolean, nullable=False, default=False)
+    warning_codes_json = Column(Text, nullable=False, default="[]")
+    neighborhood_fingerprint = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class IdentityNeighborhoodMember(Base):
+    __tablename__ = "identity_neighborhood_member"
+    __table_args__ = (
+        UniqueConstraint(
+            "neighborhood_id", "record_id", name="uq_identity_neighborhood_member"
+        ),
+        UniqueConstraint(
+            "neighborhood_id", "member_order", name="uq_identity_neighborhood_order"
+        ),
+        CheckConstraint(
+            "role IN ('ANCHOR', 'DIRECT_NEIGHBOR')",
+            name="ck_identity_neighborhood_member_role",
+        ),
+        CheckConstraint("member_order >= 0", name="ck_identity_neighborhood_member_order"),
+        CheckConstraint(
+            "(role = 'ANCHOR' AND source_proposal_id IS NULL) OR "
+            "(role = 'DIRECT_NEIGHBOR' AND source_proposal_id IS NOT NULL)",
+            name="ck_identity_neighborhood_member_source",
+        ),
+        Index("ix_identity_neighborhood_member_scan_record", "scan_id", "record_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    neighborhood_id = Column(
+        Integer, ForeignKey("identity_neighborhood_snapshot.id"), nullable=False, index=True
+    )
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_id = Column(
+        Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True
+    )
+    role = Column(String(30), nullable=False)
+    member_order = Column(Integer, nullable=False)
+    source_proposal_id = Column(
+        Integer, ForeignKey("identity_neighbor_proposal.id"), index=True
+    )
+    discovery_priority = Column(Float)
+    proposal_order = Column(Integer)
+    source_channels_json = Column(Text, nullable=False, default="[]")
 
 
 class DuplicateFeedback(Base):
@@ -674,3 +768,12 @@ def _reject_scan_record_mutation(_mapper, _connection, _target):
 
 event.listen(ScanRecordSnapshot, "before_update", _reject_scan_record_mutation)
 event.listen(ScanRecordSnapshot, "before_delete", _reject_scan_record_mutation)
+
+
+def _reject_neighborhood_mutation(_mapper, _connection, _target):
+    raise ValueError("identity neighborhood snapshots are immutable")
+
+
+for _neighborhood_model in (IdentityNeighborhoodSnapshot, IdentityNeighborhoodMember):
+    event.listen(_neighborhood_model, "before_update", _reject_neighborhood_mutation)
+    event.listen(_neighborhood_model, "before_delete", _reject_neighborhood_mutation)

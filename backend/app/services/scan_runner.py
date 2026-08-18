@@ -26,8 +26,11 @@ from app.services.hybrid_retrieval import (
 )
 from app.services.identity_discovery_service import (
     mark_discovery_failed,
-    persist_and_complete_discovery,
+    persist_discovery_proposals,
     start_discovery_run,
+)
+from app.services.identity_neighborhood_service import (
+    build_and_persist_identity_neighborhoods,
 )
 from app.services.identity_group_snapshot_service import (
     project_and_persist_identity_groups,
@@ -229,7 +232,7 @@ class ScanRunner:
                 ))
                 candidates_found += added
 
-            persist_and_complete_discovery(
+            persist_discovery_proposals(
                 self.db,
                 discovery_run_id=discovery_run_id,
                 scan_id=scan.id,
@@ -237,6 +240,14 @@ class ScanRunner:
                 standard_pairs=pairs,
                 hybrid_result=retrieval,
                 engine_records=engine_records,
+            )
+            build_and_persist_identity_neighborhoods(
+                self.db,
+                discovery_run_id=discovery_run_id,
+                scan_id=scan.id,
+                max_members=int(getattr(
+                    self.configuration, "identity_neighborhood_max_members", 20
+                )),
             )
 
             # G2 consumes the complete persisted deterministic evidence set. Its

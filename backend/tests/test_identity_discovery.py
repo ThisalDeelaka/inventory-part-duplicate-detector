@@ -21,9 +21,13 @@ from app.services.canonical_record_service import create_or_get_scan_record_cata
 from app.services.hybrid_retrieval import HybridCandidateRetriever, MemoryEmbeddingVectorCache
 from app.services.identity_discovery_service import (
     discovery_fingerprint,
+    load_discovery_run,
     load_neighbor_proposals,
-    persist_and_complete_discovery,
+    persist_discovery_proposals,
     start_discovery_run,
+)
+from app.services.identity_neighborhood_service import (
+    build_and_persist_identity_neighborhoods,
 )
 from app.services.scan_runner import ScanRunner
 
@@ -84,7 +88,7 @@ def complete(db, scan, catalog, rows, pairs, *, hybrid=None, cfg=None):
         selected_fields=["CONTRACT"],
     )
     db.commit()
-    completed = persist_and_complete_discovery(
+    persisted = persist_discovery_proposals(
         db,
         discovery_run_id=run.discovery_run_id,
         scan_id=scan.id,
@@ -93,8 +97,17 @@ def complete(db, scan, catalog, rows, pairs, *, hybrid=None, cfg=None):
         hybrid_result=hybrid,
         engine_records=rows.to_dict(orient="records"),
     )
+    assert persisted.status.value == "RUNNING"
+    build_and_persist_identity_neighborhoods(
+        db,
+        discovery_run_id=run.discovery_run_id,
+        scan_id=scan.id,
+        max_members=cfg.identity_neighborhood_max_members,
+    )
     db.commit()
-    return completed, load_neighbor_proposals(db, run.discovery_run_id)
+    return load_discovery_run(db, run.discovery_run_id), load_neighbor_proposals(
+        db, run.discovery_run_id
+    )
 
 
 def test_neighbor_proposal_contract_is_neutral_and_immutable():
@@ -149,7 +162,7 @@ def test_same_record_and_missing_or_cross_scan_endpoints_fail_safely(db):
     )
     db.commit()
     with pytest.raises(ValueError, match="cannot be proposed to itself"):
-        persist_and_complete_discovery(
+        persist_discovery_proposals(
             db, discovery_run_id=run.discovery_run_id, scan_id=scan.id,
             catalog_records=catalog.records, standard_pairs=self_pair,
             hybrid_result=None, engine_records=records,
@@ -160,7 +173,7 @@ def test_same_record_and_missing_or_cross_scan_endpoints_fail_safely(db):
     other_scan, other_catalog = create_scan_and_catalog(db, other_rows)
     assert other_scan.id != scan.id
     with pytest.raises(ValueError, match="cross-scan"):
-        persist_and_complete_discovery(
+        persist_discovery_proposals(
             db, discovery_run_id=run.discovery_run_id, scan_id=scan.id,
             catalog_records=catalog.records + other_catalog.records,
             standard_pairs=[], hybrid_result=None, engine_records=records,
@@ -275,7 +288,7 @@ def test_primary_run_start_and_completion_are_idempotent(db):
     completed, proposals = complete(
         db, scan, catalog, rows, generate_candidate_pairs(rows, ["CONTRACT"]), cfg=cfg
     )
-    repeated = persist_and_complete_discovery(
+    repeated = persist_discovery_proposals(
         db, discovery_run_id=completed.discovery_run_id, scan_id=scan.id,
         catalog_records=catalog.records, standard_pairs=[], hybrid_result=None,
         engine_records=rows.to_dict(orient="records"),
@@ -349,7 +362,7 @@ def test_proposal_persistence_uses_bulk_catalog_resolution_without_endpoint_sele
 
     event.listen(db.bind, "before_cursor_execute", count_select)
     try:
-        persist_and_complete_discovery(
+        persist_discovery_proposals(
             db, discovery_run_id=run.discovery_run_id, scan_id=scan.id,
             catalog_records=catalog.records, standard_pairs=pairs,
             hybrid_result=None, engine_records=rows.to_dict(orient="records"),

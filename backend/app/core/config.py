@@ -221,6 +221,11 @@ class Settings(BaseModel):
     hybrid_retrieval_family_max: int = Field(
         default_factory=lambda: os.getenv("HYBRID_RETRIEVAL_FAMILY_MAX", "25"), gt=0, le=250
     )
+    identity_neighborhood_max_members: int = Field(
+        default_factory=lambda: os.getenv("IDENTITY_NEIGHBORHOOD_MAX_MEMBERS", "20"),
+        ge=2,
+        le=250,
+    )
 
 
 settings = Settings()

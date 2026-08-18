@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-3 implementation commit: `b5ca5be28475c9e7205c7cc4544d685d2c749578`.
 - Baseline HEAD before the GF-2 implementation commit: `7614a1ea84eef0649caecbd11a011b041d3a9ba7`.
 - Baseline HEAD before the GF-1 implementation commit: `bdefe9dad25b112c92f7f40af358e361d37e59f0`.
 - Baseline HEAD before the GF-0 governance commit: `f58b3f881a70a2c0d704092c929df55cd878dc90`.
@@ -16,7 +17,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet implemented as the normal discovery and resolution core. GF-0, GF-1, and GF-2 are verified. GF-3 and all later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0, GF-1, GF-2, and GF-3 are verified. GF-4 and all later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -44,6 +45,21 @@ Every normal scan now starts one versioned, provider-independent `IdentityDiscov
 - The RUNNING/COMPLETED/FAILED lifecycle is auditable. A proposal-stage failure rolls back partial proposals and legacy evidence in that transaction, marks the discovery run failed, marks the scan failed, and preserves the already committed immutable GF-1 catalog.
 - Persistence resolves endpoints from the catalog in bulk and uses bounded batched proposal insertion. Additive tables require no historical backfill, so scans without GF-2 data and all current G2-G7 reads remain compatible.
 - Discovery calls no provider and records a provider request count of zero.
+
+## GF-3 overlapping identity neighborhoods
+
+New GF-3-version discovery runs now remain `RUNNING` after GF-2 proposal persistence and become `COMPLETED` only after required neighborhood snapshots and members have been persisted successfully.
+
+- The authoritative neighborhood builder consumes only persisted GF-2 proposals and the GF-1 canonical catalog. It does not query pair scores, pair business status, feedback, LLM snapshots, rule exclusions, G0/G1 classifications, or G2 results.
+- Every canonical record participating in at least one proposal receives one anchor neighborhood containing the anchor and its bounded direct neighbors only. Neighbors-of-neighbors are not expanded transitively.
+- Neighborhoods deliberately overlap. A canonical record may be the anchor of one neighborhood and a direct member of any number of other neighborhoods.
+- The configurable `IDENTITY_NEIGHBORHOOD_MAX_MEMBERS` cap includes the anchor and defaults to the current 20-member compatibility bound. The default is operational rather than permanent product truth and remains subject to GF-11 benchmarking.
+- High-degree anchors preserve their exact candidate-neighbor count, bounded included count, persisted source proposals, `MEMBER_CAP_REACHED` warning, degradation state, and deterministic fingerprint. Omitted proposals are not treated as rejections.
+- Every non-anchor member references the exact persisted proposal connecting it directly to the anchor. Snapshot and member readers validate same-run, same-scan, same-catalog, and direct-link integrity.
+- Neighborhood and membership rows are immutable and idempotent. Persistence uses bulk catalog/proposal reads and batched writes without per-anchor or per-member lookup queries.
+- A neighborhood-stage failure rolls back proposals, neighborhoods, members, and uncommitted legacy evidence together; the run and scan become failed while the committed GF-1 catalog remains intact.
+- Historical GF-2 completed runs without neighborhoods remain readable, receive no automatic backfill, and are not reinterpreted as failed.
+- Visible product behavior remains the legacy pair path through G1 and G2 v1. GF-3 neighborhoods are internal, non-authoritative discovery work units and do not affect APIs, UI, exports, review, or provider behavior.
 
 ## Reusable current capabilities
 
@@ -78,4 +94,4 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-With GF-0, GF-1, and GF-2 verified, the only approved next production implementation phase is GF-3, Overlapping Identity Neighborhoods. No later GF phase should begin by skipping its prerequisites.
+With GF-0 through GF-3 verified, the only approved next production implementation phase is GF-4, Independent Signed Identity Evidence. No later GF phase should begin by skipping its prerequisites.
