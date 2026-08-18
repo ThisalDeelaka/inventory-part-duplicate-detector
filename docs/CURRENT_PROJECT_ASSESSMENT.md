@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-6A implementation commit: `88863868b0e8c58b311007c921fe8c114165e715`.
 - Baseline HEAD before the GF-5C implementation commit: `abda90ace57187292cd28f428fa57028d496dacc`.
 - Baseline HEAD before the GF-5B implementation commit: `d31a5bb9d5c8ef5b55a4a6db5d305e8b7a886269`.
 - Baseline HEAD before the GF-5A implementation commit: `be05baace42540de6983bfdc70fe483d0b852467`.
@@ -22,7 +23,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-5C runs internally during new scans, while visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6 is in progress: GF-6A is verified and GF-6B has not started. GF-5C runs internally during new scans, while visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -195,6 +196,41 @@ G1/G2-v1 projection.
 - Resolution is deterministic and provider-free; provider requests remain zero.
   No API, UI, export, LLM, dependency, deployment, or pair behavior changed.
 
+## GF-6A pure G2-v2 adapter contracts
+
+The production library now contains a pure, immutable, database-independent
+adapter from a completed GF-5C typed resolution result and authoritative
+GF-1/GF-4/GF-5C evidence to a typed G2-v2 snapshot manifest.
+
+- G2-v1 remains the current visible and persisted contract. Its complete
+  N-choose-2 evidence semantics, schema, persistence, selection, readers, APIs,
+  exports, reviews, and advisory targets are unchanged.
+- Every v2 group maps one accepted GF-5 hypothesis without changing status or
+  membership. It carries ordered GF-1 members, GF-5 summaries, validation mode,
+  exact coverage, effective internal evidence, and stable provenance.
+- `COMPLETE_PAIRWISE` requires exactly N-choose-2 deterministic evidence items.
+  `PROGRESSIVE_TARGETED` explicitly preserves evaluated and missing-nonrequired
+  pair counts and never fabricates unevaluated neutral edges.
+- GF-4 proposal evidence and GF-5C targeted evidence are normalized separately.
+  Equivalent overlap uses deterministic proposal precedence with supplemental
+  targeted provenance; incompatible overlap is rejected.
+- Conflicts, deferred work, and exact unassigned identities remain distinct
+  first-class manifest outcomes. Deferred and unassigned never mean unique or
+  non-duplicate.
+- Canonical fingerprints cover stable record references, source GF-5
+  fingerprints, validation coverage, effective evidence, and adapter versions.
+  Input order, timestamps, provider data, secrets, and avoidable database IDs do
+  not affect semantic fingerprints.
+- The validator rejects cross-scan/source-run drift, overlapping or invalid
+  membership, cannot-links, false complete coverage, missing required targeted
+  evidence, duplicate/out-of-group evidence, status drift, and fingerprint drift.
+- GF-5B-v1 currently emits complete-pairwise accepted groups and no progressive
+  likely groups. GF-6A nevertheless freezes a validator-approved progressive
+  review mapping seam for future resolver versions.
+- GF-6A creates no database model, migration, repository loader, persistence
+  path, scan integration, public route, UI, export, review, advisory, or provider
+  behavior. GF-6B remains responsible for non-current v2 persistence.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -228,6 +264,6 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-5 are verified. GF-5 is complete through its GF-5A contracts,
-GF-5B pure resolver, and GF-5C lifecycle/persistence units. GF-6 has not
-started; its versioned G2 adapter remains the next frozen-roadmap boundary.
+GF-0 through GF-5 are verified. GF-6 is in progress: GF-6A pure adapter
+contracts and mapping invariants are verified, while GF-6B non-current G2-v2
+persistence has not started. GF-6B is the next frozen-roadmap boundary.
