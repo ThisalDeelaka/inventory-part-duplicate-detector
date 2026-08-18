@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-5B implementation commit: `d31a5bb9d5c8ef5b55a4a6db5d305e8b7a886269`.
 - Baseline HEAD before the GF-5A implementation commit: `be05baace42540de6983bfdc70fe483d0b852467`.
 - Baseline HEAD before the GF-4 implementation commit: `64d98fb13363953016a42669a934b756776eacd0`.
 - Baseline HEAD before the GF-4-PRE safety correction: `d294b6ca5b77a9d8a6b185b514484b75fa20424a`.
@@ -20,7 +21,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0 through GF-4, including the GF-4-PRE safety correction, are verified. GF-5 is in progress: GF-5A is verified and GF-5B has not started. All later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0 through GF-4, including the GF-4-PRE safety correction, are verified. GF-5 is in progress: GF-5A and GF-5B are verified, while GF-5C has not started. All later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -131,6 +132,43 @@ GF-5B pure constrained resolution, and GF-5C lifecycle/persistence plus
 non-visible integration. This does not alter the frozen GF-0 through GF-12
 roadmap order. GF-5 remains in progress until its later units are complete.
 
+## GF-5B pure constrained resolver algorithm
+
+The production library now includes a pure, deterministic
+`resolve_identity_groups(...)` implementation over the immutable GF-5A
+boundary. It is not wired into normal scans and persists nothing.
+
+- Overlapping GF-3 neighborhoods and in-scope GF-4 evidence form bounded work
+  units only; connectivity is never accepted as identity.
+- Machine/human cannot-links remain protected vetoes. Compatible must-links
+  contribute positive authority, while direct and transitive must-link
+  contradictions remain explicit conflicts.
+- Missing small-work-unit relationships are scheduled through a narrow typed
+  targeted-evidence protocol in bridge, ownership, likely-completeness, then
+  partition-refinement priority. Requests are canonical, deduplicated, cached,
+  bounded, and may use the existing pure GF-4 evaluator adapter.
+- Bridge articulation, single-edge branches, generic hubs, neutral gaps, and
+  missing cross-branch evidence are analyzed before group acceptance.
+- Complete-pairwise likely remains all-strong only. Review hypotheses must pass
+  the frozen GF-5A cohesion and ambiguity validators. Progressive likely is not
+  emitted in v1.
+- Candidate generation and disjoint partition selection are bounded and
+  lexicographic: safety, compatible constraints, coverage, strong cohesion,
+  bridge/generic stability, then deterministic identity. Equal materially
+  different ownership remains deferred.
+- Safe subgroups common to the selected stable partition are retained without
+  hiding the broader conflict. Accepted membership remains globally disjoint.
+- Member caps, targeted-budget exhaustion, evaluator failure, truncation, and
+  bounded-search exhaustion produce typed deferred work rather than optimistic
+  acceptance.
+- All 15 frozen golden cases now execute against the real resolver. Additional
+  tests cover shuffled determinism, bounds, disjoint cliques, must-link closure,
+  neutral evidence, duplicate-valued rows, evaluator failure, targeted
+  ordering/deduplication, GF-4 evaluator inheritance, legacy-path isolation,
+  and bounded-search metrics.
+- There are no database, migration, repository, scan-runner, G2, API, UI,
+  export, pair-path, provider, or secret changes.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -164,4 +202,4 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-With GF-0 through GF-4 and the bounded GF-5A unit verified, GF-5 remains in progress. The only approved next implementation unit is GF-5B, the pure constrained resolver algorithm. GF-5C, GF-6, and later work must not begin by skipping that prerequisite.
+With GF-0 through GF-4 and the bounded GF-5A/GF-5B units verified, GF-5 remains in progress. The only approved next implementation unit is GF-5C, resolver persistence/lifecycle and non-visible scan integration. GF-6 and later work must not begin by skipping that prerequisite.

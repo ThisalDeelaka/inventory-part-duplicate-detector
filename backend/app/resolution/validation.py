@@ -263,6 +263,13 @@ def _evidence_lookup(
         lookup[(request.record_id_1, request.record_id_2)] = (
             result.edge_class, result.generic_only
         )
+    for constraint in resolution_input.human_constraints:
+        pair = (constraint.record_id_1, constraint.record_id_2)
+        current = lookup.get(pair)
+        if constraint.constraint_type == IdentityResolutionConstraintType.CANNOT_LINK:
+            lookup[pair] = (IdentityEdgeClass.CANNOT_LINK, False)
+        elif not current or current[0] != IdentityEdgeClass.CANNOT_LINK:
+            lookup[pair] = (IdentityEdgeClass.STRONG_SUPPORT, False)
     return lookup
 
 
@@ -330,8 +337,6 @@ def validate_group_hypothesis(
     lookup = _evidence_lookup(resolution_input, targeted_results)
     internal_pairs = tuple(combinations(group.member_record_ids, 2))
     internal = [lookup.get(pair) for pair in internal_pairs]
-    _require(not any(item and item[0] == IdentityEdgeClass.CANNOT_LINK for item in internal),
-             "accepted group contains machine CANNOT_LINK evidence")
     human_cannot = {
         (item.record_id_1, item.record_id_2)
         for item in resolution_input.human_constraints
@@ -339,6 +344,8 @@ def validate_group_hypothesis(
     }
     _require(not (set(internal_pairs) & human_cannot),
              "accepted group contains human CANNOT_LINK evidence")
+    _require(not any(item and item[0] == IdentityEdgeClass.CANNOT_LINK for item in internal),
+             "accepted group contains machine CANNOT_LINK evidence")
     actual_counts = {
         edge_class: sum(item is not None and item[0] == edge_class for item in internal)
         for edge_class in IdentityEdgeClass
@@ -626,6 +633,12 @@ def validate_resolution_result(
         metrics.targeted_evidence_result_count,
     )
     _require(actual_counts == expected_counts, "resolution metrics do not reconcile")
+    _require(
+        metrics.work_unit_count >= 0
+        and metrics.candidate_partitions_explored >= 0
+        and metrics.targeted_evidence_cache_hit_count >= 0,
+        "resolution execution metrics must be non-negative",
+    )
     _require(result.resolution_fingerprint == identity_resolution_result_fingerprint(result),
              "resolution fingerprint does not match its canonical payload")
 

@@ -13,6 +13,74 @@ GF-5A defines executable boundaries only. It does not resolve production
 scans, persist resolution runs or hypotheses, publish G2, change normal scan
 orchestration, or involve a provider.
 
+GF-5B implements `resolve_identity_groups(resolution_input,
+targeted_evidence_provider)` as a pure library function. It remains
+non-persistent and is not invoked by normal scan orchestration.
+
+## Deterministic resolver v1 algorithm
+
+The resolver canonicalizes record, neighborhood, evidence, constraint, and
+member ordering before applying the strict GF-5A validators. It then creates
+work units by unioning overlapping neighborhood membership, available GF-4
+edge scope, and explicit must-link scope. A work unit is only a bounded search
+scope; connectivity never becomes an identity conclusion.
+
+For each work unit the resolver builds separate in-memory machine evidence,
+effective cannot-link, compatible must-link, generic-evidence, and discovery
+provenance lookups. Machine or human cannot-link remains a hard veto. A direct
+human must-link against machine cannot-link emits
+`HUMAN_MACHINE_AUTHORITY_CONFLICT`. A transitive must-link closure crossing a
+protected cannot-link emits `INCOMPATIBLE_MUST_LINK_CONSTRAINTS`. Original
+machine evidence is never mutated.
+
+Strong support and compatible must-links form the preferred positive
+backbone. Review support may propose membership but cannot force a merge.
+`NON_GROUPABLE` stays neutral. The resolver identifies articulation records,
+single-edge branches, missing or neutral cross-branch relationships, and
+generic-only hubs before accepting broader membership.
+
+For a bounded work unit, missing internal evidence is scheduled in this
+deterministic safety order:
+
+1. `BRIDGE_CROSS_CHECK`;
+2. `OWNERSHIP_AMBIGUITY_CHECK`;
+3. `LIKELY_GROUP_COMPLETENESS_CHECK`;
+4. `PARTITION_CROSS_CHECK`.
+
+Pairs are canonical, deduplicated, cached per invocation, and evaluated no
+more than once. The narrow provider protocol accepts one request and returns
+one typed result. The built-in adapter calls only the pure GF-4 canonical
+evaluator. Missing providers, evaluator exceptions, invalid results, or
+unfinished checks cause safe deferral. Exceeding the targeted-check budget
+causes `TARGETED_EVIDENCE_BUDGET_EXHAUSTED` without partial acceptance.
+
+Candidate groups are generated only up to
+`complete_pairwise_member_limit`. Each candidate must have complete internal
+evidence and pass the GF-5A group validator. All-strong complete candidates
+may be likely. Other candidates may be review only when they have meaningful
+cohesion and no unresolved bridge, generic-hub, neutral-gap, ownership, or
+protected-conflict risk. Progressive likely is not emitted in v1.
+
+Candidate generation and disjoint set-partition exploration use a deterministic
+cap derived from the configured member and targeted-check bounds. Partition
+selection is lexicographic: maximize safely assigned records, then likely
+membership, then retained strong evidence, then minimize review dependence and
+fragmentation. It never uses an averaged similarity objective. Groups common
+to all equally best partitions may be salvaged; differing ownership is
+deferred as `UNRESOLVED_OWNERSHIP_AMBIGUITY` instead of being tie-broken
+arbitrarily.
+
+Work units exceeding `max_resolution_members`, materially truncated work,
+targeted-budget exhaustion, evaluator failure, and exhausted bounded search
+produce typed deferred units. Protected conflicts remain visible even when the
+same work unit is deferred. Every source record outside accepted membership is
+reported as unassigned, including records involved in conflict or deferred
+work; this is never a non-duplicate classification.
+
+Execution metrics record work-unit count, candidate/partition states explored,
+targeted requests/results, and cache reuse. These are bounded implementation
+observations, not a 100k-production-readiness claim.
+
 ## Input boundary
 
 `IdentityResolutionInput` contains exactly:

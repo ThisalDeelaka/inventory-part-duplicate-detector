@@ -226,6 +226,9 @@ class IdentityResolutionMetrics:
     unassigned_record_count: int
     targeted_evidence_request_count: int
     targeted_evidence_result_count: int
+    work_unit_count: int = 0
+    candidate_partitions_explored: int = 0
+    targeted_evidence_cache_hit_count: int = 0
 
 
 @dataclass(frozen=True)
