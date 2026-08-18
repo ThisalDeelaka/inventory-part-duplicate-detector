@@ -19,6 +19,7 @@ from app.db.migrations import (
     ensure_group_review_tables,
     ensure_identity_discovery_tables,
     ensure_identity_group_snapshot_tables,
+    ensure_identity_resolution_tables,
     ensure_sqlite_demo_columns,
 )
 
@@ -30,6 +31,7 @@ async def lifespan(_app: FastAPI):
     ensure_identity_group_snapshot_tables(engine)
     ensure_identity_discovery_tables(engine)
     ensure_group_review_tables(engine)
+    ensure_identity_resolution_tables(engine)
     yield
 
 

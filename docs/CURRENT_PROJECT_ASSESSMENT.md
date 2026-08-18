@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-5C implementation commit: `abda90ace57187292cd28f428fa57028d496dacc`.
 - Baseline HEAD before the GF-5B implementation commit: `d31a5bb9d5c8ef5b55a4a6db5d305e8b7a886269`.
 - Baseline HEAD before the GF-5A implementation commit: `be05baace42540de6983bfdc70fe483d0b852467`.
 - Baseline HEAD before the GF-4 implementation commit: `64d98fb13363953016a42669a934b756776eacd0`.
@@ -21,7 +22,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0 through GF-4, including the GF-4-PRE safety correction, are verified. GF-5 is in progress: GF-5A and GF-5B are verified, while GF-5C has not started. All later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-5C runs internally during new scans, while visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -169,6 +170,31 @@ boundary. It is not wired into normal scans and persists nothing.
 - There are no database, migration, repository, scan-runner, G2, API, UI,
   export, pair-path, provider, or secret changes.
 
+## GF-5C durable resolver lifecycle and non-visible integration
+
+Every new successful scan now invokes the GF-5B resolver after its completed
+GF-4 evidence transaction and before legacy pair writes and the visible
+G1/G2-v1 projection.
+
+- A versioned immutable `IdentityResolutionRun` fingerprints the exact GF-1
+  catalog, GF-3 neighborhoods, GF-4 signed evidence, normalized effective G6
+  constraints, resolver algorithm, and bounded configuration.
+- Accepted hypotheses and ordered members, conflicts and involved records,
+  deferred work and records, explicit unassigned records, effective constraint
+  provenance, and resolver-only targeted requests/results are persisted as
+  queryable immutable rows. Targeted checks do not alter GF-4 evidence.
+- Child result persistence is atomic. A failure rolls back every partial result
+  row and terminally records a bounded safe failure category.
+- A completed run is reloaded into the typed GF-5 result, revalidated, and
+  compared with the pure resolver output before commit. Identical input reuses
+  the terminal run without duplicate children.
+- Changed G6 constraints create a distinct resolver run and never auto-run or
+  mutate a G2 projection.
+- GF-5C failure is deliberately non-visible: the legacy pair path and G1/G2-v1
+  projection continue unchanged.
+- Resolution is deterministic and provider-free; provider requests remain zero.
+  No API, UI, export, LLM, dependency, deployment, or pair behavior changed.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -202,4 +228,6 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-With GF-0 through GF-4 and the bounded GF-5A/GF-5B units verified, GF-5 remains in progress. The only approved next implementation unit is GF-5C, resolver persistence/lifecycle and non-visible scan integration. GF-6 and later work must not begin by skipping that prerequisite.
+GF-0 through GF-5 are verified. GF-5 is complete through its GF-5A contracts,
+GF-5B pure resolver, and GF-5C lifecycle/persistence units. GF-6 has not
+started; its versioned G2 adapter remains the next frozen-roadmap boundary.

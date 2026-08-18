@@ -41,6 +41,9 @@ from app.services.identity_evidence_service import (
 from app.services.identity_group_snapshot_service import (
     project_and_persist_identity_groups,
 )
+from app.services.identity_resolution_service import (
+    resolve_and_persist_identity_groups,
+)
 
 
 class ScanRunner:
@@ -250,6 +253,21 @@ class ScanRunner:
             self.db.commit()
             acquire_identity_evidence(self.db, evidence_run_id=evidence_run_id)
             self.db.commit()
+
+            # GF-5C is an internal, non-visible shadow stage. Its service commits
+            # either a complete immutable result or a safe FAILED run and never
+            # changes the authoritative legacy candidate/G1/G2-v1 path below.
+            try:
+                resolve_and_persist_identity_groups(
+                    self.db,
+                    scan_id=scan.id,
+                    discovery_run_id=discovery_run_id,
+                    evidence_run_id=evidence_run_id,
+                )
+            except Exception:
+                # Defensive isolation for failures before the GF-5C service can
+                # create its RUNNING checkpoint. GF-4 is already committed.
+                self.db.rollback()
 
             # Preserve the legacy visible pair path after required independent
             # evidence is complete; GF-4 is not an authority for G1/G2 v1.

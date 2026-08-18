@@ -240,6 +240,10 @@ New partitioning, group status changes, pair deprecation.
 
 ## GF-5 — Constrained resolver v1
 
+Implementation status: verified through GF-5A contracts and golden cases,
+GF-5B pure constrained resolution, and GF-5C immutable lifecycle/persistence
+with non-visible normal-scan integration. It still publishes no G2 result.
+
 ### Goal
 
 Implement the deterministic group-first resolver over neighborhoods and independent signed evidence, initially without publishing G2 results.

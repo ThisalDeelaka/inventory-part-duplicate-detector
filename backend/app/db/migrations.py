@@ -222,3 +222,32 @@ def ensure_identity_discovery_tables(engine):
                     connection.execute(text(
                         f"ALTER TABLE identity_discovery_run ADD COLUMN {name} {ddl}"
                     ))
+
+
+def ensure_identity_resolution_tables(engine):
+    """Add immutable GF-5C resolver tables without backfilling old scans."""
+    from app.db.models import (
+        IdentityResolutionConflictMember,
+        IdentityResolutionConflictSnapshot,
+        IdentityResolutionConstraintInput,
+        IdentityResolutionDeferredMember,
+        IdentityResolutionDeferredSnapshot,
+        IdentityResolutionGroupMember,
+        IdentityResolutionGroupSnapshot,
+        IdentityResolutionRun,
+        IdentityResolutionTargetedEvidence,
+        IdentityResolutionUnassignedRecord,
+    )
+
+    IdentityResolutionRun.metadata.create_all(bind=engine, tables=[
+        IdentityResolutionRun.__table__,
+        IdentityResolutionGroupSnapshot.__table__,
+        IdentityResolutionGroupMember.__table__,
+        IdentityResolutionConflictSnapshot.__table__,
+        IdentityResolutionConflictMember.__table__,
+        IdentityResolutionDeferredSnapshot.__table__,
+        IdentityResolutionDeferredMember.__table__,
+        IdentityResolutionTargetedEvidence.__table__,
+        IdentityResolutionUnassignedRecord.__table__,
+        IdentityResolutionConstraintInput.__table__,
+    ], checkfirst=True)

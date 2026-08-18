@@ -531,6 +531,203 @@ class IdentityEvidenceEdgeSnapshot(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class IdentityResolutionRun(Base):
+    __tablename__ = "identity_resolution_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "scan_id", "discovery_run_id", "evidence_run_id",
+            "resolver_algorithm_version", "configuration_fingerprint",
+            "input_fingerprint", name="uq_identity_resolution_input",
+        ),
+        CheckConstraint(
+            "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
+            name="ck_identity_resolution_status",
+        ),
+        CheckConstraint(
+            "provider_request_count = 0", name="ck_identity_resolution_provider_zero"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    discovery_run_id = Column(Integer, ForeignKey("identity_discovery_run.id"), nullable=False, index=True)
+    evidence_run_id = Column(Integer, ForeignKey("identity_evidence_run.id"), nullable=False, index=True)
+    resolver_algorithm_version = Column(String(80), nullable=False)
+    configuration_version = Column(String(80), nullable=False)
+    configuration_fingerprint = Column(String(64), nullable=False)
+    configuration_json = Column(Text, nullable=False)
+    input_fingerprint = Column(String(64), nullable=False, index=True)
+    resolution_fingerprint = Column(String(64), index=True)
+    status = Column(String(20), nullable=False, default="RUNNING", index=True)
+    started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    source_record_count = Column(Integer, nullable=False, default=0)
+    accepted_group_count = Column(Integer, nullable=False, default=0)
+    likely_group_count = Column(Integer, nullable=False, default=0)
+    review_group_count = Column(Integer, nullable=False, default=0)
+    conflict_count = Column(Integer, nullable=False, default=0)
+    deferred_work_unit_count = Column(Integer, nullable=False, default=0)
+    unassigned_record_count = Column(Integer, nullable=False, default=0)
+    targeted_evidence_request_count = Column(Integer, nullable=False, default=0)
+    targeted_evidence_result_count = Column(Integer, nullable=False, default=0)
+    work_unit_count = Column(Integer, nullable=False, default=0)
+    candidate_partitions_explored = Column(Integer, nullable=False, default=0)
+    targeted_evidence_cache_hit_count = Column(Integer, nullable=False, default=0)
+    effective_constraint_count = Column(Integer, nullable=False, default=0)
+    effective_constraint_fingerprint = Column(String(64), nullable=False)
+    provider_request_count = Column(Integer, nullable=False, default=0)
+    safe_failure_category = Column(String(80))
+
+
+class IdentityResolutionGroupSnapshot(Base):
+    __tablename__ = "identity_resolution_group_snapshot"
+    __table_args__ = (
+        UniqueConstraint("resolution_run_id", "hypothesis_id", name="uq_resolution_group_id"),
+        UniqueConstraint("resolution_run_id", "hypothesis_fingerprint", name="uq_resolution_group_fingerprint"),
+        CheckConstraint("member_count >= 2", name="ck_resolution_group_members"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    hypothesis_id = Column(String(64), nullable=False)
+    status = Column(String(60), nullable=False, index=True)
+    validation_mode = Column(String(40), nullable=False)
+    member_count = Column(Integer, nullable=False)
+    evidence_summary_json = Column(Text, nullable=False)
+    bridge_risk_summary_json = Column(Text, nullable=False)
+    genericity_risk_summary_json = Column(Text, nullable=False)
+    missing_evidence_summary_json = Column(Text, nullable=False)
+    source_neighborhood_references_json = Column(Text, nullable=False)
+    hypothesis_fingerprint = Column(String(64), nullable=False)
+
+
+class IdentityResolutionGroupMember(Base):
+    __tablename__ = "identity_resolution_group_member"
+    __table_args__ = (
+        UniqueConstraint("group_snapshot_id", "record_id", name="uq_resolution_group_member"),
+        UniqueConstraint("group_snapshot_id", "member_index", name="uq_resolution_group_member_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    group_snapshot_id = Column(Integer, ForeignKey("identity_resolution_group_snapshot.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_ref_key = Column(String(64), nullable=False)
+    member_index = Column(Integer, nullable=False)
+
+
+class IdentityResolutionConflictSnapshot(Base):
+    __tablename__ = "identity_resolution_conflict_snapshot"
+    __table_args__ = (
+        UniqueConstraint("resolution_run_id", "conflict_id", name="uq_resolution_conflict_id"),
+        UniqueConstraint("resolution_run_id", "fingerprint", name="uq_resolution_conflict_fingerprint"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    conflict_id = Column(String(64), nullable=False)
+    conflict_type = Column(String(80), nullable=False, index=True)
+    protected_evidence_references_json = Column(Text, nullable=False)
+    source_neighborhood_references_json = Column(Text, nullable=False)
+    summary = Column(Text, nullable=False)
+    fingerprint = Column(String(64), nullable=False)
+
+
+class IdentityResolutionConflictMember(Base):
+    __tablename__ = "identity_resolution_conflict_member"
+    __table_args__ = (UniqueConstraint("conflict_snapshot_id", "member_index", name="uq_resolution_conflict_member_index"),)
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    conflict_snapshot_id = Column(Integer, ForeignKey("identity_resolution_conflict_snapshot.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_ref_key = Column(String(64), nullable=False)
+    member_index = Column(Integer, nullable=False)
+
+
+class IdentityResolutionDeferredSnapshot(Base):
+    __tablename__ = "identity_resolution_deferred_snapshot"
+    __table_args__ = (
+        UniqueConstraint("resolution_run_id", "deferred_id", name="uq_resolution_deferred_id"),
+        UniqueConstraint("resolution_run_id", "fingerprint", name="uq_resolution_deferred_fingerprint"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    deferred_id = Column(String(64), nullable=False)
+    reason = Column(String(100), nullable=False, index=True)
+    unfinished_evidence_summary = Column(Text, nullable=False)
+    source_neighborhood_references_json = Column(Text, nullable=False)
+    fingerprint = Column(String(64), nullable=False)
+
+
+class IdentityResolutionDeferredMember(Base):
+    __tablename__ = "identity_resolution_deferred_member"
+    __table_args__ = (UniqueConstraint("deferred_snapshot_id", "member_index", name="uq_resolution_deferred_member_index"),)
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    deferred_snapshot_id = Column(Integer, ForeignKey("identity_resolution_deferred_snapshot.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_ref_key = Column(String(64), nullable=False)
+    member_index = Column(Integer, nullable=False)
+
+
+class IdentityResolutionTargetedEvidence(Base):
+    __tablename__ = "identity_resolution_targeted_evidence"
+    __table_args__ = (
+        UniqueConstraint("resolution_run_id", "request_fingerprint", name="uq_resolution_targeted_request"),
+        CheckConstraint("record_id_1 < record_id_2", name="ck_resolution_targeted_order"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_id_1 = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_id_2 = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_ref_key_1 = Column(String(64), nullable=False)
+    record_ref_key_2 = Column(String(64), nullable=False)
+    reason = Column(String(80), nullable=False)
+    requesting_work_unit_reference = Column(Text, nullable=False)
+    request_fingerprint = Column(String(64), nullable=False)
+    evaluation_completed = Column(Boolean, nullable=False, default=False)
+    edge_class = Column(String(40))
+    reason_codes_json = Column(Text)
+    evidence_summary = Column(Text)
+    evaluator_version = Column(String(80))
+    evidence_fingerprint = Column(String(64))
+    generic_only = Column(Boolean)
+
+
+class IdentityResolutionUnassignedRecord(Base):
+    __tablename__ = "identity_resolution_unassigned_record"
+    __table_args__ = (
+        UniqueConstraint("resolution_run_id", "record_id", name="uq_resolution_unassigned_record"),
+        UniqueConstraint("resolution_run_id", "unassigned_index", name="uq_resolution_unassigned_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_ref_key = Column(String(64), nullable=False)
+    unassigned_index = Column(Integer, nullable=False)
+
+
+class IdentityResolutionConstraintInput(Base):
+    __tablename__ = "identity_resolution_constraint_input"
+    __table_args__ = (
+        UniqueConstraint("resolution_run_id", "record_id_1", "record_id_2", "constraint_type", name="uq_resolution_constraint_input"),
+        CheckConstraint("record_id_1 < record_id_2", name="ck_resolution_constraint_order"),
+    )
+    id = Column(Integer, primary_key=True)
+    resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_id_1 = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_id_2 = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_ref_key_1 = Column(String(64), nullable=False)
+    record_ref_key_2 = Column(String(64), nullable=False)
+    constraint_type = Column(String(20), nullable=False)
+    source_authority = Column(String(80), nullable=False)
+    source_reference = Column(String(500), nullable=False)
+
+
 class DuplicateFeedback(Base):
     __tablename__ = "duplicate_feedback"
     id = Column(Integer, primary_key=True)
@@ -888,3 +1085,31 @@ event.listen(IdentityEvidenceRun, "before_update", _reject_terminal_evidence_run
 event.listen(IdentityEvidenceRun, "before_delete", _reject_evidence_history_delete)
 event.listen(IdentityEvidenceEdgeSnapshot, "before_update", _reject_evidence_edge_mutation)
 event.listen(IdentityEvidenceEdgeSnapshot, "before_delete", _reject_evidence_edge_mutation)
+
+
+def _reject_terminal_resolution_run_update(_mapper, _connection, target):
+    history = sa_inspect(target).attrs.status.history
+    prior_status = history.deleted[0] if history.deleted else target.status
+    if prior_status in {"COMPLETED", "FAILED"}:
+        raise ValueError("terminal identity resolution runs are immutable")
+
+
+def _reject_resolution_history_mutation(_mapper, _connection, _target):
+    raise ValueError("identity resolution snapshots are immutable")
+
+
+event.listen(IdentityResolutionRun, "before_update", _reject_terminal_resolution_run_update)
+event.listen(IdentityResolutionRun, "before_delete", _reject_resolution_history_mutation)
+for _resolution_snapshot_model in (
+    IdentityResolutionGroupSnapshot,
+    IdentityResolutionGroupMember,
+    IdentityResolutionConflictSnapshot,
+    IdentityResolutionConflictMember,
+    IdentityResolutionDeferredSnapshot,
+    IdentityResolutionDeferredMember,
+    IdentityResolutionTargetedEvidence,
+    IdentityResolutionUnassignedRecord,
+    IdentityResolutionConstraintInput,
+):
+    event.listen(_resolution_snapshot_model, "before_update", _reject_resolution_history_mutation)
+    event.listen(_resolution_snapshot_model, "before_delete", _reject_resolution_history_mutation)

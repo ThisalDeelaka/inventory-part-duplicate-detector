@@ -15,7 +15,11 @@ orchestration, or involve a provider.
 
 GF-5B implements `resolve_identity_groups(resolution_input,
 targeted_evidence_provider)` as a pure library function. It remains
-non-persistent and is not invoked by normal scan orchestration.
+independently testable and has no persistence side effects.
+
+GF-5C persists that exact typed output and invokes it as a non-visible shadow
+stage during new scans. It does not publish G2 or change current APIs, UI,
+exports, pair decisions, or provider behavior.
 
 ## Deterministic resolver v1 algorithm
 
@@ -224,6 +228,35 @@ fingerprints use the record-ref keys and exclude those avoidable database IDs.
 Collections are normalized so input permutation does not alter identity.
 Fingerprints exclude timestamps, randomness, secrets, provider data, and LLM
 content.
+
+## GF-5C persistence and lifecycle
+
+One `IdentityResolutionRun` owns one stable combination of scan, completed
+discovery run, completed evidence run, resolver algorithm, configuration, and
+canonical input fingerprint. Its lifecycle is `RUNNING`, `COMPLETED`, or
+`FAILED`; terminal rows and all child snapshots are immutable.
+
+The input fingerprint includes stable GF-1 record references and source
+fingerprints, GF-3 neighborhood fingerprints and membership, GF-4 evidence
+fingerprints/classes, normalized effective G6 constraints and provenance, and
+resolver algorithm/configuration. It excludes timestamps, avoidable database
+IDs, pair business state, provider material, and secrets.
+
+Accepted hypotheses, conflicts, deferred work, explicit unassigned records,
+and their ordered members are separate queryable snapshot rows. Targeted
+evidence requests and results have dedicated resolver-owned rows and never
+alter GF-2 proposals or GF-4 evidence. Effective constraint inputs preserve
+stable endpoint references, authority, and source reference.
+
+RUNNING metadata commits before resolution. All child rows and completion
+counters commit atomically only after the persisted graph reconstructs the
+typed result, passes the GF-5 validators, and equals the pure output. A failure
+rolls back partial children and records a bounded safe failure category.
+
+Normal scan ordering is GF-1, GF-2/GF-3, GF-4, internal GF-5C, then legacy pair
+writes and G1/G2-v1 projection. GF-5C failure alone does not fail the scan or
+suppress legacy visible results. Resolution remains deterministic and
+provider-free, with provider request count constrained to zero.
 
 ## Golden GF-5B acceptance cases
 
