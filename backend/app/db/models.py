@@ -274,6 +274,79 @@ class HybridRetrievalRun(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class IdentityDiscoveryRun(Base):
+    __tablename__ = "identity_discovery_run"
+    __table_args__ = (
+        UniqueConstraint("scan_id", name="uq_identity_discovery_scan"),
+        CheckConstraint(
+            "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
+            name="ck_identity_discovery_status",
+        ),
+        CheckConstraint(
+            "provider_request_count = 0", name="ck_identity_discovery_provider_zero"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    discovery_fingerprint = Column(String(64), nullable=False, index=True)
+    algorithm_version = Column(String(80), nullable=False)
+    configuration_version = Column(String(80), nullable=False)
+    normalization_version = Column(String(80), nullable=False)
+    configuration_json = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="RUNNING", index=True)
+    records_total = Column(Integer, nullable=False, default=0)
+    records_with_any_proposal = Column(Integer, nullable=False, default=0)
+    records_without_proposal = Column(Integer, nullable=False, default=0)
+    proposal_count = Column(Integer, nullable=False, default=0)
+    truncated_record_count = Column(Integer)
+    deferred_family_count = Column(Integer)
+    degraded = Column(Boolean, nullable=False, default=False)
+    warning_codes_json = Column(Text, nullable=False, default="[]")
+    provider_request_count = Column(Integer, nullable=False, default=0)
+    safe_error_category = Column(String(80))
+    started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+
+
+class IdentityNeighborProposal(Base):
+    __tablename__ = "identity_neighbor_proposal"
+    __table_args__ = (
+        UniqueConstraint(
+            "discovery_run_id", "record_id_1", "record_id_2",
+            name="uq_identity_neighbor_run_pair",
+        ),
+        UniqueConstraint(
+            "discovery_run_id", "proposal_key", name="uq_identity_neighbor_run_key"
+        ),
+        CheckConstraint("record_id_1 < record_id_2", name="ck_identity_neighbor_order"),
+        Index("ix_identity_neighbor_scan_endpoints", "scan_id", "record_id_1", "record_id_2"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    discovery_run_id = Column(
+        Integer, ForeignKey("identity_discovery_run.id"), nullable=False, index=True
+    )
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    record_id_1 = Column(
+        Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True
+    )
+    record_id_2 = Column(
+        Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True
+    )
+    proposal_key = Column(String(64), nullable=False)
+    proposal_version = Column(String(80), nullable=False)
+    source_channels_json = Column(Text, nullable=False)
+    channel_provenance_json = Column(Text, nullable=False)
+    reciprocal_channels_json = Column(Text, nullable=False, default="[]")
+    proposal_priority = Column(Float, nullable=False, default=0)
+    proposal_order = Column(Integer, nullable=False)
+    discovery_context_json = Column(Text, nullable=False, default="{}")
+    truncated = Column(Boolean, nullable=False, default=False)
+    degraded = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class DuplicateFeedback(Base):
     __tablename__ = "duplicate_feedback"
     id = Column(Integer, primary_key=True)

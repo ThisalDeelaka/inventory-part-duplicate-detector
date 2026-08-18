@@ -178,3 +178,14 @@ def ensure_group_review_tables(engine):
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_group_review_initial_group "
                 "ON identity_group_review_event (initial_group_snapshot_id)"
             ))
+
+
+def ensure_identity_discovery_tables(engine):
+    """Add GF-2 discovery tables without backfilling historical scans."""
+    from app.db.models import IdentityDiscoveryRun, IdentityNeighborProposal
+
+    IdentityDiscoveryRun.metadata.create_all(
+        bind=engine,
+        tables=[IdentityDiscoveryRun.__table__, IdentityNeighborProposal.__table__],
+        checkfirst=True,
+    )

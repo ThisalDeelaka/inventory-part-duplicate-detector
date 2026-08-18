@@ -24,6 +24,11 @@ from app.services.canonical_record_service import (
 from app.services.hybrid_retrieval import (
     HybridCandidateRetriever, SqlAlchemyEmbeddingVectorCache, canonical_record_pair,
 )
+from app.services.identity_discovery_service import (
+    mark_discovery_failed,
+    persist_and_complete_discovery,
+    start_discovery_run,
+)
 from app.services.identity_group_snapshot_service import (
     project_and_persist_identity_groups,
 )
@@ -63,6 +68,7 @@ class ScanRunner:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
 
         scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode)
+        discovery_run_id = None
         try:
             for warning in validation["warnings"]:
                 self.warnings.save(scan.id, warning)
@@ -72,13 +78,25 @@ class ScanRunner:
             usable = source_indexed[
                 source_indexed["DESCRIPTION"].fillna("").str.strip().ne("")
             ].copy()
-            create_or_get_scan_record_catalog(
+            catalog_result = create_or_get_scan_record_catalog(
                 self.db,
                 scan_id=scan.id,
                 records=usable.to_dict(orient="records"),
             )
             # The catalog is a completed prerequisite stage. Candidate discovery
             # never begins against a partial or merely in-memory record set.
+            self.db.commit()
+            discovery_run = start_discovery_run(
+                self.db,
+                scan_id=scan.id,
+                catalog_records=catalog_result.records,
+                configuration=self.configuration,
+                scan_mode=scan_mode,
+                selected_fields=selected_fields,
+            )
+            discovery_run_id = discovery_run.discovery_run_id
+            # Preserve RUNNING independently so a later failed proposal stage is
+            # auditable while the already committed GF-1 catalog remains intact.
             self.db.commit()
             pairs = generate_candidate_pairs(usable, selected_fields)
 
@@ -100,20 +118,23 @@ class ScanRunner:
                     self.rejections.save(scan.id, pair["record_a"], pair["record_b"], result)
                     rejections_found += 1
 
+            retrieval = None
+            engine_records = [
+                row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()
+            ]
             if self.configuration.hybrid_retrieval_enabled:
                 retrieval = HybridCandidateRetriever(
                     self.configuration,
                     cache=SqlAlchemyEmbeddingVectorCache(self.db),
                 ).retrieve(usable, scan_mode, standard_candidate_pairs)
-                records = [row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()]
                 added = 0
                 added_with_uom_difference = 0
                 added_with_uom_unknown = 0
                 post_scoring_excluded = 0
                 post_scoring_reasons = Counter()
                 for retrieved in retrieval.candidates:
-                    left = records[retrieved.left_record_id]
-                    right = records[retrieved.right_record_id]
+                    left = engine_records[retrieved.left_record_id]
+                    right = engine_records[retrieved.right_record_id]
                     result = score_candidate(
                         left, right, selected_fields, scan_mode,
                         allow_uom_mapping_review=True,
@@ -208,6 +229,16 @@ class ScanRunner:
                 ))
                 candidates_found += added
 
+            persist_and_complete_discovery(
+                self.db,
+                discovery_run_id=discovery_run_id,
+                scan_id=scan.id,
+                catalog_records=catalog_result.records,
+                standard_pairs=pairs,
+                hybrid_result=retrieval,
+                engine_records=engine_records,
+            )
+
             # G2 consumes the complete persisted deterministic evidence set. Its
             # own transaction is atomic and fingerprint-idempotent, and the scan
             # is exposed as COMPLETED only after that snapshot is available.
@@ -222,7 +253,10 @@ class ScanRunner:
                 rejections_count=rejections_found,
                 warnings_count=warning_count,
             ), len(pairs)
-        except Exception:
+        except Exception as exc:
             self.db.rollback()
+            if discovery_run_id is not None:
+                mark_discovery_failed(self.db, discovery_run_id, exc)
+                self.db.commit()
             self.scans.update_status(scan, "FAILED", total_records=len(df))
             raise

@@ -67,6 +67,8 @@ class RetrievalEvidence:
     uom_evidence: str
     uom_penalty: float
     mapping_quality: str
+    channel_ranks: tuple[tuple[str, int], ...] = ()
+    channel_scores: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -507,10 +509,13 @@ class HybridCandidateRetriever:
                 return
             row = evidence.setdefault(pair, {
                 "channel_ranks": {}, "lexical": 0.0, "vector": 0.0,
-                "reciprocal": set(),
+                "channel_scores": {}, "reciprocal": set(),
             })
             previous = row["channel_ranks"].get(channel)
             row["channel_ranks"][channel] = min(previous, channel_rank) if previous else channel_rank
+            row["channel_scores"][channel] = max(
+                row["channel_scores"].get(channel, 0.0), raw_score
+            )
             if channel == "LEXICAL":
                 row["lexical"] = max(row["lexical"], raw_score)
             if channel == "CHAR_VECTOR":
@@ -723,6 +728,11 @@ class HybridCandidateRetriever:
                     item["uom"].reason_code,
                     item["uom"].penalty,
                     item["uom"].mapping_quality.value,
+                    tuple(sorted(item["row"]["channel_ranks"].items())),
+                    tuple(
+                        (channel, round(score, 4))
+                        for channel, score in sorted(item["row"]["channel_scores"].items())
+                    ),
                 ),
             ))
 
