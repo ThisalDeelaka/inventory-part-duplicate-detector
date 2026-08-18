@@ -31,7 +31,12 @@ def is_generic_description(description: str) -> bool:
     tokens = normalize_description(description).split()
     if not tokens or len(tokens) > 2:
         return False
-    return all(token in GENERIC_TERMS for token in tokens)
+    if all(token in GENERIC_TERMS for token in tokens):
+        return True
+    # A single alphabetic category/name carries no model, rating, dimension,
+    # material, or other differentiating identity evidence.  Keep alphanumeric
+    # model-like tokens (for example MCB30A) on the normal scorer path.
+    return len(tokens) == 1 and tokens[0].isalpha()
 
 
 def has_generic_specific_pair(description_a: str, description_b: str) -> bool:

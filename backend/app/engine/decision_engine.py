@@ -92,6 +92,13 @@ def _visibility_payload(record_a, record_b, generic_warning=False, context_warni
     }
 
 
+def _has_strong_part_number_identity_evidence(record_a, record_b, similarity: float) -> bool:
+    """Reuse the scorer's existing >=90 strong part-number relationship."""
+    left = normalize_part_no_with_dictionary(record_a.get("PART_NO")).replace(" ", "")
+    right = normalize_part_no_with_dictionary(record_b.get("PART_NO")).replace(" ", "")
+    return bool(left and right and similarity >= 90)
+
+
 def _blocked_result(record_a, record_b, selected_fields, scan_mode, rule):
     matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
     score = rule["score_cap"]
@@ -205,11 +212,25 @@ def evaluate_candidate(
 
     if has_generic_description(desc_a, desc_b):
         generic_warning = True
-        final = min(final, 65.0)
-        explanation = f"{explanation} One description is too generic to confirm duplicate identity."
-        rule_decision = "DOWNGRADE"
-        rejection_reason = "GENERIC_DESCRIPTION"
-        business_status = "INSUFFICIENT_DATA"
+        if _has_strong_part_number_identity_evidence(record_a, record_b, part_no):
+            explanation = (
+                f"{explanation} Generic description evidence is supplemented by a strong "
+                "part-number relationship."
+            )
+        else:
+            final = min(final, 65.0)
+            explanation = (
+                f"{explanation} One description is too generic to confirm duplicate identity."
+            )
+            rule_decision = "DOWNGRADE"
+            rejection_reason = "GENERIC_DESCRIPTION"
+            if (
+                normalize_description(desc_a)
+                and normalize_description(desc_a) == normalize_description(desc_b)
+            ):
+                business_status = "POSSIBLE_DUPLICATE_REVIEW"
+            else:
+                business_status = "INSUFFICIENT_DATA"
 
     context_mismatch = find_application_context_mismatch(record_a, record_b)
     if context_mismatch:

@@ -168,6 +168,45 @@ def test_uom_difference_alone_never_creates_cannot_link():
     assert historical.edge_class == IdentityEdgeClass.NON_GROUPABLE
 
 
+def test_generic_text_and_context_only_are_never_strong_identity_support():
+    left = record("A", "BEARING")
+    right = record("B", "BEARING")
+    left["ACCOUNTING_GROUP"] = right["ACCOUNTING_GROUP"] = "AG1"
+    left["PRODUCT_CATEGORY_ID"] = right["PRODUCT_CATEGORY_ID"] = "CAT1"
+    result = score_candidate(
+        left, right,
+        ["CONTRACT", "UNIT_MEAS", "ACCOUNTING_GROUP", "PRODUCT_CATEGORY_ID"],
+        allow_uom_mapping_review=True,
+    )
+    classification = classify_identity_edge(result)
+
+    assert result["business_status"] == "POSSIBLE_DUPLICATE_REVIEW"
+    assert classification.edge_class == IdentityEdgeClass.REVIEW_SUPPORT
+
+
+def test_generic_text_with_strong_part_number_evidence_can_remain_strong():
+    result = score_candidate(
+        record("BRG-6205-A", "BEARING"),
+        record("BRG6205A", "BEARING"),
+        ["CONTRACT", "UNIT_MEAS"],
+        allow_uom_mapping_review=True,
+    )
+    assert classify_identity_edge(result).edge_class == IdentityEdgeClass.STRONG_SUPPORT
+
+
+@pytest.mark.parametrize("context_field", ["CONTRACT", "UNIT_MEAS", "ACCOUNTING_GROUP"])
+def test_context_difference_alone_does_not_create_cannot_link(context_field):
+    left = record("A", "BEARING")
+    right = record("B", "BEARING")
+    left["ACCOUNTING_GROUP"] = right["ACCOUNTING_GROUP"] = "AG1"
+    right[context_field] = "DIFFERENT"
+    result = score_candidate(
+        left, right, [context_field],
+        allow_uom_mapping_review=True,
+    )
+    assert classify_identity_edge(result).edge_class != IdentityEdgeClass.CANNOT_LINK
+
+
 def test_human_feedback_precedence_and_unsure_semantics():
     strong = {
         "business_status": "LIKELY_DUPLICATE",
