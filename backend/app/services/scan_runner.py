@@ -44,6 +44,9 @@ from app.services.identity_group_snapshot_service import (
 from app.services.identity_resolution_service import (
     resolve_and_persist_identity_groups,
 )
+from app.services.g2_v2_projection_service import (
+    build_and_persist_g2_v2_projection,
+)
 
 
 class ScanRunner:
@@ -258,15 +261,21 @@ class ScanRunner:
             # either a complete immutable result or a safe FAILED run and never
             # changes the authoritative legacy candidate/G1/G2-v1 path below.
             try:
-                resolve_and_persist_identity_groups(
+                resolution = resolve_and_persist_identity_groups(
                     self.db,
                     scan_id=scan.id,
                     discovery_run_id=discovery_run_id,
                     evidence_run_id=evidence_run_id,
                 )
+                if resolution.status == "COMPLETED":
+                    build_and_persist_g2_v2_projection(
+                        self.db,
+                        scan_id=scan.id,
+                        resolution_run_id=resolution.resolution_run_id,
+                    )
             except Exception:
-                # Defensive isolation for failures before the GF-5C service can
-                # create its RUNNING checkpoint. GF-4 is already committed.
+                # Defensive isolation for failures before GF-5C/GF-6B can
+                # create their RUNNING checkpoints. GF-4 is already committed.
                 self.db.rollback()
 
             # Preserve the legacy visible pair path after required independent

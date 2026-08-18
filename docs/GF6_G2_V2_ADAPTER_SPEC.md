@@ -6,8 +6,7 @@ GF-6 remains one phase in the frozen GF-0 through GF-12 roadmap:
 
 - GF-6A defines the pure G2-v2 manifest, mapping, validation, and fingerprint
   contracts.
-- GF-6B may later add immutable non-current persistence and compatibility
-  isolation.
+- GF-6B adds immutable non-current persistence and compatibility isolation.
 
 GF-6A performs no database I/O and changes no visible behavior. G2-v1 remains
 the selected historical/current projection format and permanently retains its
@@ -106,3 +105,70 @@ fingerprint drift.
 
 GF-6A adds no schema, migration, scan orchestration, persistence, current-result
 selection, API, UI, export, review, advisory, pair-deprecation, or provider work.
+
+## GF-6B persistence architecture
+
+GF-6B uses separate additive tables rooted at `g2_v2_projection_run`, with
+structured tables for accepted groups, ordered members, effective internal
+evidence, conflicts and members, deferred work and members, and explicit
+unassigned records. It never writes to `identity_group_projection_run` or any
+other G2-v1 snapshot table. The v2 run has no current/promotion flag; therefore
+the existing current/latest v1 query cannot select it by construction.
+
+A completed v2 run records the source GF-5C resolution, GF-4 evidence, and
+GF-3 discovery run IDs; snapshot contract version 2; adapter version and
+configuration fingerprint; source resolution fingerprint; manifest
+fingerprint; reconciled outcome counts; timestamps; and an optional bounded
+safe failure category. Child rows preserve exact GF-6A membership, categorical
+status, validation mode, summaries, coverage, evidence origins and references,
+and outcome fingerprints. The full manifest is queryable rather than stored as
+one opaque JSON value.
+
+## Atomicity, idempotency, and immutability
+
+The service builds the authoritative pure GF-6A manifest, reuses an existing
+run for the same scan/source/adapter/configuration/source/manifest identity, or
+commits a RUNNING checkpoint. It writes the complete child graph in one result
+transaction, reconstructs it through bounded bulk queries, validates it against
+the authoritative upstream inputs, requires exact semantic equality, and only
+then commits COMPLETED. A result-write or reconciliation failure rolls back all
+children and terminally records FAILED. Completed and failed runs and every
+child snapshot reject update/delete through normal ORM paths; historical runs
+are never overwritten.
+
+## Validation-mode reconciliation
+
+For `COMPLETE_PAIRWISE`, persistence requires exactly `N*(N-1)/2` unique
+canonical evidence pairs and equal evaluated/possible coverage. A v1-resolver
+likely group remains all strong support. For `PROGRESSIVE_TARGETED`, evaluated,
+possible, required, proposal-origin, targeted-origin, and missing-nonrequired
+counts round-trip exactly; no row is created for an unevaluated pair. Conflict,
+deferred, and unassigned rows remain distinct and no singleton group is
+synthesized.
+
+## Normal scan ordering and failure isolation
+
+The implemented order is:
+
+```text
+GF-1 canonical catalog
+-> GF-2 proposals / GF-3 neighborhoods
+-> GF-4 independent evidence
+-> GF-5C constrained resolution
+-> GF-6B non-current G2-v2 persistence
+-> legacy pair persistence
+-> G1
+-> current/visible G2-v1
+```
+
+GF-6B is non-authoritative before graduation. A failed v2 result remains
+observable as FAILED but does not fail the scan, mutate GF-1 through GF-5C, or
+suppress the legacy G1/G2-v1 result. A successful v2 result likewise cannot
+change visible group/conflict counts, current projection identity, exports,
+review targets, or advisory eligibility because all current readers retain
+their existing v1 model dependencies. Historical scans receive no backfill and
+no v2 data is created on read.
+
+GF-6B adds no public v2 API, UI, export, review, advisory, GF-7 comparison,
+GF-8 promotion switch, pair-write deprecation, scorer/resolver change, or
+provider call.

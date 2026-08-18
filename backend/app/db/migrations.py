@@ -251,3 +251,30 @@ def ensure_identity_resolution_tables(engine):
         IdentityResolutionUnassignedRecord.__table__,
         IdentityResolutionConstraintInput.__table__,
     ], checkfirst=True)
+
+
+def ensure_g2_v2_projection_tables(engine):
+    """Create structurally isolated non-current GF-6B tables; never backfill v1."""
+    from app.db.models import (
+        G2V2ConflictMemberRow,
+        G2V2ConflictSnapshotRow,
+        G2V2DeferredMemberRow,
+        G2V2DeferredSnapshotRow,
+        G2V2GroupMemberRow,
+        G2V2GroupSnapshotRow,
+        G2V2InternalEvidenceRow,
+        G2V2ProjectionRun,
+        G2V2UnassignedRecordRow,
+    )
+
+    G2V2ProjectionRun.metadata.create_all(bind=engine, tables=[
+        G2V2ProjectionRun.__table__,
+        G2V2GroupSnapshotRow.__table__,
+        G2V2GroupMemberRow.__table__,
+        G2V2InternalEvidenceRow.__table__,
+        G2V2ConflictSnapshotRow.__table__,
+        G2V2ConflictMemberRow.__table__,
+        G2V2DeferredSnapshotRow.__table__,
+        G2V2DeferredMemberRow.__table__,
+        G2V2UnassignedRecordRow.__table__,
+    ], checkfirst=True)

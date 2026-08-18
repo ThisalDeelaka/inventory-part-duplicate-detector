@@ -16,6 +16,7 @@ from app.api import (
 from app.core.config import settings
 from app.db.database import Base, SessionLocal, engine
 from app.db.migrations import (
+    ensure_g2_v2_projection_tables,
     ensure_group_review_tables,
     ensure_identity_discovery_tables,
     ensure_identity_group_snapshot_tables,
@@ -32,6 +33,7 @@ async def lifespan(_app: FastAPI):
     ensure_identity_discovery_tables(engine)
     ensure_group_review_tables(engine)
     ensure_identity_resolution_tables(engine)
+    ensure_g2_v2_projection_tables(engine)
     yield
 
 

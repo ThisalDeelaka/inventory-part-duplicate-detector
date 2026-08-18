@@ -728,6 +728,187 @@ class IdentityResolutionConstraintInput(Base):
     source_reference = Column(String(500), nullable=False)
 
 
+class G2V2ProjectionRun(Base):
+    __tablename__ = "g2_v2_projection_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "scan_id", "source_resolution_run_id", "adapter_algorithm_version",
+            "adapter_configuration_fingerprint", "source_manifest_fingerprint",
+            "manifest_fingerprint", name="uq_g2_v2_projection_identity",
+        ),
+        CheckConstraint(
+            "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
+            name="ck_g2_v2_projection_status",
+        ),
+        CheckConstraint("snapshot_contract_version = 2", name="ck_g2_v2_contract_v2"),
+        Index("ix_g2_v2_projection_scan_status", "scan_id", "status"),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    source_resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    source_discovery_run_id = Column(Integer, ForeignKey("identity_discovery_run.id"), nullable=False, index=True)
+    source_evidence_run_id = Column(Integer, ForeignKey("identity_evidence_run.id"), nullable=False, index=True)
+    snapshot_contract_version = Column(Integer, nullable=False, default=2)
+    adapter_algorithm_version = Column(String(80), nullable=False)
+    adapter_configuration_fingerprint = Column(String(64), nullable=False)
+    source_manifest_fingerprint = Column(String(64), nullable=False)
+    manifest_fingerprint = Column(String(64), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="RUNNING", index=True)
+    started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    canonical_record_count = Column(Integer, nullable=False, default=0)
+    accepted_group_count = Column(Integer, nullable=False, default=0)
+    likely_group_count = Column(Integer, nullable=False, default=0)
+    review_group_count = Column(Integer, nullable=False, default=0)
+    conflict_count = Column(Integer, nullable=False, default=0)
+    deferred_count = Column(Integer, nullable=False, default=0)
+    unassigned_record_count = Column(Integer, nullable=False, default=0)
+    safe_failure_category = Column(String(80))
+
+
+class G2V2GroupSnapshotRow(Base):
+    __tablename__ = "g2_v2_group_snapshot"
+    __table_args__ = (
+        UniqueConstraint("projection_run_id", "group_reference", name="uq_g2_v2_group_reference"),
+        UniqueConstraint("projection_run_id", "group_fingerprint", name="uq_g2_v2_group_fingerprint"),
+        CheckConstraint("member_count >= 2", name="ck_g2_v2_group_members"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    group_reference = Column(String(80), nullable=False)
+    status = Column(String(60), nullable=False, index=True)
+    validation_mode = Column(String(40), nullable=False)
+    member_count = Column(Integer, nullable=False)
+    group_evidence_summary_json = Column(Text, nullable=False)
+    bridge_risk_summary_json = Column(Text, nullable=False)
+    genericity_risk_summary_json = Column(Text, nullable=False)
+    missing_evidence_summary_json = Column(Text, nullable=False)
+    validation_coverage_json = Column(Text, nullable=False)
+    source_hypothesis_fingerprint = Column(String(64), nullable=False)
+    source_neighborhood_references_json = Column(Text, nullable=False)
+    group_fingerprint = Column(String(64), nullable=False)
+
+
+class G2V2GroupMemberRow(Base):
+    __tablename__ = "g2_v2_group_member"
+    __table_args__ = (
+        UniqueConstraint("group_snapshot_id", "record_id", name="uq_g2_v2_group_member"),
+        UniqueConstraint("group_snapshot_id", "member_order", name="uq_g2_v2_group_member_order"),
+        CheckConstraint("member_order >= 0", name="ck_g2_v2_group_member_order"),
+        Index("ix_g2_v2_group_member_run_record", "projection_run_id", "record_id"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    group_snapshot_id = Column(Integer, ForeignKey("g2_v2_group_snapshot.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    stable_record_reference = Column(String(64), nullable=False)
+    member_order = Column(Integer, nullable=False)
+
+
+class G2V2InternalEvidenceRow(Base):
+    __tablename__ = "g2_v2_internal_evidence"
+    __table_args__ = (
+        UniqueConstraint("group_snapshot_id", "record_id_1", "record_id_2", name="uq_g2_v2_group_pair"),
+        CheckConstraint("record_id_1 < record_id_2", name="ck_g2_v2_evidence_order"),
+        CheckConstraint("evidence_origin IN ('PROPOSAL_EVIDENCE', 'TARGETED_RESOLUTION_EVIDENCE')", name="ck_g2_v2_evidence_origin"),
+        Index("ix_g2_v2_evidence_run_pair", "projection_run_id", "record_id_1", "record_id_2"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    group_snapshot_id = Column(Integer, ForeignKey("g2_v2_group_snapshot.id"), nullable=False, index=True)
+    record_id_1 = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    record_id_2 = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    stable_record_reference_1 = Column(String(64), nullable=False)
+    stable_record_reference_2 = Column(String(64), nullable=False)
+    edge_class = Column(String(40), nullable=False)
+    evidence_origin = Column(String(40), nullable=False)
+    source_evidence_reference = Column(String(64), nullable=False)
+    supplemental_source_references_json = Column(Text, nullable=False, default="[]")
+    reason_codes_json = Column(Text, nullable=False, default="[]")
+    evidence_summary = Column(Text, nullable=False)
+    evaluator_version = Column(String(80), nullable=False)
+    evidence_fingerprint = Column(String(64), nullable=False)
+    required_for_validation = Column(Boolean, nullable=False)
+
+
+class G2V2ConflictSnapshotRow(Base):
+    __tablename__ = "g2_v2_conflict_snapshot"
+    __table_args__ = (
+        UniqueConstraint("projection_run_id", "conflict_reference", name="uq_g2_v2_conflict_reference"),
+        UniqueConstraint("projection_run_id", "conflict_fingerprint", name="uq_g2_v2_conflict_fingerprint"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    conflict_reference = Column(String(80), nullable=False)
+    conflict_type = Column(String(80), nullable=False)
+    summary = Column(Text, nullable=False)
+    protected_evidence_references_json = Column(Text, nullable=False)
+    source_neighborhood_references_json = Column(Text, nullable=False)
+    source_conflict_fingerprint = Column(String(64), nullable=False)
+    conflict_fingerprint = Column(String(64), nullable=False)
+
+
+class G2V2ConflictMemberRow(Base):
+    __tablename__ = "g2_v2_conflict_member"
+    __table_args__ = (
+        UniqueConstraint("conflict_snapshot_id", "record_id", name="uq_g2_v2_conflict_member"),
+        UniqueConstraint("conflict_snapshot_id", "member_order", name="uq_g2_v2_conflict_member_order"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    conflict_snapshot_id = Column(Integer, ForeignKey("g2_v2_conflict_snapshot.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    stable_record_reference = Column(String(64), nullable=False)
+    member_order = Column(Integer, nullable=False)
+
+
+class G2V2DeferredSnapshotRow(Base):
+    __tablename__ = "g2_v2_deferred_snapshot"
+    __table_args__ = (
+        UniqueConstraint("projection_run_id", "deferred_reference", name="uq_g2_v2_deferred_reference"),
+        UniqueConstraint("projection_run_id", "deferred_fingerprint", name="uq_g2_v2_deferred_fingerprint"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    deferred_reference = Column(String(80), nullable=False)
+    reason = Column(String(100), nullable=False)
+    unfinished_evidence_summary = Column(Text, nullable=False)
+    source_neighborhood_references_json = Column(Text, nullable=False)
+    source_deferred_fingerprint = Column(String(64), nullable=False)
+    deferred_fingerprint = Column(String(64), nullable=False)
+
+
+class G2V2DeferredMemberRow(Base):
+    __tablename__ = "g2_v2_deferred_member"
+    __table_args__ = (
+        UniqueConstraint("deferred_snapshot_id", "record_id", name="uq_g2_v2_deferred_member"),
+        UniqueConstraint("deferred_snapshot_id", "member_order", name="uq_g2_v2_deferred_member_order"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    deferred_snapshot_id = Column(Integer, ForeignKey("g2_v2_deferred_snapshot.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    stable_record_reference = Column(String(64), nullable=False)
+    member_order = Column(Integer, nullable=False)
+
+
+class G2V2UnassignedRecordRow(Base):
+    __tablename__ = "g2_v2_unassigned_record"
+    __table_args__ = (
+        UniqueConstraint("projection_run_id", "record_id", name="uq_g2_v2_unassigned_record"),
+        UniqueConstraint("projection_run_id", "member_order", name="uq_g2_v2_unassigned_order"),
+    )
+    id = Column(Integer, primary_key=True)
+    projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    record_id = Column(Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True)
+    stable_record_reference = Column(String(64), nullable=False)
+    member_order = Column(Integer, nullable=False)
+
+
 class DuplicateFeedback(Base):
     __tablename__ = "duplicate_feedback"
     id = Column(Integer, primary_key=True)
@@ -1113,3 +1294,30 @@ for _resolution_snapshot_model in (
 ):
     event.listen(_resolution_snapshot_model, "before_update", _reject_resolution_history_mutation)
     event.listen(_resolution_snapshot_model, "before_delete", _reject_resolution_history_mutation)
+
+
+def _reject_terminal_g2_v2_run_update(_mapper, _connection, target):
+    history = sa_inspect(target).attrs.status.history
+    prior_status = history.deleted[0] if history.deleted else target.status
+    if prior_status in {"COMPLETED", "FAILED"}:
+        raise ValueError("terminal G2-v2 projection runs are immutable")
+
+
+def _reject_g2_v2_snapshot_mutation(_mapper, _connection, _target):
+    raise ValueError("G2-v2 projection snapshots are immutable")
+
+
+event.listen(G2V2ProjectionRun, "before_update", _reject_terminal_g2_v2_run_update)
+event.listen(G2V2ProjectionRun, "before_delete", _reject_g2_v2_snapshot_mutation)
+for _g2_v2_snapshot_model in (
+    G2V2GroupSnapshotRow,
+    G2V2GroupMemberRow,
+    G2V2InternalEvidenceRow,
+    G2V2ConflictSnapshotRow,
+    G2V2ConflictMemberRow,
+    G2V2DeferredSnapshotRow,
+    G2V2DeferredMemberRow,
+    G2V2UnassignedRecordRow,
+):
+    event.listen(_g2_v2_snapshot_model, "before_update", _reject_g2_v2_snapshot_mutation)
+    event.listen(_g2_v2_snapshot_model, "before_delete", _reject_g2_v2_snapshot_mutation)

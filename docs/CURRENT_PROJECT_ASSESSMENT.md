@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-6B implementation commit: `ae87011c91ee678607784713e0717347935f8ba8`.
 - Baseline HEAD before the GF-6A implementation commit: `88863868b0e8c58b311007c921fe8c114165e715`.
 - Baseline HEAD before the GF-5C implementation commit: `abda90ace57187292cd28f428fa57028d496dacc`.
 - Baseline HEAD before the GF-5B implementation commit: `d31a5bb9d5c8ef5b55a4a6db5d305e8b7a886269`.
@@ -23,7 +24,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6 is in progress: GF-6A is verified and GF-6B has not started. GF-5C runs internally during new scans, while visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-5C and the structurally isolated, non-current G2-v2 persistence stage run internally during new scans, while visible G1/G2-v1 behavior remains legacy-compatible. GF-7 has not started, and all later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -231,6 +232,29 @@ GF-1/GF-4/GF-5C evidence to a typed G2-v2 snapshot manifest.
   path, scan integration, public route, UI, export, review, advisory, or provider
   behavior. GF-6B remains responsible for non-current v2 persistence.
 
+## GF-6B non-current G2-v2 persistence
+
+Every successful new GF-5C resolution now feeds the pure GF-6A adapter and is
+persisted in structurally separate `g2_v2_*` tables before legacy pair writes.
+
+- One immutable `G2V2ProjectionRun` owns structured group, ordered member,
+  internal evidence, conflict, deferred, and explicit unassigned rows. The
+  persisted manifest reconstructs exactly and revalidates against GF-1,
+  GF-4, and GF-5C before completion.
+- Complete-pairwise and progressive-targeted coverage retain their distinct
+  semantics. Missing progressive pairs are never synthesized, and proposal
+  versus targeted evidence origin/provenance remains explicit.
+- Stable source, adapter/configuration, and manifest fingerprints make repeats
+  idempotent. Terminal runs and every child row are immutable.
+- Child persistence and completion are atomic. A failed v2 write rolls back its
+  child graph, records a bounded FAILED run, and cannot change completed GF-5C
+  history or the legacy visible G2-v1 result.
+- The v2 schema has no current flag and no relationship to current v1 selection.
+  Existing G3 APIs, G5 exports, G6 reviews, G7 advisory eligibility, and
+  `snapshot_available` continue querying only `identity_group_*` v1 tables.
+- Historical scans are not backfilled, and reads never create v2 data. No
+  GF-7 comparison metric or GF-8 promotion/orchestration switch exists.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -264,6 +288,6 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-5 are verified. GF-6 is in progress: GF-6A pure adapter
-contracts and mapping invariants are verified, while GF-6B non-current G2-v2
-persistence has not started. GF-6B is the next frozen-roadmap boundary.
+GF-0 through GF-6 are verified. GF-6A pure adapter contracts and GF-6B
+non-current persistence/compatibility isolation are complete. GF-7 controlled
+shadow comparison is the next frozen-roadmap boundary.

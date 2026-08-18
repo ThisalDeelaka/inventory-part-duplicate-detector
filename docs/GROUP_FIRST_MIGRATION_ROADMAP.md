@@ -291,6 +291,9 @@ G2 publication, normal APIs/UI, pair-write shutdown, AI.
 
 ## GF-6 — Versioned G2 adapter
 
+Implementation status: verified through GF-6A pure adapter contracts and GF-6B
+immutable, non-current persistence with current-reader compatibility isolation.
+
 ### Goal
 
 Adapt completed resolver output to immutable, idempotent G2 snapshots with explicit v1/v2 validation semantics.
