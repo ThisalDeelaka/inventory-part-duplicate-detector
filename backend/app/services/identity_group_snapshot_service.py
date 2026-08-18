@@ -16,13 +16,11 @@ from app.db.models import (
     IdentityGroupSnapshot,
     ScanRecordSnapshot,
 )
-from app.engine.domain_dictionary import normalize_part_no_with_dictionary
 from app.engine.identity_edge import (
     IDENTITY_EDGE_CLASSIFIER_VERSION,
     IdentityEdgeClass,
     classify_identity_edge,
 )
-from app.engine.normalizer import normalize_description
 from app.engine.scoring import score_candidate
 from app.services.identity_group_projection import (
     GROUP_PROJECTION_VERSION,
@@ -460,19 +458,13 @@ def persist_identity_group_projection(
         for key in sorted(record_values):
             values = record_values[key]
             row = existing_records.get(key)
-            if row is not None:
-                persisted = {name: _clean(getattr(row, name)) for name in values}
-                if persisted != values:
-                    raise ValueError("existing immutable scan record snapshot differs")
-            else:
-                row = ScanRecordSnapshot(
-                    scan_id=scan.id,
-                    record_ref_key=key,
-                    normalized_part_no=normalize_part_no_with_dictionary(values["part_no"]),
-                    normalized_description=normalize_description(values["description"]),
-                    **values,
+            if row is None:
+                raise ValueError(
+                    "G2 projection record is missing from the canonical scan record catalog"
                 )
-                db.add(row)
+            persisted = {name: _clean(getattr(row, name)) for name in values}
+            if persisted != values:
+                raise ValueError("existing immutable scan record snapshot differs")
             record_rows[key] = row
         db.flush()
 

@@ -17,6 +17,8 @@ def ensure_sqlite_demo_columns(engine):
             ("rejections_count", "INTEGER DEFAULT 0"),
         ],
         "duplicate_candidate": [
+            ("source_row_index_a", "INTEGER"),
+            ("source_row_index_b", "INTEGER"),
             ("business_status", "VARCHAR(80) NOT NULL DEFAULT 'POSSIBLE_DUPLICATE_REVIEW'"),
             ("rule_decision", "VARCHAR(50) NOT NULL DEFAULT 'ALLOW'"),
             ("rejection_reason", "VARCHAR(120) DEFAULT ''"),
@@ -32,6 +34,10 @@ def ensure_sqlite_demo_columns(engine):
             ("normalized_description_b", "TEXT DEFAULT ''"),
             ("normalized_part_no_a", "TEXT DEFAULT ''"),
             ("normalized_part_no_b", "TEXT DEFAULT ''"),
+        ],
+        "rule_exclusion_audit": [
+            ("source_row_index_a", "INTEGER"),
+            ("source_row_index_b", "INTEGER"),
         ],
         "candidate_discovery_metadata": [
             ("retrieval_sources_json", "TEXT NOT NULL DEFAULT '[]'"),
@@ -106,6 +112,33 @@ def ensure_identity_group_snapshot_tables(engine):
         IdentityGroupEdgeSnapshot.__table__,
     ]
     IdentityGroupProjectionRun.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
+    if engine.url.get_backend_name().startswith("sqlite"):
+        additions = [
+            ("source_row_index", "INTEGER"),
+            ("source_record_fingerprint", "VARCHAR(64)"),
+            ("type_code", "VARCHAR(128)"),
+            ("prime_commodity", "VARCHAR(128)"),
+            ("second_commodity", "VARCHAR(128)"),
+            ("accounting_group", "VARCHAR(128)"),
+            ("part_product_code", "VARCHAR(128)"),
+            ("part_product_family", "VARCHAR(128)"),
+            ("hazard_code", "VARCHAR(128)"),
+            ("normalization_version", "VARCHAR(80)"),
+        ]
+        existing = {
+            column["name"]
+            for column in inspect(engine).get_columns("scan_record_snapshot")
+        }
+        with engine.begin() as connection:
+            for name, ddl in additions:
+                if name not in existing:
+                    connection.execute(text(
+                        f"ALTER TABLE scan_record_snapshot ADD COLUMN {name} {ddl}"
+                    ))
+            connection.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_scan_record_source_row "
+                "ON scan_record_snapshot (scan_id, source_row_index)"
+            ))
 
 
 def ensure_group_review_tables(engine):

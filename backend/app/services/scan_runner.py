@@ -6,6 +6,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.constants import SOURCE_ROW_INDEX_FIELD
 from app.db.models import CandidateDiscoveryMetadata, HybridRetrievalRun
 from app.engine.candidate_generator import generate_candidate_pairs
 from app.engine.column_semantics import normalize_scan_mode
@@ -15,6 +16,11 @@ from app.repositories.scan_repository import ScanRepository
 from app.repositories.rejection_repository import RejectionRepository
 from app.repositories.warning_repository import WarningRepository
 from app.services.validation_service import validate_dataframe
+from app.services.canonical_record_service import (
+    catalog_record_to_engine_input,
+    create_or_get_scan_record_catalog,
+    load_scan_record_catalog,
+)
 from app.services.hybrid_retrieval import (
     HybridCandidateRetriever, SqlAlchemyEmbeddingVectorCache, canonical_record_pair,
 )
@@ -39,10 +45,12 @@ class ScanRunner:
         selected_fields: list[str],
     ):
         """Persist the scan's initial immutable G2 projection from stored evidence."""
+        del records  # G2 consumes the authoritative persisted catalog.
+        catalog_records = load_scan_record_catalog(self.db, scan.id)
         return project_and_persist_identity_groups(
             self.db,
             scan=scan,
-            records=records.to_dict(orient="records"),
+            records=[catalog_record_to_engine_input(row) for row in catalog_records],
             candidates=self.candidates.list_for_scan(scan.id),
             exclusions=self.rejections.list_for_scan(scan.id),
             selected_fields=selected_fields,
@@ -59,7 +67,19 @@ class ScanRunner:
             for warning in validation["warnings"]:
                 self.warnings.save(scan.id, warning)
 
-            usable = df[df["DESCRIPTION"].fillna("").str.strip().ne("")].copy()
+            source_indexed = df.copy()
+            source_indexed[SOURCE_ROW_INDEX_FIELD] = range(len(source_indexed))
+            usable = source_indexed[
+                source_indexed["DESCRIPTION"].fillna("").str.strip().ne("")
+            ].copy()
+            create_or_get_scan_record_catalog(
+                self.db,
+                scan_id=scan.id,
+                records=usable.to_dict(orient="records"),
+            )
+            # The catalog is a completed prerequisite stage. Candidate discovery
+            # never begins against a partial or merely in-memory record set.
+            self.db.commit()
             pairs = generate_candidate_pairs(usable, selected_fields)
 
             existing_warnings = {(w["warning_type"], w["message"]) for w in validation["warnings"]}

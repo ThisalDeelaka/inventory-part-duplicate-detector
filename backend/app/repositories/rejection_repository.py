@@ -3,6 +3,7 @@ import json
 from sqlalchemy.orm import Session
 
 from app.db.models import RuleExclusionAudit
+from app.core.constants import SOURCE_ROW_INDEX_FIELD
 
 
 class RejectionRepository:
@@ -13,9 +14,11 @@ class RejectionRepository:
         item = RuleExclusionAudit(
             scan_id=scan_id,
             contract_a=record_a.get("CONTRACT"),
+            source_row_index_a=record_a.get(SOURCE_ROW_INDEX_FIELD),
             part_no_a=str(record_a.get("PART_NO", "")),
             description_a=str(record_a.get("DESCRIPTION", "")),
             contract_b=record_b.get("CONTRACT"),
+            source_row_index_b=record_b.get(SOURCE_ROW_INDEX_FIELD),
             part_no_b=str(record_b.get("PART_NO", "")),
             description_b=str(record_b.get("DESCRIPTION", "")),
             similarity_score=result["final_score"],

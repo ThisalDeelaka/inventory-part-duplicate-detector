@@ -12,6 +12,8 @@ from app.engine.identity_edge import (
     classify_identity_edge,
 )
 from app.engine.scoring import score_candidate
+from app.core.constants import SOURCE_ROW_INDEX_FIELD
+from app.services.canonical_record_service import canonical_record_ref_key
 from app.engine.uom_relationship import MappingQuality, UomRelationship, classify_uom_relationship
 
 
@@ -135,7 +137,9 @@ def _clean(value) -> str:
 
 def _record_snapshot(item, side: str | None = None) -> dict:
     suffix = f"_{side}" if side else ""
+    source_row_field = f"source_row_index{suffix}" if side else SOURCE_ROW_INDEX_FIELD
     return {
+        SOURCE_ROW_INDEX_FIELD: _value(item, source_row_field),
         "CONTRACT": _clean(_value(item, f"contract{suffix}", _value(item, "CONTRACT", ""))),
         "PART_NO": _clean(_value(item, f"part_no{suffix}", _value(item, "PART_NO", ""))),
         "DESCRIPTION": _clean(_value(item, f"description{suffix}", _value(item, "DESCRIPTION", ""))),
@@ -154,9 +158,16 @@ def _identity_payload(record: dict) -> str:
 
 
 def _record_ref(scan_id: int, record: dict) -> RecordRef:
-    payload = f"scan:{scan_id}|{_identity_payload(record)}"
+    source_row_index = record.get(SOURCE_ROW_INDEX_FIELD)
+    key = (
+        canonical_record_ref_key(scan_id, int(source_row_index))
+        if source_row_index is not None
+        else hashlib.sha256(
+            f"scan:{scan_id}|{_identity_payload(record)}".encode("utf-8")
+        ).hexdigest()
+    )
     return RecordRef(
-        hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        key,
         record["CONTRACT"],
         record["PART_NO"],
         record["DESCRIPTION"],

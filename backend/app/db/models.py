@@ -39,9 +39,11 @@ class DuplicateCandidate(Base):
     id = Column(Integer, primary_key=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
     contract_a = Column(String(100))
+    source_row_index_a = Column(Integer)
     part_no_a = Column(String(200), nullable=False)
     description_a = Column(Text, nullable=False)
     contract_b = Column(String(100))
+    source_row_index_b = Column(Integer)
     part_no_b = Column(String(200), nullable=False)
     description_b = Column(Text, nullable=False)
     similarity_score = Column(Float, nullable=False)
@@ -297,9 +299,11 @@ class RuleExclusionAudit(Base):
     id = Column(Integer, primary_key=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
     contract_a = Column(String(100))
+    source_row_index_a = Column(Integer)
     part_no_a = Column(String(200), nullable=False)
     description_a = Column(Text, nullable=False)
     contract_b = Column(String(100))
+    source_row_index_b = Column(Integer)
     part_no_b = Column(String(200), nullable=False)
     description_b = Column(Text, nullable=False)
     similarity_score = Column(Float, nullable=False)
@@ -351,18 +355,29 @@ class ScanRecordSnapshot(Base):
     __tablename__ = "scan_record_snapshot"
     __table_args__ = (
         UniqueConstraint("scan_id", "record_ref_key", name="uq_scan_record_ref"),
+        UniqueConstraint("scan_id", "source_row_index", name="uq_scan_record_source_row"),
     )
     id = Column(Integer, primary_key=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
     record_ref_key = Column(String(64), nullable=False)
+    source_row_index = Column(Integer)
+    source_record_fingerprint = Column(String(64))
     contract = Column(String(100))
     part_no = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     normalized_part_no = Column(Text, nullable=False, default="")
     normalized_description = Column(Text, nullable=False, default="")
     uom = Column(String(128))
+    type_code = Column(String(128))
+    prime_commodity = Column(String(128))
+    second_commodity = Column(String(128))
+    accounting_group = Column(String(128))
+    part_product_code = Column(String(128))
+    part_product_family = Column(String(128))
     product_category_id = Column(String(128))
     hsn_sac_code = Column(String(128))
+    hazard_code = Column(String(128))
+    normalization_version = Column(String(80))
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
@@ -578,3 +593,11 @@ for _append_only_model in (
 ):
     event.listen(_append_only_model, "before_update", _reject_review_history_mutation)
     event.listen(_append_only_model, "before_delete", _reject_review_history_mutation)
+
+
+def _reject_scan_record_mutation(_mapper, _connection, _target):
+    raise ValueError("canonical scan record snapshots are immutable")
+
+
+event.listen(ScanRecordSnapshot, "before_update", _reject_scan_record_mutation)
+event.listen(ScanRecordSnapshot, "before_delete", _reject_scan_record_mutation)

@@ -135,7 +135,7 @@ def test_projection_persistence_failure_is_atomic_and_marks_scan_failed(db):
     scan = db.query(DuplicateScan).one()
     assert scan.status == "FAILED"
     assert db.query(IdentityGroupProjectionRun).count() == 0
-    assert db.query(ScanRecordSnapshot).count() == 0
+    assert db.query(ScanRecordSnapshot).count() == len(accepted_group_records())
     assert db.query(IdentityGroupSnapshot).count() == 0
     assert db.query(IdentityGroupMemberSnapshot).count() == 0
     assert db.query(IdentityGroupEdgeSnapshot).count() == 0

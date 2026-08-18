@@ -18,9 +18,12 @@ from app.db.models import (
 from app.db.migrations import ensure_identity_group_snapshot_tables
 from app.engine.identity_edge import IdentityEdgeClass
 from app.engine.scoring import score_candidate
+from app.engine.domain_dictionary import normalize_part_no_with_dictionary
+from app.engine.normalizer import normalize_description
 from app.services.identity_group_projection import (
     FamilyDiagnosticStatus,
     project_identity_groups,
+    scan_record_ref,
 )
 from app.services.identity_group_snapshot_service import (
     load_identity_group_snapshot_manifest,
@@ -78,6 +81,28 @@ def project(scan_id, records, candidates, exclusions=(), feedback=None):
 
 
 def persist(db, scan_row, records, candidates, projection, exclusions=(), feedback=None):
+    existing = {
+        row.record_ref_key
+        for row in db.query(ScanRecordSnapshot).filter_by(scan_id=scan_row.id).all()
+    }
+    for item in records:
+        ref = scan_record_ref(scan_row.id, item)
+        if ref.key in existing:
+            continue
+        db.add(ScanRecordSnapshot(
+            scan_id=scan_row.id,
+            record_ref_key=ref.key,
+            contract=item.get("CONTRACT"),
+            part_no=item.get("PART_NO", ""),
+            description=item.get("DESCRIPTION", ""),
+            normalized_part_no=normalize_part_no_with_dictionary(item.get("PART_NO", "")),
+            normalized_description=normalize_description(item.get("DESCRIPTION", "")),
+            uom=item.get("UNIT_MEAS"),
+            product_category_id=item.get("PRODUCT_CATEGORY_ID"),
+            hsn_sac_code=item.get("HSN_SAC_CODE"),
+        ))
+        existing.add(ref.key)
+    db.commit()
     return persist_identity_group_projection(
         db, scan=scan_row, records=records, candidates=candidates,
         exclusions=exclusions, feedback_by_candidate_id=feedback or {},
@@ -206,7 +231,7 @@ def test_transaction_failure_rolls_back_entire_snapshot_graph(db):
     finally:
         event.remove(IdentityGroupMemberSnapshot, "before_insert", fail_member)
     assert db.query(IdentityGroupProjectionRun).count() == 0
-    assert db.query(ScanRecordSnapshot).count() == 0
+    assert db.query(ScanRecordSnapshot).count() == 2
     assert db.query(IdentityGroupSnapshot).count() == 0
     assert db.query(IdentityGroupMemberSnapshot).count() == 0
     assert db.query(IdentityGroupEdgeSnapshot).count() == 0
@@ -280,4 +305,4 @@ def test_persistence_select_count_is_bounded_not_per_member_or_edge(db):
         persist(db, scan_row, items, candidates, projection)
     finally:
         event.remove(db.get_bind(), "before_cursor_execute", count_select)
-    assert len(selects) <= 4
+    assert len(selects) <= 6

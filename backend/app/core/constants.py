@@ -1,4 +1,5 @@
 MODEL_VERSION = "hybrid-nlp-v1"
+SOURCE_ROW_INDEX_FIELD = "__SOURCE_ROW_INDEX"
 
 FIELD_DEFINITIONS = [
     {"field": "CONTRACT", "display": "Site", "required": False},
