@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-4 implementation commit: `64d98fb13363953016a42669a934b756776eacd0`.
 - Baseline HEAD before the GF-4-PRE safety correction: `d294b6ca5b77a9d8a6b185b514484b75fa20424a`.
 - Baseline HEAD before the GF-3 implementation commit: `b5ca5be28475c9e7205c7cc4544d685d2c749578`.
 - Baseline HEAD before the GF-2 implementation commit: `7614a1ea84eef0649caecbd11a011b041d3a9ba7`.
@@ -18,7 +19,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0, GF-1, GF-2, and GF-3 are verified. GF-4 and all later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0 through GF-4, including the GF-4-PRE safety correction, are verified. GF-5 and all later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -64,13 +65,26 @@ New GF-3-version discovery runs now remain `RUNNING` after GF-2 proposal persist
 
 ## GF-4 prerequisite generic-description safety correction
 
-GF-4 remains not started. Its initial implementation review correctly identified that an identical one-token category description could bypass the existing generic-description lexicon and become strong identity support from text and matching context alone.
+Before GF-4 implementation, its initial review correctly identified that an identical one-token category description could bypass the existing generic-description lexicon and become strong identity support from text and matching context alone.
 
 - The deterministic genericity guard now treats a single alphabetic token as insufficiently specific while preserving alphanumeric model-like tokens on the normal scoring path.
 - Generic text without independent strong identity evidence cannot produce `LIKELY_DUPLICATE` or `STRONG_SUPPORT`. Identical generic text remains review evidence rather than proof of difference.
 - The only current rescue is the scorer's existing strong part-number relationship at its established threshold; site, UOM, accounting, category, or fuzzy/TF-IDF agreement does not rescue generic text.
 - Protected technical contradictions remain `CANNOT_LINK`, context differences alone remain non-terminal, and specific clear matches retain their existing results.
-- Focused scoring and G0/G1/G2 safety regressions plus the complete backend, frontend, and build gates verify the correction. GF-4 may now resume; its evidence persistence remains not started.
+- Focused scoring and G0/G1/G2 safety regressions plus the complete backend, frontend, and build gates verified the correction and cleared the GF-4 implementation blocker.
+
+## GF-4 independent signed identity evidence
+
+Every new scan now completes one provider-neutral `IdentityEvidenceRun` after GF-2/GF-3 discovery and before legacy pair business writes and the visible G1/G2-v1 projection.
+
+- Normal acquisition evaluates every unique persisted GF-2 proposal exactly once from its GF-1 canonical endpoints. GF-3 overlap never duplicates an edge and does not cause transitive non-proposal evaluation.
+- The pure canonical relationship evaluator is independently callable for a future GF-5 targeted check, but normal GF-4 orchestration persists proposal relationships only.
+- The evaluator reuses the current deterministic scorer, generic-description guard, technical extraction, protected mismatch rules, UOM decoupling, and authoritative signed edge classifier. It does not read `DuplicateCandidate`, exclusions, feedback, pair advisory data, G1/G2 results, or G6 review as machine-evidence authority.
+- Immutable evidence edges use canonical endpoints and preserve exact source-proposal provenance, signed class/reasons, score components, protected conflicts, generic and technical summaries, UOM mapping context, evaluator version, and a deterministic non-secret fingerprint. An edge score is neither group confidence nor duplicate probability.
+- Completed runs prove exact proposal coverage and class-count reconciliation. Repeating a compatible completed acquisition is idempotent; changed relevant context creates a separate versioned run rather than mutating completed evidence.
+- A GF-4 failure rolls back partial edges, records a safe failed run, fails the scan, preserves the completed GF-1/GF-2/GF-3 state, and prevents legacy candidate/G1/G2 completion.
+- The GF-4-PRE generic safety correction is inherited: generic text and matching context alone cannot produce strong support. Site, UOM, and accounting differences alone remain non-terminal, while protected technical contradictions remain cannot-links.
+- Historical scans require no GF-4 backfill. Current visible pair results, G1/G2-v1 snapshots, G3 APIs, G4 UI, G5 exports, G6 reviews, and G7 advisory behavior remain legacy-compatible and unchanged.
 
 ## Reusable current capabilities
 
@@ -105,4 +119,4 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-With GF-0 through GF-3 verified, the only approved next production implementation phase is GF-4, Independent Signed Identity Evidence. No later GF phase should begin by skipping its prerequisites.
+With GF-0 through GF-4 verified, the only approved next production implementation phase is GF-5, Constrained Group Resolver v1. No later GF phase should begin by skipping its prerequisites.

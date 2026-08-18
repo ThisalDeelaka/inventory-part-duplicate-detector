@@ -181,9 +181,11 @@ def ensure_group_review_tables(engine):
 
 
 def ensure_identity_discovery_tables(engine):
-    """Add GF-2/GF-3 discovery tables without backfilling historical scans."""
+    """Add GF-2/GF-3/GF-4 tables without backfilling historical scans."""
     from app.db.models import (
         IdentityDiscoveryRun,
+        IdentityEvidenceEdgeSnapshot,
+        IdentityEvidenceRun,
         IdentityNeighborProposal,
         IdentityNeighborhoodMember,
         IdentityNeighborhoodSnapshot,
@@ -196,6 +198,8 @@ def ensure_identity_discovery_tables(engine):
             IdentityNeighborProposal.__table__,
             IdentityNeighborhoodSnapshot.__table__,
             IdentityNeighborhoodMember.__table__,
+            IdentityEvidenceRun.__table__,
+            IdentityEvidenceEdgeSnapshot.__table__,
         ],
         checkfirst=True,
     )

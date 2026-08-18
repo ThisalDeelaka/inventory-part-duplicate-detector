@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, event
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, event, inspect as sa_inspect
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -441,6 +441,96 @@ class IdentityNeighborhoodMember(Base):
     source_channels_json = Column(Text, nullable=False, default="[]")
 
 
+class IdentityEvidenceRun(Base):
+    __tablename__ = "identity_evidence_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "discovery_run_id", "algorithm_version", "configuration_fingerprint",
+            name="uq_identity_evidence_run_configuration",
+        ),
+        CheckConstraint(
+            "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
+            name="ck_identity_evidence_run_status",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    discovery_run_id = Column(
+        Integer, ForeignKey("identity_discovery_run.id"), nullable=False, index=True
+    )
+    algorithm_version = Column(String(80), nullable=False)
+    configuration_fingerprint = Column(String(64), nullable=False)
+    configuration_json = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="RUNNING", index=True)
+    started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    proposal_count_expected = Column(Integer, nullable=False)
+    edge_count_persisted = Column(Integer, nullable=False, default=0)
+    strong_support_count = Column(Integer, nullable=False, default=0)
+    review_support_count = Column(Integer, nullable=False, default=0)
+    cannot_link_count = Column(Integer, nullable=False, default=0)
+    non_groupable_count = Column(Integer, nullable=False, default=0)
+    safe_failure_category = Column(String(80))
+
+
+class IdentityEvidenceEdgeSnapshot(Base):
+    __tablename__ = "identity_evidence_edge_snapshot"
+    __table_args__ = (
+        CheckConstraint("record_id_1 < record_id_2", name="ck_identity_evidence_edge_order"),
+        CheckConstraint(
+            "edge_class IN ('STRONG_SUPPORT', 'REVIEW_SUPPORT', 'CANNOT_LINK', "
+            "'NON_GROUPABLE')",
+            name="ck_identity_evidence_edge_class",
+        ),
+        UniqueConstraint(
+            "evidence_run_id", "record_id_1", "record_id_2",
+            name="uq_identity_evidence_edge_pair",
+        ),
+        UniqueConstraint(
+            "evidence_run_id", "source_proposal_id",
+            name="uq_identity_evidence_edge_proposal",
+        ),
+        UniqueConstraint(
+            "evidence_run_id", "evidence_fingerprint",
+            name="uq_identity_evidence_edge_fingerprint",
+        ),
+        Index("ix_identity_evidence_edge_scan_pair", "scan_id", "record_id_1", "record_id_2"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    evidence_run_id = Column(
+        Integer, ForeignKey("identity_evidence_run.id"), nullable=False, index=True
+    )
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    discovery_run_id = Column(
+        Integer, ForeignKey("identity_discovery_run.id"), nullable=False, index=True
+    )
+    record_id_1 = Column(
+        Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True
+    )
+    record_id_2 = Column(
+        Integer, ForeignKey("scan_record_snapshot.id"), nullable=False, index=True
+    )
+    source_proposal_id = Column(
+        Integer, ForeignKey("identity_neighbor_proposal.id"), nullable=False, index=True
+    )
+    edge_class = Column(String(40), nullable=False, index=True)
+    classification_reason_codes_json = Column(Text, nullable=False, default="[]")
+    evaluation_algorithm_version = Column(String(80), nullable=False)
+    evidence_fingerprint = Column(String(64), nullable=False)
+    deterministic_score = Column(Float, nullable=False)
+    component_scores_json = Column(Text, nullable=False, default="{}")
+    rule_decision = Column(String(50), nullable=False)
+    rejection_reason = Column(String(120), nullable=False, default="")
+    protected_conflicts_json = Column(Text, nullable=False, default="[]")
+    generic_evidence_json = Column(Text, nullable=False, default="{}")
+    technical_evidence_json = Column(Text, nullable=False, default="{}")
+    uom_context_json = Column(Text, nullable=False, default="{}")
+    evaluation_context_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class DuplicateFeedback(Base):
     __tablename__ = "duplicate_feedback"
     id = Column(Integer, primary_key=True)
@@ -777,3 +867,24 @@ def _reject_neighborhood_mutation(_mapper, _connection, _target):
 for _neighborhood_model in (IdentityNeighborhoodSnapshot, IdentityNeighborhoodMember):
     event.listen(_neighborhood_model, "before_update", _reject_neighborhood_mutation)
     event.listen(_neighborhood_model, "before_delete", _reject_neighborhood_mutation)
+
+
+def _reject_terminal_evidence_run_update(_mapper, _connection, target):
+    history = sa_inspect(target).attrs.status.history
+    prior_status = history.deleted[0] if history.deleted else target.status
+    if prior_status in {"COMPLETED", "FAILED"}:
+        raise ValueError("terminal identity evidence runs are immutable")
+
+
+def _reject_evidence_history_delete(_mapper, _connection, _target):
+    raise ValueError("identity evidence history is immutable")
+
+
+def _reject_evidence_edge_mutation(_mapper, _connection, _target):
+    raise ValueError("identity evidence edges are immutable")
+
+
+event.listen(IdentityEvidenceRun, "before_update", _reject_terminal_evidence_run_update)
+event.listen(IdentityEvidenceRun, "before_delete", _reject_evidence_history_delete)
+event.listen(IdentityEvidenceEdgeSnapshot, "before_update", _reject_evidence_edge_mutation)
+event.listen(IdentityEvidenceEdgeSnapshot, "before_delete", _reject_evidence_edge_mutation)
