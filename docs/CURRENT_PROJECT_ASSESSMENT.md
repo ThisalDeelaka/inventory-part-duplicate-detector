@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-5A implementation commit: `be05baace42540de6983bfdc70fe483d0b852467`.
 - Baseline HEAD before the GF-4 implementation commit: `64d98fb13363953016a42669a934b756776eacd0`.
 - Baseline HEAD before the GF-4-PRE safety correction: `d294b6ca5b77a9d8a6b185b514484b75fa20424a`.
 - Baseline HEAD before the GF-3 implementation commit: `b5ca5be28475c9e7205c7cc4544d685d2c749578`.
@@ -19,7 +20,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0 through GF-4, including the GF-4-PRE safety correction, are verified. GF-5 and all later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet implemented as the normal resolution core. GF-0 through GF-4, including the GF-4-PRE safety correction, are verified. GF-5 is in progress: GF-5A is verified and GF-5B has not started. All later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -86,6 +87,50 @@ Every new scan now completes one provider-neutral `IdentityEvidenceRun` after GF
 - The GF-4-PRE generic safety correction is inherited: generic text and matching context alone cannot produce strong support. Site, UOM, and accounting differences alone remain non-terminal, while protected technical contradictions remain cannot-links.
 - Historical scans require no GF-4 backfill. Current visible pair results, G1/G2-v1 snapshots, G3 APIs, G4 UI, G5 exports, G6 reviews, and G7 advisory behavior remain legacy-compatible and unchanged.
 
+## GF-5A constrained resolver contracts and golden safety cases
+
+GF-5A establishes an isolated, provider-free boundary for the future GF-5
+decision core without implementing a production resolver or changing normal
+scan execution.
+
+- Immutable input contracts consume GF-1 canonical records, normalized GF-3
+  overlapping neighborhoods, normalized GF-4 signed evidence, optional narrow
+  G6 effective human constraints, and versioned deterministic bounds.
+- Human `CANNOT_LINK` and protected machine `CANNOT_LINK` prohibit accepted
+  co-membership. A human `MUST_LINK` against a protected machine cannot-link is
+  an explicit authority conflict, never an override.
+- Typed targeted requests are limited to bridge, partition, likely-completeness,
+  and ownership checks. The pure GF-4 evaluator result can be adapted in memory
+  without changing GF-4 persistence.
+- Accepted hypothesis contracts distinguish `COMPLETE_PAIRWISE` from
+  `PROGRESSIVE_TARGETED`. GF-5A's conservative likely validator requires every
+  internal pair to be strong support and authorizes no permissive progressive
+  likely rule.
+- Group evidence is categorical and auditable rather than an average pair
+  score. Bridge, generic-hub, missing-evidence, truncation, and ownership risks
+  are explicit typed summaries.
+- Conflicts remain deterministic contradictions or incompatible authority;
+  bounds, missing evidence, truncation, and unresolved ambiguity are deferred.
+  Unassigned records are not classified as non-duplicates.
+- Pure validators reject cross-scan references, noncanonical/self pairs,
+  duplicate members, false complete-pairwise claims, cannot-link membership,
+  duplicate accepted membership, unresolved likely risks, and unsupported
+  generic/neutral support chains.
+- Fifteen executable golden cases freeze GF-5B acceptance expectations for
+  strong triangles, contradictions, bridge checks, generic hubs, human
+  constraints, ownership overlap, safe disjoint groups, site/UOM context,
+  technical variants, truncation, unassigned records, and duplicate-valued
+  distinct source rows.
+- Deterministic fingerprints use canonical versioned payloads and exclude
+  timestamps, secrets, randomness, provider data, and LLM content.
+- There are no schema or persistence changes. No scan runner, G2 publication,
+  API, UI, export, pair-path, review persistence, or provider behavior changed.
+
+GF-5 is intentionally subdivided internally into GF-5A contracts/safety cases,
+GF-5B pure constrained resolution, and GF-5C lifecycle/persistence plus
+non-visible integration. This does not alter the frozen GF-0 through GF-12
+roadmap order. GF-5 remains in progress until its later units are complete.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -119,4 +164,4 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-With GF-0 through GF-4 verified, the only approved next production implementation phase is GF-5, Constrained Group Resolver v1. No later GF phase should begin by skipping its prerequisites.
+With GF-0 through GF-4 and the bounded GF-5A unit verified, GF-5 remains in progress. The only approved next implementation unit is GF-5B, the pure constrained resolver algorithm. GF-5C, GF-6, and later work must not begin by skipping that prerequisite.
