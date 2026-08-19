@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-8A implementation commit: `004093209c04ad5cc27f0222c3293d0cd7292d37`.
 - Baseline HEAD before the GF-7A implementation commit: `9b6b058530c9ee15e7cf223427a0a97d8131086c`.
 - Baseline HEAD before the GF-6B implementation commit: `ae87011c91ee678607784713e0717347935f8ba8`.
 - Baseline HEAD before the GF-6A implementation commit: `88863868b0e8c58b311007c921fe8c114165e715`.
@@ -25,7 +26,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-5C and the structurally isolated, non-current G2-v2 persistence stage run internally during new scans; explicitly enabled eligible scans may persist a non-visible GF-7 comparison after current G2-v1. Visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8 is in progress: GF-8A orchestration authority/mode contracts and failure/compatibility gates are verified, while GF-8B controlled group-first-primary execution has not started. The runtime remains legacy-primary and visible G1/G2-v1 behavior remains unchanged.
 
 ## GF-1 canonical scan-record catalog
 
@@ -312,6 +313,35 @@ GF-7B now persists the exact pure GF-7A result for eligible scans only when
 - No winner, correctness, quality, error-rate, or promotion semantics were
   introduced. No public API, frontend, provider, or secret behavior changed.
 
+## GF-8A group-first orchestration contracts and authority gates
+
+GF-8A defines a pure, immutable planning boundary without changing execution.
+
+- `LEGACY_PRIMARY` preserves the current legacy pair/G1 authority and current
+  G2-v1 projection. GF-5C/GF-6B remain failure-isolated internal stages.
+- `GROUP_FIRST_PRIMARY` is a future GF-8B mode in which GF-1 through GF-6 are
+  primary-required. Before GF-9, legacy pair/G1/G2-v1 output remains
+  compatibility-required because all current product readers still consume
+  G2-v1.
+- Primary identity authority and visible compatibility projection are separate
+  concepts. In group-first-primary mode, visible readiness requires both
+  primary readiness and compatibility-projection readiness.
+- The stage taxonomy distinguishes primary-required, compatibility-required,
+  optional-diagnostic, and not-applicable work. Primary, compatibility,
+  optional, configuration, and multiple-required-stage failure categories are
+  explicit.
+- `IDENTITY_ORCHESTRATION_MODE` is allowlisted to `legacy_primary` and
+  `group_first_primary`, defaults to `legacy_primary`, and rejects invalid
+  values. It is not wired into the scan runner in GF-8A.
+- GF-7 agreement metrics, cases, deltas, and fingerprints are excluded from
+  policy and plan identity. No comparison threshold or scalar score can select
+  an orchestration mode.
+- The pure planner/evaluator has no SQLAlchemy, repository, scan mutation,
+  current-selector, API, frontend, export, review, advisory, or provider
+  dependency. GF-8A adds no schema or migration.
+- The visible projection contract remains `G2_V1` in both modes throughout
+  GF-8A. GF-8B execution and GF-9 product-reader inversion remain unstarted.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -345,7 +375,8 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-7 are verified. GF-7A pure comparison contracts/metrics and
-GF-7B persisted controlled shadow runs are complete. GF-8 group-first scan
-orchestration is the next frozen-roadmap boundary; no promotion or current
-selection change has started.
+GF-0 through GF-7 are verified. GF-8 is in progress: GF-8A orchestration
+contracts and authority gates are verified, and GF-8B controlled
+group-first-primary scan orchestration has not started. GF-8B is the next
+frozen-roadmap boundary; no runtime authority, current selection, or visible
+projection change has started.

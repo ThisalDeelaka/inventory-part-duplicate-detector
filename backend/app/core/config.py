@@ -231,6 +231,13 @@ class Settings(BaseModel):
             "GROUP_FIRST_SHADOW_COMPARISON_ENABLED", "false"
         )
     )
+    identity_orchestration_mode: Literal[
+        "legacy_primary", "group_first_primary"
+    ] = Field(
+        default_factory=lambda: os.getenv(
+            "IDENTITY_ORCHESTRATION_MODE", "legacy_primary"
+        )
+    )
 
 
 settings = Settings()
