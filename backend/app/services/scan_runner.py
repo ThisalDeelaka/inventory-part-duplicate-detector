@@ -47,6 +47,10 @@ from app.services.identity_resolution_service import (
 from app.services.g2_v2_projection_service import (
     build_and_persist_g2_v2_projection,
 )
+from app.services.identity_group_query_service import IdentityGroupQueryService
+from app.services.shadow_comparison_service import (
+    build_and_persist_shadow_comparison,
+)
 
 
 class ScanRunner:
@@ -260,6 +264,7 @@ class ScanRunner:
             # GF-5C is an internal, non-visible shadow stage. Its service commits
             # either a complete immutable result or a safe FAILED run and never
             # changes the authoritative legacy candidate/G1/G2-v1 path below.
+            v2_projection = None
             try:
                 resolution = resolve_and_persist_identity_groups(
                     self.db,
@@ -268,7 +273,7 @@ class ScanRunner:
                     evidence_run_id=evidence_run_id,
                 )
                 if resolution.status == "COMPLETED":
-                    build_and_persist_g2_v2_projection(
+                    v2_projection = build_and_persist_g2_v2_projection(
                         self.db,
                         scan_id=scan.id,
                         resolution_run_id=resolution.resolution_run_id,
@@ -323,7 +328,35 @@ class ScanRunner:
             # G2 consumes the complete persisted legacy deterministic evidence set. Its
             # own transaction is atomic and fingerprint-idempotent, and the scan
             # is exposed as COMPLETED only after that snapshot is available.
-            self.persist_initial_identity_group_projection(scan, usable, selected_fields)
+            v1_projection = self.persist_initial_identity_group_projection(
+                scan, usable, selected_fields
+            )
+            # GF-7B is explicitly controlled and diagnostic only. It reuses the
+            # ordinary current-v1 selector after G2-v1 is complete, and failures
+            # cannot alter or suppress that visible result.
+            if (
+                bool(getattr(
+                    self.configuration,
+                    "group_first_shadow_comparison_enabled",
+                    False,
+                ))
+                and v2_projection is not None
+                and v2_projection.status == "COMPLETED"
+            ):
+                try:
+                    current_v1 = IdentityGroupQueryService(self.db).resolve_run(scan.id)
+                    if (
+                        current_v1 is not None
+                        and current_v1.id == v1_projection.projection_run_id
+                    ):
+                        build_and_persist_shadow_comparison(
+                            self.db,
+                            scan_id=scan.id,
+                            v1_projection_run_id=current_v1.id,
+                            v2_projection_run_id=v2_projection.projection_run_id,
+                        )
+                except Exception:
+                    self.db.rollback()
             warning_count = self.warnings.count_for_scan(scan.id)
             return self.scans.update_status(
                 scan,

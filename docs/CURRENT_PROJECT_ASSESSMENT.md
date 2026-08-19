@@ -25,7 +25,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7 is in progress: GF-7A pure comparison contracts and metrics are verified, while GF-7B persisted controlled shadow runs have not started. GF-5C and the structurally isolated, non-current G2-v2 persistence stage run internally during new scans, while visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
+The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-5C and the structurally isolated, non-current G2-v2 persistence stage run internally during new scans; explicitly enabled eligible scans may persist a non-visible GF-7 comparison after current G2-v1. Visible G1/G2-v1 behavior remains legacy-compatible. All later production implementation phases have not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -282,6 +282,36 @@ manifest.
   UI, export, review, advisory, pair-deprecation, or provider behavior. GF-7B
   remains responsible for persisted explicitly controlled shadow runs.
 
+## GF-7B persisted controlled shadow runs
+
+GF-7B now persists the exact pure GF-7A result for eligible scans only when
+`GROUP_FIRST_SHADOW_COMPARISON_ENABLED=true`; the setting defaults to false.
+
+- The enabled normal-scan hook runs after completed non-current G2-v2 and after
+  the ordinary current G2-v1 selector resolves the just-persisted v1 run, but
+  before visible scan completion.
+- Separate additive comparison tables store immutable run provenance and
+  summary metrics plus normalized cases, source group/member relations,
+  involved records, safety deltas, and case/delta associations.
+- Semantic input identity covers stable GF-1 evidence, v1 memberships/statuses,
+  the v2 manifest and non-accepted context, and comparison algorithm/config;
+  timestamps, providers, secrets, randomness, and avoidable database IDs are
+  excluded.
+- Repeated identical work reuses one completed graph. Changed configuration or
+  semantic input creates a distinct historical run. Terminal rows are
+  immutable.
+- Child persistence is atomic and must reconstruct and exactly equal the pure
+  typed result before completion. Failures retain a bounded FAILED run with no
+  partial children and do not fail or reinterpret the visible scan.
+- Bulk reconstruction uses six SELECTs independent of case/record/delta count
+  in the controlled multi-case fixture. This is a query-shape observation, not
+  a 100k-readiness claim.
+- The gate-disabled path creates no run. Historical reads create no backfill.
+  Current/latest selection, `snapshot_available`, G3 APIs, G5 exports, G6
+  review targets, and G7 advisory eligibility remain v1-only.
+- No winner, correctness, quality, error-rate, or promotion semantics were
+  introduced. No public API, frontend, provider, or secret behavior changed.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -315,6 +345,7 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-6 are verified. GF-7 is in progress: GF-7A pure comparison
-contracts/metrics are verified and GF-7B persisted controlled shadow runs have
-not started. GF-7B is the next frozen-roadmap boundary.
+GF-0 through GF-7 are verified. GF-7A pure comparison contracts/metrics and
+GF-7B persisted controlled shadow runs are complete. GF-8 group-first scan
+orchestration is the next frozen-roadmap boundary; no promotion or current
+selection change has started.

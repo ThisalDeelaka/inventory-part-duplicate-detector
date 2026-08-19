@@ -6,8 +6,8 @@ GF-7 remains one phase in the frozen GF-0 through GF-12 roadmap:
 
 - GF-7A defines pure, immutable v1-to-v2 comparison contracts, agreement
   metrics, structural cases, safety deltas, priorities, and golden cases.
-- GF-7B may later persist and integrate explicitly controlled non-visible
-  comparison runs.
+- GF-7B persists and integrates explicitly controlled non-visible comparison
+  runs while G2-v1 remains current.
 
 GF-7A compares two system hypotheses. Neither G2-v1 nor G2-v2 is ground truth,
 and no unadjudicated comparison metric is a correctness, quality, or promotion
@@ -127,10 +127,63 @@ construction uses record-to-group membership indexes rather than comparing
 every group pair or every inventory-record pair. GF-7A makes no 100k-readiness
 claim; GF-7B/GF-11 own persisted execution and measured scale work.
 
-## GF-7A boundary
+## GF-7B controlled persistence
 
-GF-7A adds no schema, migration, persistence, orchestration, current-result
-selection, public route, frontend, export, review, advisory, pair deprecation,
-provider behavior, or secret access. G2-v1 remains the only current and visible
-product result. GF-7B is responsible for any future controlled, non-visible
-run lifecycle and persistence.
+`GROUP_FIRST_SHADOW_COMPARISON_ENABLED` is the only automatic normal-scan
+enablement gate and defaults to `false`. A disabled scan creates no comparison
+run. When enabled, an eligible scan runs in this exact order:
+
+```text
+GF-1 -> GF-2/GF-3 -> GF-4 -> GF-5C -> GF-6B non-current G2-v2
+     -> legacy pair persistence -> G1 -> current G2-v1 -> GF-7B
+     -> visible scan completion
+```
+
+GF-7B reuses the existing current-v1 selector after G2-v1 persistence. It
+requires an explicit completed same-scan v1 run, a completed same-scan v2 run,
+and that v2 run's completed GF-5C resolution provenance. Ineligible automatic
+work is skipped without fabricating a comparison. The direct internal service
+accepts explicit eligible run identities for controlled tests or operations.
+
+One immutable `shadow_comparison_run` owns normalized case, case-group,
+case-record, safety-delta, and case-to-delta rows. The run stores exact v1/v2
+and source-resolution provenance, algorithm/configuration/input/result
+fingerprints, lifecycle timestamps, the complete GF-7A summary, a critical
+safety-delta count, and a bounded safe failure category. Cases preserve exact
+source group references, source statuses/fingerprints, memberships, overlap
+and status-transition metrics, conflict/deferred/unassigned context,
+adjudication priority/reasons, and semantic fingerprints. Safety deltas retain
+canonical involved records, direct evidence references/fingerprints, related
+group/outcome references, explanation, priority, and fingerprint. These are
+comparison evidence and adjudication priorities, never winner, correctness,
+accuracy, or promotion fields.
+
+The semantic input fingerprint includes GF-1 stable record references/source
+fingerprints, v1 accepted memberships/statuses/source fingerprint, the v2
+manifest and conflict/deferred/unassigned semantics, and the comparison
+algorithm/configuration. It excludes timestamps, randomness, secrets,
+providers, and avoidable database identities. Identical eligible input reuses
+the same completed run and child graph. Changed semantic input or configuration
+creates a distinct run; completed and failed history is never overwritten.
+
+RUNNING metadata commits before pure comparison execution. Case/delta children
+and summary persist in one transaction, reload through a fixed set of bulk
+queries, reconstruct the exact typed `ShadowComparisonResult`, and must equal
+the pure GF-7A output before COMPLETED commits. A failure rolls back every
+child, records FAILED safely, and leaves v1, v2, and visible scan results
+unchanged. Terminal runs and all children reject update/delete through normal
+ORM paths.
+
+The comparison tables have no current/promotion flag and no public route.
+`snapshot_available`, G3 list/detail, G5 exports, G6 review targets, G7
+advisory eligibility, and current/latest selection continue to query v1-only
+tables. Historical scans are not backfilled and reads create no comparison.
+Provider calls remain zero.
+
+## GF-7 boundary
+
+GF-7A remains pure. GF-7B adds only controlled internal persistence and the
+post-v1 normal-scan hook described above. G2-v1 remains the only current and
+visible product result. GF-7 adds no promotion, public route, frontend, export,
+review, advisory, pair deprecation, provider behavior, or secret access. GF-8
+owns any future group-first orchestration or current-result promotion.

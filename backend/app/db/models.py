@@ -909,6 +909,160 @@ class G2V2UnassignedRecordRow(Base):
     member_order = Column(Integer, nullable=False)
 
 
+class ShadowComparisonRun(Base):
+    __tablename__ = "shadow_comparison_run"
+    __table_args__ = (
+        UniqueConstraint(
+            "scan_id", "v1_projection_run_id", "v2_projection_run_id",
+            "comparison_algorithm_version", "configuration_fingerprint",
+            "input_fingerprint", name="uq_shadow_comparison_identity",
+        ),
+        CheckConstraint(
+            "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
+            name="ck_shadow_comparison_status",
+        ),
+        Index("ix_shadow_comparison_scan_status", "scan_id", "status"),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    v1_projection_run_id = Column(Integer, ForeignKey("identity_group_projection_run.id"), nullable=False, index=True)
+    v2_projection_run_id = Column(Integer, ForeignKey("g2_v2_projection_run.id"), nullable=False, index=True)
+    v2_source_resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
+    comparison_algorithm_version = Column(String(80), nullable=False)
+    configuration_fingerprint = Column(String(64), nullable=False)
+    input_fingerprint = Column(String(64), nullable=False)
+    comparison_fingerprint = Column(String(64), index=True)
+    status = Column(String(20), nullable=False, default="RUNNING", index=True)
+    started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    safe_failure_category = Column(String(80))
+    v1_group_count = Column(Integer, nullable=False, default=0)
+    v2_group_count = Column(Integer, nullable=False, default=0)
+    v1_likely_group_count = Column(Integer, nullable=False, default=0)
+    v2_likely_group_count = Column(Integer, nullable=False, default=0)
+    v1_review_group_count = Column(Integer, nullable=False, default=0)
+    v2_review_group_count = Column(Integer, nullable=False, default=0)
+    exact_match_count = Column(Integer, nullable=False, default=0)
+    exact_member_status_change_count = Column(Integer, nullable=False, default=0)
+    split_count = Column(Integer, nullable=False, default=0)
+    merge_count = Column(Integer, nullable=False, default=0)
+    reassignment_count = Column(Integer, nullable=False, default=0)
+    v1_only_count = Column(Integer, nullable=False, default=0)
+    v2_only_count = Column(Integer, nullable=False, default=0)
+    complex_overlap_count = Column(Integer, nullable=False, default=0)
+    v1_positive_pair_count = Column(Integer, nullable=False, default=0)
+    v2_positive_pair_count = Column(Integer, nullable=False, default=0)
+    positive_pair_intersection_count = Column(Integer, nullable=False, default=0)
+    v1_only_positive_pair_count = Column(Integer, nullable=False, default=0)
+    v2_only_positive_pair_count = Column(Integer, nullable=False, default=0)
+    positive_pair_jaccard = Column(Float, nullable=False, default=0)
+    v1_membership_retained_in_v2_ratio = Column(Float, nullable=False, default=0)
+    v2_membership_also_present_in_v1_ratio = Column(Float, nullable=False, default=0)
+    records_total = Column(Integer, nullable=False, default=0)
+    records_grouped_v1 = Column(Integer, nullable=False, default=0)
+    records_grouped_v2 = Column(Integer, nullable=False, default=0)
+    records_grouped_both = Column(Integer, nullable=False, default=0)
+    records_grouped_v1_only = Column(Integer, nullable=False, default=0)
+    records_grouped_v2_only = Column(Integer, nullable=False, default=0)
+    records_unassigned_both = Column(Integer, nullable=False, default=0)
+    v2_conflict_count = Column(Integer, nullable=False, default=0)
+    v2_deferred_count = Column(Integer, nullable=False, default=0)
+    critical_safety_delta_count = Column(Integer, nullable=False, default=0)
+    critical_case_count = Column(Integer, nullable=False, default=0)
+    high_case_count = Column(Integer, nullable=False, default=0)
+    medium_case_count = Column(Integer, nullable=False, default=0)
+    low_case_count = Column(Integer, nullable=False, default=0)
+    none_case_count = Column(Integer, nullable=False, default=0)
+    targeted_evidence_case_count = Column(Integer, nullable=False, default=0)
+    overlap_graph_edge_count = Column(Integer, nullable=False, default=0)
+
+
+class ShadowComparisonCaseRow(Base):
+    __tablename__ = "shadow_comparison_case"
+    __table_args__ = (
+        UniqueConstraint("comparison_run_id", "case_reference", name="uq_shadow_case_reference"),
+        UniqueConstraint("comparison_run_id", "case_fingerprint", name="uq_shadow_case_fingerprint"),
+    )
+    id = Column(Integer, primary_key=True)
+    comparison_run_id = Column(Integer, ForeignKey("shadow_comparison_run.id"), nullable=False, index=True)
+    case_reference = Column(String(96), nullable=False)
+    case_type = Column(String(60), nullable=False, index=True)
+    overlap_metrics_json = Column(Text, nullable=False, default="[]")
+    status_transitions_json = Column(Text, nullable=False, default="[]")
+    related_v2_conflict_references_json = Column(Text, nullable=False, default="[]")
+    related_v2_deferred_references_json = Column(Text, nullable=False, default="[]")
+    related_v2_outcome_context_json = Column(Text, nullable=False, default="[]")
+    adjudication_priority = Column(String(20), nullable=False, index=True)
+    adjudication_reasons_json = Column(Text, nullable=False, default="[]")
+    case_fingerprint = Column(String(64), nullable=False)
+
+
+class ShadowComparisonCaseGroupRow(Base):
+    __tablename__ = "shadow_comparison_case_group"
+    __table_args__ = (
+        UniqueConstraint("case_id", "source_version", "group_reference", name="uq_shadow_case_group"),
+    )
+    id = Column(Integer, primary_key=True)
+    comparison_run_id = Column(Integer, ForeignKey("shadow_comparison_run.id"), nullable=False, index=True)
+    case_id = Column(Integer, ForeignKey("shadow_comparison_case.id"), nullable=False, index=True)
+    source_version = Column(String(2), nullable=False)
+    group_reference = Column(String(96), nullable=False)
+    source_status = Column(String(60), nullable=False)
+    source_fingerprint = Column(String(64), nullable=False)
+    member_references_json = Column(Text, nullable=False)
+
+
+class ShadowComparisonCaseRecordRow(Base):
+    __tablename__ = "shadow_comparison_case_record"
+    __table_args__ = (
+        UniqueConstraint("case_id", "record_reference", name="uq_shadow_case_record"),
+    )
+    id = Column(Integer, primary_key=True)
+    comparison_run_id = Column(Integer, ForeignKey("shadow_comparison_run.id"), nullable=False, index=True)
+    case_id = Column(Integer, ForeignKey("shadow_comparison_case.id"), nullable=False, index=True)
+    record_reference = Column(String(64), nullable=False, index=True)
+    involved = Column(Boolean, nullable=False, default=True)
+    in_v1_membership = Column(Boolean, nullable=False, default=False)
+    in_v2_membership = Column(Boolean, nullable=False, default=False)
+    v2_unassigned_context = Column(Boolean, nullable=False, default=False)
+
+
+class ShadowComparisonSafetyDeltaRow(Base):
+    __tablename__ = "shadow_comparison_safety_delta"
+    __table_args__ = (
+        UniqueConstraint("comparison_run_id", "delta_fingerprint", name="uq_shadow_delta_fingerprint"),
+        CheckConstraint(
+            "(left_record_reference IS NULL AND right_record_reference IS NULL) "
+            "OR left_record_reference < right_record_reference",
+            name="ck_shadow_delta_endpoint_order",
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    comparison_run_id = Column(Integer, ForeignKey("shadow_comparison_run.id"), nullable=False, index=True)
+    delta_type = Column(String(100), nullable=False, index=True)
+    left_record_reference = Column(String(64))
+    right_record_reference = Column(String(64))
+    involved_record_references_json = Column(Text, nullable=False)
+    related_group_references_json = Column(Text, nullable=False, default="[]")
+    related_outcome_references_json = Column(Text, nullable=False, default="[]")
+    protected_evidence_references_json = Column(Text, nullable=False, default="[]")
+    evidence_fingerprints_json = Column(Text, nullable=False, default="[]")
+    explanation = Column(Text, nullable=False)
+    adjudication_priority = Column(String(20), nullable=False)
+    delta_fingerprint = Column(String(64), nullable=False)
+
+
+class ShadowComparisonCaseDeltaRow(Base):
+    __tablename__ = "shadow_comparison_case_delta"
+    __table_args__ = (
+        UniqueConstraint("case_id", "safety_delta_id", name="uq_shadow_case_delta"),
+    )
+    id = Column(Integer, primary_key=True)
+    comparison_run_id = Column(Integer, ForeignKey("shadow_comparison_run.id"), nullable=False, index=True)
+    case_id = Column(Integer, ForeignKey("shadow_comparison_case.id"), nullable=False, index=True)
+    safety_delta_id = Column(Integer, ForeignKey("shadow_comparison_safety_delta.id"), nullable=False, index=True)
+
+
 class DuplicateFeedback(Base):
     __tablename__ = "duplicate_feedback"
     id = Column(Integer, primary_key=True)
@@ -1321,3 +1475,39 @@ for _g2_v2_snapshot_model in (
 ):
     event.listen(_g2_v2_snapshot_model, "before_update", _reject_g2_v2_snapshot_mutation)
     event.listen(_g2_v2_snapshot_model, "before_delete", _reject_g2_v2_snapshot_mutation)
+
+
+def _reject_terminal_shadow_comparison_run_update(_mapper, _connection, target):
+    history = sa_inspect(target).attrs.status.history
+    prior_status = history.deleted[0] if history.deleted else target.status
+    if prior_status in {"COMPLETED", "FAILED"}:
+        raise ValueError("terminal shadow comparison runs are immutable")
+
+
+def _reject_shadow_comparison_snapshot_mutation(_mapper, _connection, _target):
+    raise ValueError("shadow comparison snapshots are immutable")
+
+
+event.listen(
+    ShadowComparisonRun, "before_update", _reject_terminal_shadow_comparison_run_update
+)
+event.listen(
+    ShadowComparisonRun, "before_delete", _reject_shadow_comparison_snapshot_mutation
+)
+for _shadow_comparison_snapshot_model in (
+    ShadowComparisonCaseRow,
+    ShadowComparisonCaseGroupRow,
+    ShadowComparisonCaseRecordRow,
+    ShadowComparisonSafetyDeltaRow,
+    ShadowComparisonCaseDeltaRow,
+):
+    event.listen(
+        _shadow_comparison_snapshot_model,
+        "before_update",
+        _reject_shadow_comparison_snapshot_mutation,
+    )
+    event.listen(
+        _shadow_comparison_snapshot_model,
+        "before_delete",
+        _reject_shadow_comparison_snapshot_mutation,
+    )

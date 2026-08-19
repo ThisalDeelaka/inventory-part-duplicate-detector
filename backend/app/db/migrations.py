@@ -278,3 +278,24 @@ def ensure_g2_v2_projection_tables(engine):
         G2V2DeferredMemberRow.__table__,
         G2V2UnassignedRecordRow.__table__,
     ], checkfirst=True)
+
+
+def ensure_shadow_comparison_tables(engine):
+    """Create isolated GF-7B comparison tables without backfill or v1/v2 rewrites."""
+    from app.db.models import (
+        ShadowComparisonCaseDeltaRow,
+        ShadowComparisonCaseGroupRow,
+        ShadowComparisonCaseRecordRow,
+        ShadowComparisonCaseRow,
+        ShadowComparisonRun,
+        ShadowComparisonSafetyDeltaRow,
+    )
+
+    ShadowComparisonRun.metadata.create_all(bind=engine, tables=[
+        ShadowComparisonRun.__table__,
+        ShadowComparisonCaseRow.__table__,
+        ShadowComparisonCaseGroupRow.__table__,
+        ShadowComparisonCaseRecordRow.__table__,
+        ShadowComparisonSafetyDeltaRow.__table__,
+        ShadowComparisonCaseDeltaRow.__table__,
+    ], checkfirst=True)

@@ -226,6 +226,11 @@ class Settings(BaseModel):
         ge=2,
         le=250,
     )
+    group_first_shadow_comparison_enabled: bool = Field(
+        default_factory=lambda: os.getenv(
+            "GROUP_FIRST_SHADOW_COMPARISON_ENABLED", "false"
+        )
+    )
 
 
 settings = Settings()

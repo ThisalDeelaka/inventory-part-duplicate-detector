@@ -338,6 +338,10 @@ Normal UI promotion, pair deprecation, provider work.
 
 ## GF-7 — Controlled shadow comparison
 
+Implementation status: verified through GF-7A pure comparison contracts and
+metrics plus GF-7B immutable, explicitly controlled, non-visible persistence.
+G2-v1 remains current; GF-8 promotion/orchestration has not started.
+
 ### Goal
 
 Run old and new pipelines on controlled scans, keeping the old G2 result visible and recording non-visible comparison metrics.
