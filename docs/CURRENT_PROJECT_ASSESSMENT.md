@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-10A implementation commit: `53aa554095f1e4b476102d9e25d8fbd841493836`.
 - Baseline HEAD before the GF-9C implementation commit: `e8dcd5795b7e522129827e85316739ab64fed661`.
 - Branch: `llm-assisted-mvp`.
 - Baseline HEAD before the GF-9B implementation commit: `4470249ff8ce1988e253df5556e7e6a3c46f7af5`.
@@ -30,7 +31,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8A orchestration authority contracts and GF-8B controlled runtime integration are verified, so GF-8 is complete. GF-9A read contracts, GF-9B backend inversion, and GF-9C frontend/export graduation are verified, so GF-9 is complete. Legacy numeric group routes remain v1-only compatibility endpoints while the normal frontend, reviews, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-10 pair-path write deprecation has not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8A orchestration authority contracts and GF-8B controlled runtime integration are verified, so GF-8 is complete. GF-9A read contracts, GF-9B backend inversion, and GF-9C frontend/export graduation are verified, so GF-9 is complete. Legacy numeric group routes remain v1-only compatibility endpoints while the normal frontend, reviews, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-10 is IN PROGRESS: GF-10A policy and dependency contracts are verified, while GF-10B runtime write deprecation has not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -477,6 +478,32 @@ GF-9C is verified and completes GF-9.
   group-first System Group and Reviewed Identity exports used 16 and 17 SELECTs
   respectively, independent of member count; this is not a GF-11 scale claim.
 
+## GF-10A pair-path write deprecation policy and dependency freeze
+
+GF-10A is verified as a pure governance/contract unit. It activates no runtime
+behavior.
+
+- A code-backed typed manifest classifies every direct runtime module that
+  reads or writes legacy candidates, G1, or G2-v1. The
+  authoritative-required group-first residual count is zero.
+- Post-GF-9 orchestration policy v2 makes GF-1 through GF-6 primary-required
+  and G2-v2 visible for `group_first_primary`. Pair, G1, G2-v1, and GF-7 shadow
+  stages are not applicable, so visible readiness has no compatibility-v1 gate.
+- Policy-v2 `legacy_primary` retains pair/G1/G2-v1 authority and the existing
+  optional shadow gate. Historical policy-v1 audit reconstruction and
+  readiness evaluation continue to use the persisted policy generation.
+- The immutable pair-write policy disables legacy pair, G1, and G2-v1 writes,
+  shadow comparison, new-scan pair diagnostics, and numeric-route authority
+  only for future policy-v2 group-first scans. It retains them for legacy mode.
+- Future group-first pair diagnostics are explicitly
+  `NOT_GENERATED_NOT_APPLICABLE`, distinct from a generated zero-pair result.
+- Static dependency tests prove GF-9 authority-selected reads, versioned G6
+  review, and versioned G7 advisory eligibility use G2-v2 for persisted
+  group-first scans without `DuplicateCandidate`, G1, or v1 current selection.
+- `scan_runner.py`, schema, migrations, APIs, frontend, exports, G6/G7 runtime,
+  configuration defaults, and provider behavior are unchanged. GF-10B owns
+  runtime activation and write shutdown.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -504,12 +531,15 @@ These are reusable transitional capabilities. Their presence does not mean that 
 
 ## Current and target pair-path status
 
-Current pair machinery remains operational for compatibility and as internal evidence. It is still central to current discovery and decision computation.
+Current pair machinery remains operational for compatibility. Policy-v2
+deprecation behavior is frozen but not wired, so the current runner still
+writes the complete GF-8 pair/G1/G2-v1 compatibility path in both modes.
 
 The approved target makes groups the business-domain center. Pair machinery will be reduced non-destructively after independent discovery, evidence, resolver, G2 adapter, and shadow-graduation prerequisites exist. Historical pair data remains readable.
 
 ## Next phase boundary
 
-GF-0 through GF-9 are verified and complete. GF-10 Pair-Path Write Deprecation
-is the next phase and has not started. No GF-10 pair-write shutdown, GF-11
-scale-hardening claim, or GF-12 production graduation work is included here.
+GF-0 through GF-9 are verified and complete. GF-10 is IN PROGRESS: GF-10A is
+verified and GF-10B Runtime Pair-Path Write Deprecation is the next bounded
+unit. No runtime pair-write shutdown, GF-11 scale-hardening claim, or GF-12
+production graduation work is included here.

@@ -21,6 +21,7 @@ class PrimaryIdentityPipeline(str, Enum):
 
 class VisibleProjectionContract(str, Enum):
     G2_V1 = "G2_V1"
+    G2_V2 = "G2_V2"
 
 
 class ScanStage(str, Enum):

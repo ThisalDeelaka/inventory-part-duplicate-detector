@@ -479,6 +479,17 @@ Deleting legacy endpoints/data or adding AI UI.
 
 ## GF-10 — Pair-path write deprecation
 
+Implementation status: IN PROGRESS. GF-10A has verified the residual
+dependency inventory and frozen the post-GF-9 policy-v2 contracts. GF-10B
+runtime write deprecation has not started.
+
+GF-10 remains one roadmap phase with two bounded delivery units:
+
+- GF-10A — residual pair-path dependency inventory and post-GF-9
+  orchestration/deprecation contracts;
+- GF-10B — runtime write deprecation for group-first-primary scans plus
+  compatibility/shadow cleanup.
+
 ### Goal
 
 Stop creating new pair business decisions after every supported consumer uses independent evidence and group results.
