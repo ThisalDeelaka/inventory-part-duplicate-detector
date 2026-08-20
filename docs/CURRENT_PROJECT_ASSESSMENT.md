@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-9C implementation commit: `e8dcd5795b7e522129827e85316739ab64fed661`.
 - Branch: `llm-assisted-mvp`.
 - Baseline HEAD before the GF-9B implementation commit: `4470249ff8ce1988e253df5556e7e6a3c46f7af5`.
 - Baseline HEAD before the GF-9A implementation commit: `ab0e8b152d306807a69f6ba58d41346b14252c51`.
@@ -29,7 +30,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but frontend and final export graduation are not complete. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8A orchestration authority contracts and GF-8B controlled runtime integration are verified, so GF-8 is complete. GF-9 is IN PROGRESS: GF-9A pure read-authority/projection contracts and adapters and GF-9B backend read/API/review/advisory inversion are verified; GF-9C frontend/export graduation has not started. Legacy numeric group routes remain v1-only compatibility endpoints while the new backend identity-read routes use persisted per-scan authority and projection-safe keys.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8A orchestration authority contracts and GF-8B controlled runtime integration are verified, so GF-8 is complete. GF-9A read contracts, GF-9B backend inversion, and GF-9C frontend/export graduation are verified, so GF-9 is complete. Legacy numeric group routes remain v1-only compatibility endpoints while the normal frontend, reviews, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-10 pair-path write deprecation has not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -407,8 +408,8 @@ GF-9 is IN PROGRESS. GF-9A is verified; GF-9B and GF-9C have not started.
 
 ## GF-9B backend read, review, and advisory inversion
 
-GF-9B is verified. GF-9 remains IN PROGRESS because GF-9C frontend and final
-System Group Export inversion have not started.
+GF-9B is verified. At its delivery boundary, GF-9 remained in progress pending
+the GF-9C frontend and final System Group Export inversion now documented below.
 
 - `IdentityReadService` is now the canonical backend product-reader boundary.
   It loads the persisted GF-8 audit and exact stage source-run references,
@@ -430,12 +431,51 @@ System Group Export inversion have not started.
   opaque group key, and source group fingerprint. Existing G7 has no durable
   group-advisory result table, so no historical advisory rows required schema
   migration. Progressive groups fail closed; likely groups remain ineligible.
-- System Group Export remains byte-compatible for historical/legacy scans and
-  is temporarily blocked for group-first-primary scans with a typed GF-9C
-  migration-pending conflict. Reviewed export remains unchanged.
+- At the GF-9B boundary, System Group Export remained byte-compatible for
+  historical/legacy scans and was temporarily blocked for group-first-primary
+  scans with a typed GF-9C migration-pending conflict. Reviewed export was
+  unchanged until GF-9C.
 - Controlled reads observed five SELECTs for historical v1 and fourteen for
   v2, independent of member/evidence cardinality. No scale-readiness claim is
   made.
+
+## GF-9C frontend and authoritative export graduation
+
+GF-9C is verified and completes GF-9.
+
+- Normal scan results now load summary, paged group list, lazy group detail,
+  typed outcomes, review history, and advisory eligibility only through the
+  authority-selected `/identity-read` API family. The frontend contains no
+  orchestration-mode or current-configuration authority logic and performs no
+  legacy fallback after a 409 or 422 authority failure.
+- Opaque `igk1` keys are treated as strings and are used for detail, G6 review,
+  and G7 eligibility targets. Numeric v1 group IDs remain compatibility-only.
+- The primary summary counts records and 2..N identity groups, likely groups,
+  review groups, conflicts, deferred work, and not-safely-assigned records.
+  Pair counts and A/B language are absent from the business headline.
+- Group cards provide bounded member previews, validation mode, exact coverage,
+  and projection-scoped review state. Detail shows every member, exact opaque
+  identity, actual evaluated evidence, review, and backend-owned advisory
+  eligibility. Progressive 2-of-3 evidence stays 2-of-3; no third pair is
+  synthesized.
+- Conflict, deferred, and unassigned outcomes stay distinct. Unassigned is
+  described only as not safely assigned and never as confirmed unique.
+- Pair data remains available under Advanced legacy diagnostics without pair
+  review, pair LLM action, headline, or primary export prominence. Pair writes
+  and compatibility machinery remain unchanged for GF-10.
+- Canonical System Group, Reviewed Identity, Identity Conflict, and Deferred
+  Identity Work CSV routes consume `IdentityReadSnapshot`. System rows are
+  member-shaped and include stable projection/coverage provenance. Reviewed
+  output contains current human-confirmed sets from only the exact selected
+  projection review chain. Historical G5/G6 routes remain unchanged.
+- A controlled disagreement fixture preserves compatibility v1 `{A,B,C}` but
+  presents and exports only authoritative v2 `{A,B}` with `C` deferred. Missing
+  required v2 fails closed; a ready zero-group snapshot remains a valid empty
+  product/export result.
+- Verification completed with 878 backend tests, 94 frontend tests, and the
+  production build. Ordinary verification made zero provider calls. Controlled
+  group-first System Group and Reviewed Identity exports used 16 and 17 SELECTs
+  respectively, independent of member count; this is not a GF-11 scale claim.
 
 ## Reusable current capabilities
 
@@ -470,8 +510,6 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-8 are verified and complete. GF-9 is IN PROGRESS: GF-9A and
-GF-9B are verified, while GF-9C frontend/export inversion plus end-to-end
-graduation has not started. The backend canonical reader and versioned G6/G7
-targets are ready for GF-9C. No frontend source, final export inversion, or
-pair-write deprecation has started.
+GF-0 through GF-9 are verified and complete. GF-10 Pair-Path Write Deprecation
+is the next phase and has not started. No GF-10 pair-write shutdown, GF-11
+scale-hardening claim, or GF-12 production graduation work is included here.

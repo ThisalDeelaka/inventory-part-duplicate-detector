@@ -209,9 +209,13 @@ class IdentityReadService:
     def load_identity_read_group(
         self, scan_id: int, versioned_group_key: VersionedIdentityGroupKey
     ):
+        snapshot = self.load_identity_read_snapshot(scan_id)
+        return self.group_from_snapshot(scan_id, versioned_group_key, snapshot)
+
+    def group_from_snapshot(self, scan_id, versioned_group_key, snapshot):
+        """Resolve an exact opaque target from an already selected snapshot."""
         if versioned_group_key.scan_id != scan_id:
             raise IdentityReadGroupProjectionMismatch("GROUP_KEY_SCAN_MISMATCH")
-        snapshot = self.load_identity_read_snapshot(scan_id)
         if versioned_group_key.projection_contract != snapshot.projection_contract:
             raise IdentityReadGroupProjectionMismatch("GROUP_KEY_PROJECTION_MISMATCH")
         group = next(

@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import {
   identityGroupExportTargets,
+  identityReadExportTargets,
   reviewedIdentityExportTarget,
 } from '../src/utils/identityGroupUi.js'
 import { scanExportTargets } from '../src/utils/llmUi.js'
@@ -14,13 +15,13 @@ const resultsSource = readFileSync(
 )
 
 
-test('reviewed decision export has a distinct route, label, and filename', () => {
-  assert.deepEqual(reviewedIdentityExportTarget(21), {
-    path: '/api/scans/21/identity-groups/reviewed-export.csv',
-    filename: 'scan-21-reviewed-identity-decisions.csv',
+test('canonical reviewed identity export has a distinct authority-selected route, label, and filename', () => {
+  assert.deepEqual(identityReadExportTargets(21).reviewedIdentities, {
+    path: '/api/scans/21/identity-read/reviewed-identities/export.csv',
+    filename: 'scan-21-reviewed-identities.csv',
   })
-  assert.match(resultsSource, />Export reviewed decisions CSV</)
-  assert.match(resultsSource, />Export grouped CSV</)
+  assert.match(resultsSource, />Export Reviewed Identities</)
+  assert.match(resultsSource, />Export System Groups</)
 })
 
 test('reviewed export targets an exact selected projection when available', () => {
@@ -31,7 +32,7 @@ test('reviewed export targets an exact selected projection when available', () =
 })
 
 test('reviewed export never invokes review mutation or LLM endpoints', () => {
-  const target = reviewedIdentityExportTarget(21, 44)
+  const target = identityReadExportTargets(21).reviewedIdentities
   assert.doesNotMatch(target.path, /\/reviews(?:\/|\?|$)|llm|triage|advisory/i)
   assert.match(resultsSource, /api\.download\(target\.path, target\.filename\)/)
 })
@@ -50,14 +51,12 @@ test('existing pair export controls remain independent', () => {
   assert.doesNotMatch(JSON.stringify(targets), /reviewed-export/)
 })
 
-test('no-snapshot state conditionally withholds reviewed export action', () => {
-  assert.match(
-    resultsSource,
-    /summary\?\.snapshot_available && <button[^>]*onClick=\{exportReviewedDecisions\}>Export reviewed decisions CSV/
-  )
+test('reviewed export remains explicit while backend readiness fails closed', () => {
+  assert.match(resultsSource, /Export Reviewed Identities/)
+  assert.match(resultsSource, /identityReadErrorState/)
 })
 
 test('unknown export failures render through a safe alert', () => {
-  assert.match(resultsSource, /setReviewedExportError\(requestError\.message/)
-  assert.match(resultsSource, /role="alert">Reviewed decisions export failed:/)
+  assert.match(resultsSource, /setExportError\(error\.message/)
+  assert.match(resultsSource, /role="alert">Identity export failed:/)
 })

@@ -431,9 +431,9 @@ Removing pair tables or changing provider defaults.
 
 ## GF-9 — Group-first API, UI, and export inversion
 
-Implementation status: IN PROGRESS. GF-9A read-authority/projection contracts
-and GF-9B backend read/API/review/advisory inversion are verified. GF-9C
-frontend and final export inversion plus end-to-end graduation has not started.
+Implementation status: verified and complete through GF-9A read-authority
+contracts, GF-9B backend inversion, and GF-9C frontend/export end-to-end
+graduation. GF-10 pair-path write deprecation has not started.
 
 ### Goal
 

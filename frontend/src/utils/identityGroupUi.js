@@ -70,6 +70,81 @@ export function identityGroupTargets(scanId, options = {}) {
   }
 }
 
+export function identityReadTargets(scanId, options = {}) {
+  const id = Number(scanId)
+  if (!Number.isInteger(id) || id <= 0) throw new Error('scanId must be a positive integer')
+  const base = `/api/scans/${id}/identity-read`
+  const query = new URLSearchParams()
+  if (options.status) query.set('status', options.status)
+  if (options.minimumGroupSize) query.set('minimum_group_size', String(options.minimumGroupSize))
+  if (options.maximumGroupSize) query.set('maximum_group_size', String(options.maximumGroupSize))
+  if (options.limit) query.set('limit', String(options.limit))
+  if (options.offset) query.set('offset', String(options.offset))
+  const suffix = query.toString() ? `?${query}` : ''
+  const groupPath = key => `${base}/groups/${encodeURIComponent(String(key))}`
+  return {
+    summary: `${base}/summary`,
+    groups: `${base}/groups${suffix}`,
+    groupDetail: groupPath,
+    outcomes: `${base}/outcomes`,
+    reviewHistory: key => `${groupPath(key)}/reviews`,
+    currentReview: key => `${groupPath(key)}/reviews/current`,
+    createReview: key => `${groupPath(key)}/reviews`,
+    advisoryEligibility: key => `${groupPath(key)}/advisory/eligibility`,
+  }
+}
+
+export function identityReadExportTargets(scanId) {
+  const id = Number(scanId)
+  if (!Number.isInteger(id) || id <= 0) throw new Error('scanId must be a positive integer')
+  const base = `/api/scans/${id}/identity-read`
+  return {
+    systemGroups: {
+      path: `${base}/system-groups/export.csv`,
+      filename: `scan-${id}-system-groups.csv`,
+    },
+    reviewedIdentities: {
+      path: `${base}/reviewed-identities/export.csv`,
+      filename: `scan-${id}-reviewed-identities.csv`,
+    },
+    conflicts: {
+      path: `${base}/conflicts/export.csv`,
+      filename: `scan-${id}-identity-conflicts.csv`,
+    },
+    deferred: {
+      path: `${base}/deferred/export.csv`,
+      filename: `scan-${id}-deferred-identity-work.csv`,
+    },
+  }
+}
+
+export const validationModeLabel = mode => ({
+  LEGACY_COMPLETE_PAIRWISE: 'Legacy complete pairwise validation',
+  COMPLETE_PAIRWISE: 'Complete pairwise validation',
+  PROGRESSIVE_TARGETED: 'Progressive targeted validation',
+}[mode] || fallbackLabel(mode, 'Unknown validation mode'))
+
+export function validationCoverageLabel(coverage = {}) {
+  const evaluated = Number(coverage.evaluated_internal_pair_count || 0)
+  const possible = Number(coverage.possible_internal_pair_count || 0)
+  const missing = Number(coverage.missing_nonrequired_pair_count || 0)
+  return `${evaluated} of ${possible} relationships evaluated${missing ? ` · ${missing} missing non-required` : ''}`
+}
+
+export function identityReadErrorState(status, message = '') {
+  if (Number(status) === 409) return {
+    kind: 'not-ready',
+    title: 'Identity result is not ready',
+    message: message || 'The authoritative identity snapshot is not ready yet.',
+  }
+  if (Number(status) === 422) return {
+    kind: 'inconsistent',
+    title: 'Identity authority is inconsistent',
+    message: message || 'The authoritative identity snapshot could not be validated.',
+  }
+  return { kind: 'error', title: 'Identity result could not be loaded', message }
+}
+
 export function identityGroupExportTargets(scanId, projectionRunId) {
   const id = Number(scanId)
   if (!Number.isInteger(id) || id <= 0) throw new Error('scanId must be a positive integer')

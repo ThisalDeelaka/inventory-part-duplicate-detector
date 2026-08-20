@@ -33,6 +33,14 @@ export function identityGroupReviewTargets(scanId, groupSnapshotId) {
   return { history: base, current: `${base}/current`, create: base }
 }
 
+export function versionedIdentityGroupReviewTargets(scanId, versionedGroupKey) {
+  const scan = positive(scanId, 'scanId')
+  const key = String(versionedGroupKey || '').trim()
+  if (!key) throw new Error('versionedGroupKey is required')
+  const base = `/api/scans/${scan}/identity-read/groups/${encodeURIComponent(key)}/reviews`
+  return { history: base, current: `${base}/current`, create: base }
+}
+
 export function relationshipCounts(decisionType, memberCount, partitions = []) {
   const n = Number(memberCount)
   const choose2 = value => value * (value - 1) / 2
@@ -49,7 +57,7 @@ export function relationshipCounts(decisionType, memberCount, partitions = []) {
 }
 
 export function canonicalSplitPartitions(members, assignments, setCount) {
-  const refs = members.map(member => member.record_ref_key)
+  const refs = members.map(member => member.stable_record_reference || member.record_ref_key)
   if (new Set(refs).size !== refs.length) throw new Error('Group members must be unique')
   const count = Number(setCount)
   if (!Number.isInteger(count) || count < 2 || count > refs.length) throw new Error('Use between 2 and N identity sets')
@@ -73,7 +81,7 @@ export function buildGroupReviewPayload({
   const name = String(reviewer || '').trim()
   if (!name) throw new Error('Reviewer name is required')
   const members = detail.members || []
-  const validRefs = new Set(members.map(member => member.record_ref_key))
+  const validRefs = new Set(members.map(member => member.stable_record_reference || member.record_ref_key))
   const payload = {
     projection_run_id: detail.projection.projection_run_id,
     group_hypothesis_key: detail.hypothesis_key,
@@ -100,6 +108,36 @@ export function buildGroupReviewPayload({
 
 export function reviewPreview(input) {
   const payload = buildGroupReviewPayload(input)
+  const members = input.detail.members || []
+  const partitions = payload.decision_type === 'CONFIRM_SELECTED'
+    ? [payload.selected_record_ref_keys]
+    : payload.partitions
+  return {
+    member_count: members.length,
+    partition_sizes: partitions.map(block => block.length),
+    ...relationshipCounts(payload.decision_type, members.length, partitions),
+  }
+}
+
+export function buildVersionedGroupReviewPayload(input) {
+  const legacy = buildGroupReviewPayload({
+    ...input,
+    detail: {
+      ...input.detail,
+      projection: { projection_run_id: 1 },
+      hypothesis_key: 'versioned-target',
+    },
+  })
+  const {
+    projection_run_id: _projectionRunId,
+    group_hypothesis_key: _hypothesisKey,
+    ...payload
+  } = legacy
+  return payload
+}
+
+export function versionedReviewPreview(input) {
+  const payload = buildVersionedGroupReviewPayload(input)
   const members = input.detail.members || []
   const partitions = payload.decision_type === 'CONFIRM_SELECTED'
     ? [payload.selected_record_ref_keys]

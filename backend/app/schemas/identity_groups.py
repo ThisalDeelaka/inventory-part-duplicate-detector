@@ -198,6 +198,8 @@ class IdentityReadGroupResponse(BaseModel):
     bridge_risk_summary: dict[str, Any] | None = None
     genericity_risk_summary: dict[str, Any] | None = None
     missing_evidence_summary: dict[str, Any] | None = None
+    member_preview: list[dict[str, Any]] = Field(default_factory=list, max_length=3)
+    review_state: GroupReviewStateResponse = Field(default_factory=GroupReviewStateResponse)
 
 
 class IdentityReadGroupDetailResponse(IdentityReadGroupResponse):

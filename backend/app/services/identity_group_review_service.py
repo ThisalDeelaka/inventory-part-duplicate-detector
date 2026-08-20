@@ -481,6 +481,59 @@ class VersionedIdentityGroupReviewService:
         self.read_service = IdentityReadService(db)
         self.legacy = IdentityGroupReviewService(db)
 
+    def current_states_for_snapshot(self, snapshot):
+        """Bulk-load exact current review state without per-group queries."""
+        keys = {
+            serialize_versioned_identity_group_key(group.versioned_group_key): group
+            for group in snapshot.groups
+        }
+        if not keys:
+            return {}
+        if snapshot.projection_contract == IdentityReadProjectionContract.G2_V1:
+            successor = aliased(IdentityGroupReviewEvent)
+            rows = self.db.query(
+                IdentityGroupSnapshot.hypothesis_key, IdentityGroupReviewEvent
+            ).join(
+                IdentityGroupReviewEvent,
+                IdentityGroupReviewEvent.group_snapshot_id == IdentityGroupSnapshot.id,
+            ).outerjoin(
+                successor,
+                successor.supersedes_review_event_id == IdentityGroupReviewEvent.id,
+            ).filter(
+                IdentityGroupSnapshot.scan_id == snapshot.scan_id,
+                IdentityGroupSnapshot.projection_run_id == snapshot.source_projection_run_id,
+                successor.id.is_(None),
+            ).all()
+            by_reference = {reference: event for reference, event in rows}
+            events = {
+                key: by_reference.get(group.versioned_group_key.group_reference)
+                for key, group in keys.items()
+            }
+        else:
+            successor = aliased(VersionedIdentityGroupReviewEvent)
+            rows = self.db.query(VersionedIdentityGroupReviewEvent).outerjoin(
+                successor,
+                successor.supersedes_review_event_id
+                == VersionedIdentityGroupReviewEvent.id,
+            ).filter(
+                VersionedIdentityGroupReviewEvent.scan_id == snapshot.scan_id,
+                VersionedIdentityGroupReviewEvent.source_projection_run_id
+                == snapshot.source_projection_run_id,
+                VersionedIdentityGroupReviewEvent.versioned_group_key.in_(tuple(keys)),
+                successor.id.is_(None),
+            ).all()
+            events = {row.versioned_group_key: row for row in rows}
+        return {
+            key: {
+                "reviewed": event is not None,
+                "current_decision_type": event.decision_type if event else None,
+                "reviewer": event.reviewer if event else None,
+                "reviewed_at": event.created_at if event else None,
+                "current_review_event_id": event.id if event else None,
+            }
+            for key, event in events.items()
+        }
+
     def _target(self, scan_id, key):
         group = self.read_service.load_identity_read_group(scan_id, key)
         snapshot = self.read_service.load_identity_read_snapshot(scan_id)

@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import {
   GROUP_REVIEW_DECISIONS,
-  buildGroupReviewPayload,
+  buildVersionedGroupReviewPayload,
   groupReviewLabel,
-  reviewPreview,
+  versionedReviewPreview,
   staleReviewHandling,
 } from '../utils/identityGroupReviewUi'
 
+const memberRef = member => member.stable_record_reference || member.record_ref_key
 
 function partitionSummary(review) {
   if (!review.partitions?.length) return 'No identity sets recorded'
@@ -25,17 +26,17 @@ export default function GroupReviewPanel({ scanId, detail, onSaved }) {
   const [selected, setSelected] = useState({})
   const [setCount, setSetCount] = useState(2)
   const [assignments, setAssignments] = useState(() => Object.fromEntries(
-    (detail.members || []).map(member => [member.record_ref_key, 0])
+    (detail.members || []).map(member => [memberRef(member), 0])
   ))
   const [acknowledged, setAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
   const loadHistory = useCallback(async () => {
-    const value = await api.getIdentityGroupReviewHistory(scanId, detail.group_snapshot_id)
+    const value = await api.getVersionedGroupReviewHistory(scanId, detail.versioned_group_key)
     setHistory(value)
     return value
-  }, [scanId, detail.group_snapshot_id])
+  }, [scanId, detail.versioned_group_key])
 
   useEffect(() => { loadHistory().catch(error => setMessage(error.message)) }, [loadHistory])
 
@@ -53,7 +54,7 @@ export default function GroupReviewPanel({ scanId, detail, onSaved }) {
 
   let preview = null
   let validationMessage = ''
-  try { preview = reviewPreview(input) } catch (error) { validationMessage = error.message }
+  try { preview = versionedReviewPreview(input) } catch (error) { validationMessage = error.message }
   const requiresAcknowledgement = decisionType === 'KEEP_ALL_SEPARATE'
   const canSubmit = Boolean(preview) && (!requiresAcknowledgement || acknowledged) && !busy
 
@@ -82,7 +83,7 @@ export default function GroupReviewPanel({ scanId, detail, onSaved }) {
     setBusy(true); setMessage('')
     try {
       const saved = await api.createIdentityGroupReview(
-        scanId, detail.group_snapshot_id, buildGroupReviewPayload(input)
+        scanId, detail.versioned_group_key, buildVersionedGroupReviewPayload(input)
       )
       await loadHistory()
       onSaved(saved)
@@ -102,9 +103,9 @@ export default function GroupReviewPanel({ scanId, detail, onSaved }) {
     const bounded = Math.max(2, Math.min(detail.members.length, next))
     setSetCount(bounded)
     setAssignments(previous => Object.fromEntries(
-      detail.members.map(member => [
-        member.record_ref_key,
-        Math.min(Number(previous[member.record_ref_key]) || 0, bounded - 1),
+        detail.members.map(member => [
+          memberRef(member),
+          Math.min(Number(previous[memberRef(member)]) || 0, bounded - 1),
       ])
     ))
   }
@@ -112,8 +113,11 @@ export default function GroupReviewPanel({ scanId, detail, onSaved }) {
   return (
     <section className="group-review" aria-label="Human group review">
       <div className="review-state-line">
-        <b>Human review: {groupReviewLabel(detail.review_state)}</b>
-        {detail.review_state?.reviewed && <small>System status remains {detail.group_status}.</small>}
+        <b>Human review: {groupReviewLabel(current ? {
+          reviewed: true,
+          current_decision_type: current.decision_type,
+        } : { reviewed: false })}</b>
+        {current && <small>System status remains {detail.group_status}.</small>}
       </div>
       <button type="button" className="secondary" disabled={!history} onClick={toggleEditor} aria-expanded={open}>
         {!history ? 'Loading review stateâ€¦' : current ? 'Edit review' : 'Review group'}
@@ -131,16 +135,16 @@ export default function GroupReviewPanel({ scanId, detail, onSaved }) {
           {decisionType === 'CONFIRM_ALL_AS_ONE' && <p className="warning">All {detail.members.length} records will be recorded as one reviewed identity set. No inventory merge occurs.</p>}
           {decisionType === 'CONFIRM_SELECTED' && <fieldset><legend>Select members to confirm together</legend>
             <p>Unselected records will remain unresolved.</p>
-            {detail.members.map(member => <label className="review-member" key={member.record_ref_key}>
-              <input type="checkbox" checked={Boolean(selected[member.record_ref_key])} onChange={event => setSelected(previous => ({ ...previous, [member.record_ref_key]: event.target.checked }))} />
+            {detail.members.map(member => <label className="review-member" key={memberRef(member)}>
+              <input type="checkbox" checked={Boolean(selected[memberRef(member)])} onChange={event => setSelected(previous => ({ ...previous, [memberRef(member)]: event.target.checked }))} />
               <span><b>{member.part_no}</b> â€” {member.description}<small>{member.contract || 'No site'} / {member.uom || 'No UOM'}</small></span>
             </label>)}
           </fieldset>}
           {decisionType === 'SPLIT_PARTITIONS' && <fieldset><legend>Assign every member to an identity set</legend>
             <div className="review-set-actions"><button type="button" className="secondary" onClick={() => changeSetCount(setCount + 1)} disabled={setCount >= detail.members.length}>Add set</button><button type="button" className="ghost" onClick={() => changeSetCount(setCount - 1)} disabled={setCount <= 2}>Remove set</button></div>
-            {detail.members.map(member => <label className="review-member" key={member.record_ref_key}>
+            {detail.members.map(member => <label className="review-member" key={memberRef(member)}>
               <span><b>{member.part_no}</b> â€” {member.description}<small>{member.contract || 'No site'} / {member.uom || 'No UOM'}</small></span>
-              <select aria-label={`Identity set for ${member.part_no}`} value={assignments[member.record_ref_key] ?? 0} onChange={event => setAssignments(previous => ({ ...previous, [member.record_ref_key]: Number(event.target.value) }))}>
+              <select aria-label={`Identity set for ${member.part_no}`} value={assignments[memberRef(member)] ?? 0} onChange={event => setAssignments(previous => ({ ...previous, [memberRef(member)]: Number(event.target.value) }))}>
                 {Array.from({ length: setCount }, (_, index) => <option key={index} value={index}>Set {index + 1}</option>)}
               </select>
             </label>)}

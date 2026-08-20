@@ -50,6 +50,12 @@ from app.services.identity_group_review_service import (
 from app.services.identity_group_review_export_service import (
     reviewed_identity_decisions_to_csv,
 )
+from app.services.identity_read_export_service import (
+    authority_selected_conflicts_to_csv,
+    authority_selected_deferred_to_csv,
+    authority_selected_reviewed_identities_to_csv,
+    authority_selected_system_groups_to_csv,
+)
 from app.identity_read.fingerprints import canonical_value
 from app.identity_read.key_codec import (
     InvalidVersionedIdentityGroupKey,
@@ -106,7 +112,7 @@ def _read_projection(snapshot):
     }
 
 
-def _read_group(group, *, detail=False):
+def _read_group(group, *, detail=False, review_state=None):
     payload = {
         "versioned_group_key": serialize_versioned_identity_group_key(
             group.versioned_group_key
@@ -123,6 +129,8 @@ def _read_group(group, *, detail=False):
         "bridge_risk_summary": canonical_value(group.bridge_risk_summary),
         "genericity_risk_summary": canonical_value(group.genericity_risk_summary),
         "missing_evidence_summary": canonical_value(group.missing_evidence_summary),
+        "member_preview": [canonical_value(item) for item in group.members[:3]],
+        "review_state": review_state or {"reviewed": False},
     }
     if detail:
         payload["members"] = [canonical_value(item) for item in group.members]
@@ -171,10 +179,21 @@ def authoritative_identity_groups(
         and (minimum_group_size is None or group.member_count >= minimum_group_size)
         and (maximum_group_size is None or group.member_count <= maximum_group_size)
     )
+    review_states = VersionedIdentityGroupReviewService(db).current_states_for_snapshot(
+        snapshot
+    )
     items = groups[offset:offset + limit]
     return {
         "projection": _read_projection(snapshot), "limit": limit, "offset": offset,
-        "total": len(groups), "items": [_read_group(item) for item in items],
+        "total": len(groups), "items": [
+            _read_group(
+                item,
+                review_state=review_states.get(
+                    serialize_versioned_identity_group_key(item.versioned_group_key)
+                ),
+            )
+            for item in items
+        ],
     }
 
 
@@ -207,6 +226,52 @@ def authoritative_identity_outcomes(scan_id: int, db: Session = Depends(get_db))
         "deferred_work_units": [canonical_value(item) for item in snapshot.deferred_work_units],
         "unassigned_records": [canonical_value(item) for item in snapshot.unassigned_records],
     }
+
+
+def _identity_read_csv(scan_id, db, converter, filename):
+    _service(db, scan_id)
+    content = _identity_read_safe(lambda: converter(db, scan_id))
+    return Response(
+        content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{scan_id}/identity-read/system-groups/export.csv")
+def export_authoritative_system_groups(scan_id: int, db: Session = Depends(get_db)):
+    return _identity_read_csv(
+        scan_id, db, authority_selected_system_groups_to_csv,
+        f"scan-{scan_id}-system-groups.csv",
+    )
+
+
+@router.get("/{scan_id}/identity-read/reviewed-identities/export.csv")
+def export_authoritative_reviewed_identities(
+    scan_id: int, db: Session = Depends(get_db)
+):
+    return _identity_read_csv(
+        scan_id, db, authority_selected_reviewed_identities_to_csv,
+        f"scan-{scan_id}-reviewed-identities.csv",
+    )
+
+
+@router.get("/{scan_id}/identity-read/conflicts/export.csv")
+def export_authoritative_identity_conflicts(scan_id: int, db: Session = Depends(get_db)):
+    return _identity_read_csv(
+        scan_id, db, authority_selected_conflicts_to_csv,
+        f"scan-{scan_id}-identity-conflicts.csv",
+    )
+
+
+@router.get("/{scan_id}/identity-read/deferred/export.csv")
+def export_authoritative_deferred_identity_work(
+    scan_id: int, db: Session = Depends(get_db)
+):
+    return _identity_read_csv(
+        scan_id, db, authority_selected_deferred_to_csv,
+        f"scan-{scan_id}-deferred-identity-work.csv",
+    )
 
 
 @router.get(

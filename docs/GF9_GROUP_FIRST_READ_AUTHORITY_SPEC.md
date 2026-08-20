@@ -158,3 +158,77 @@ output remains unchanged. Group-first-primary export is temporarily rejected
 with `Authoritative group-first System Group Export is pending GF-9C`, mapped
 to HTTP 409, rather than exporting v1 compatibility data as authority. Reviewed
 Identity Export remains unchanged. GF-9C owns frontend and final export work.
+
+## GF-9C verified product graduation
+
+### Canonical frontend reads and identity
+
+The normal frontend consumes only `/identity-read/summary`, paged
+`/identity-read/groups`, lazy group detail, and typed outcomes. Persisted-mode
+authority remains entirely in `IdentityReadService`; the frontend does not read
+`IDENTITY_ORCHESTRATION_MODE`, current configuration, selectors, or v1/v2
+tables. HTTP 409 read-not-ready and HTTP 422 authority-inconsistent responses
+are explicit product states and never trigger a legacy fallback.
+
+Opaque `igk1` keys are passed unchanged to detail, versioned G6 review, and G7
+eligibility routes. Group cards show a bounded member preview, categorical
+status, exact validation mode/coverage, and exact projection-scoped review
+state. Detail loads every member and only materialized evidence. Legacy v1 is
+labelled `LEGACY_COMPLETE_PAIRWISE`; v2 preserves `COMPLETE_PAIRWISE` or
+`PROGRESSIVE_TARGETED`. A progressive three-member group with two evaluated of
+three possible relationships displays two evaluated and one missing
+non-required relationship without synthesizing evidence.
+
+### Product UX and typed outcomes
+
+The headline is records plus potential 2..N identities, likely groups, review
+groups, conflicts, deferred work, and records not safely assigned. Conflict and
+deferred outcomes have separate sections, and unassigned is never called
+unique. Pair candidates are available only under Advanced legacy diagnostics;
+they are not the default result, review target, advisory target, headline, or
+primary export.
+
+Advisory rendering consumes backend eligibility as authority. Complete-pairwise
+review groups may show eligibility; progressive groups display
+`INELIGIBLE_PROGRESSIVE_VALIDATION_NOT_SUPPORTED`; likely groups remain
+ineligible. The frontend starts no provider execution.
+
+### Authority-selected exports
+
+Canonical exports are:
+
+```text
+GET /api/scans/{scan_id}/identity-read/system-groups/export.csv
+GET /api/scans/{scan_id}/identity-read/reviewed-identities/export.csv
+GET /api/scans/{scan_id}/identity-read/conflicts/export.csv
+GET /api/scans/{scan_id}/identity-read/deferred/export.csv
+```
+
+All load `IdentityReadSnapshot`; historical/no-audit and legacy-primary scans
+therefore use v1 while group-first-primary uses v2 with no fallback. The System
+Group Export has one row per member and carries projection, source-run, opaque
+group key, status, validation mode, and exact coverage. It has no Part A/Part B,
+pair score, synthetic pair, or averaged group confidence columns. Conflict and
+deferred CSVs remain separate typed, outcome/member-shaped analytical exports.
+
+The canonical Reviewed Identity Export is confirmed-only operational output.
+V1 is derived from the unchanged historical G6 chain; v2 bulk-loads only the
+current exact versioned chain. `CONFIRM_ALL`, `CONFIRM_SELECTED`, and `SPLIT`
+produce their frozen confirmed partitions; `KEEP_SEPARATE` and `UNSURE` produce
+no operational duplicate identity set, and unselected members are not inferred
+as singletons. Existing G5/G6 CSV routes and schemas remain compatibility
+routes and retain their established bytes and audit behavior.
+
+### Graduation evidence and compatibility
+
+A decisive fixture with compatibility v1 `{A,B,C}` and authoritative v2
+`{A,B}` plus deferred `C` shows, reviews, and exports only v2 truth. Historical
+and legacy-primary fixtures remain v1 without read-time v2 creation. A missing
+required v2 produces authority errors across UI and exports, while a completed
+zero-group snapshot produces a valid empty result/export.
+
+The frontend makes one paged list request and one detail request when a group is
+opened; review and advisory state are separate on-demand requests rather than
+per-member or per-pair calls. Controlled v2 System Group and Reviewed Identity
+exports used 16 and 17 SELECTs. This is bounded query-shape evidence, not a
+100k-readiness claim. GF-9 is complete; GF-10 owns pair-write deprecation.
