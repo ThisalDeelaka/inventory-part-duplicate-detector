@@ -994,8 +994,8 @@ class ScanOrchestrationRun(Base):
             name="ck_scan_orchestration_primary_pipeline",
         ),
         CheckConstraint(
-            "visible_projection_contract = 'G2_V1'",
-            name="ck_scan_orchestration_visible_v1",
+            "visible_projection_contract IN ('G2_V1', 'G2_V2')",
+            name="ck_scan_orchestration_visible_projection",
         ),
         Index("ix_scan_orchestration_scan_status", "scan_id", "status"),
         Index("ix_scan_orchestration_mode_status", "mode", "status"),

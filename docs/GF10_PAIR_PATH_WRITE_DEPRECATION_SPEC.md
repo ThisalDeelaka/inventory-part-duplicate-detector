@@ -14,6 +14,29 @@ GF-10A is pure. It does not change `scan_runner.py`, configuration selection,
 schema, migrations, APIs, frontend, exports, G6/G7 behavior, provider behavior,
 or any persisted row. Current execution remains policy v1 until GF-10B.
 
+## GF-10B prerequisite: truthful orchestration-audit persistence
+
+GF-10B pre-flight found that the persisted orchestration-run schema allowed
+only `G2_V1` as `visible_projection_contract`. That invariant was correct for
+policy v1, but it cannot truthfully represent the already-frozen policy-v2
+`group_first_primary` contract, whose visible projection is `G2_V2` and whose
+compatibility projection is not required. Persisting `G2_V1` for that plan
+would create false audit history.
+
+The narrow GF-10B prerequisite therefore expands the non-null allowlist to
+exactly `G2_V1 | G2_V2`. It does not permit arbitrary values, `AUTO`, or future
+contract names. The SQLite migration rebuilds only `scan_orchestration_run`
+from its stored definition, copies every column and row without rewriting any
+value, and restores its explicit indexes and triggers. Primary/foreign/unique
+keys, unrelated checks, types, nullability, defaults, IDs, timestamps, status,
+readiness, and failure fields remain intact. Historical policy-v1 legacy and
+group-first rows remain `G2_V1`; there is no backfill.
+
+This prerequisite proves that a future policy-v2 group-first audit can persist
+and read back `G2_V2`. It does not activate policy v2 in `scan_runner.py` and
+does not stop pair, G1, G2-v1, or shadow writes. GF-10B runtime pair-path write
+deprecation remains pending.
+
 ## Dependency-audit conclusion
 
 No authoritative `group_first_primary` product or business flow requires a new

@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy import inspect, text
 
 
@@ -320,3 +322,112 @@ def ensure_scan_orchestration_tables(engine):
         ScanOrchestrationRun.__table__,
         ScanOrchestrationStageResultRow.__table__,
     ], checkfirst=True)
+    _ensure_sqlite_orchestration_projection_contract(engine)
+
+
+def _ensure_sqlite_orchestration_projection_contract(engine):
+    """Expand only the SQLite audit projection CHECK from v1 to v1-or-v2.
+
+    SQLite cannot alter a CHECK constraint in place.  Rebuild this one table
+    from its own stored DDL so columns, defaults, keys, unrelated checks, rows,
+    identifiers, indexes, and triggers are retained exactly.
+    """
+    if not engine.url.get_backend_name().startswith("sqlite"):
+        return
+
+    raw_connection = engine.raw_connection()
+    cursor = raw_connection.cursor()
+    temporary_table = "scan_orchestration_run_gf10b_pre_new"
+    foreign_keys_enabled = None
+    try:
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+            ("scan_orchestration_run",),
+        ).fetchone()
+        if row is None:
+            return
+        table_sql = row[0]
+        v2_check = re.compile(
+            r"visible_projection_contract\s+IN\s*\(\s*'G2_V1'\s*,\s*'G2_V2'\s*\)",
+            re.IGNORECASE,
+        )
+        if v2_check.search(table_sql):
+            return
+        legacy_check = re.compile(
+            r"visible_projection_contract\s*=\s*'G2_V1'",
+            re.IGNORECASE,
+        )
+        if len(legacy_check.findall(table_sql)) != 1:
+            raise RuntimeError(
+                "scan orchestration visible-projection CHECK is not a supported v1 schema"
+            )
+
+        columns = tuple(
+            item[1]
+            for item in cursor.execute(
+                "PRAGMA table_info(scan_orchestration_run)"
+            ).fetchall()
+        )
+        if not columns:
+            raise RuntimeError("scan orchestration table has no columns")
+        schema_objects = tuple(cursor.execute(
+            "SELECT type, name, sql FROM sqlite_master "
+            "WHERE tbl_name = ? AND type IN ('index', 'trigger') "
+            "AND sql IS NOT NULL ORDER BY rowid",
+            ("scan_orchestration_run",),
+        ).fetchall())
+        foreign_keys_enabled = int(cursor.execute(
+            "PRAGMA foreign_keys"
+        ).fetchone()[0])
+        raw_connection.commit()
+        cursor.execute("PRAGMA foreign_keys = OFF")
+        cursor.execute("BEGIN IMMEDIATE")
+
+        cursor.execute(f'DROP TABLE IF EXISTS "{temporary_table}"')
+        rebuilt_sql = legacy_check.sub(
+            "visible_projection_contract IN ('G2_V1', 'G2_V2')",
+            table_sql,
+            count=1,
+        ).replace(
+            "ck_scan_orchestration_visible_v1",
+            "ck_scan_orchestration_visible_projection",
+        )
+        rebuilt_sql, replacements = re.subn(
+            r"^(CREATE\s+TABLE\s+)(?:\"scan_orchestration_run\"|"
+            r"`scan_orchestration_run`|\[scan_orchestration_run\]|"
+            r"scan_orchestration_run)",
+            rf'\1"{temporary_table}"',
+            rebuilt_sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if replacements != 1:
+            raise RuntimeError("scan orchestration table DDL cannot be rebuilt safely")
+        cursor.execute(rebuilt_sql)
+        quoted_columns = ", ".join(
+            f'"{name.replace(chr(34), chr(34) * 2)}"' for name in columns
+        )
+        cursor.execute(
+            f'INSERT INTO "{temporary_table}" ({quoted_columns}) '
+            f'SELECT {quoted_columns} FROM "scan_orchestration_run"'
+        )
+        cursor.execute('DROP TABLE "scan_orchestration_run"')
+        cursor.execute(
+            f'ALTER TABLE "{temporary_table}" RENAME TO "scan_orchestration_run"'
+        )
+        for _object_type, _name, sql in schema_objects:
+            cursor.execute(sql)
+        violations = cursor.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError("scan orchestration migration violated foreign keys")
+        raw_connection.commit()
+    except Exception:
+        raw_connection.rollback()
+        raise
+    finally:
+        try:
+            if foreign_keys_enabled is not None:
+                cursor.execute(f"PRAGMA foreign_keys = {foreign_keys_enabled}")
+        finally:
+            cursor.close()
+            raw_connection.close()

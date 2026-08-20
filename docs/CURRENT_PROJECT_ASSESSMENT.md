@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-10B prerequisite schema-migration commit: `bb5f5775e0e93a8ec80d9e8411840c9ca5d0b72a`.
 - Baseline HEAD before the GF-10A implementation commit: `53aa554095f1e4b476102d9e25d8fbd841493836`.
 - Baseline HEAD before the GF-9C implementation commit: `e8dcd5795b7e522129827e85316739ab64fed661`.
 - Branch: `llm-assisted-mvp`.
@@ -503,6 +504,25 @@ behavior.
 - `scan_runner.py`, schema, migrations, APIs, frontend, exports, G6/G7 runtime,
   configuration defaults, and provider behavior are unchanged. GF-10B owns
   runtime activation and write shutdown.
+
+## GF-10B prerequisite orchestration-audit schema migration
+
+GF-10B is in progress. Its prerequisite orchestration-audit migration is
+verified, while runtime pair-path write deprecation is not yet complete.
+
+- The previous non-null `visible_projection_contract = 'G2_V1'` check could not
+  truthfully persist the frozen policy-v2 group-first plan.
+- Fresh and migrated databases now allow exactly `G2_V1 | G2_V2`; unsupported
+  values such as `G2_V3` and `AUTO` remain rejected.
+- The SQLite migration is idempotent and rebuilds only the orchestration-run
+  table. Historical policy-v1 rows remain byte-for-value `G2_V1`, with row
+  count, IDs, scan references, timestamps, readiness/failure data, keys,
+  indexes, triggers, and unrelated checks preserved.
+- A valid policy-v2 `group_first_primary` audit with visible `G2_V2` and
+  `compatibility_projection_required=false` now persists and reads back.
+- `scan_runner.py` and pair, G1, G2-v1, shadow, API, frontend, export, G6/G7,
+  provider, and secret behavior remain unchanged. GF-10B runtime activation
+  and write shutdown remain the next bounded unit.
 
 ## Reusable current capabilities
 
