@@ -299,3 +299,16 @@ def ensure_shadow_comparison_tables(engine):
         ShadowComparisonSafetyDeltaRow.__table__,
         ShadowComparisonCaseDeltaRow.__table__,
     ], checkfirst=True)
+
+
+def ensure_scan_orchestration_tables(engine):
+    """Create additive GF-8B audit tables without backfilling historical scans."""
+    from app.db.models import (
+        ScanOrchestrationRun,
+        ScanOrchestrationStageResultRow,
+    )
+
+    ScanOrchestrationRun.metadata.create_all(bind=engine, tables=[
+        ScanOrchestrationRun.__table__,
+        ScanOrchestrationStageResultRow.__table__,
+    ], checkfirst=True)

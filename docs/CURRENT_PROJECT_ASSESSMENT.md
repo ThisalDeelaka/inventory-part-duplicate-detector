@@ -7,6 +7,7 @@ This document describes the observed repository state. It is not a requirements 
 ## Assessed baseline
 
 - Branch: `llm-assisted-mvp`.
+- Baseline HEAD before the GF-8B implementation commit: `be357ff397c921f2248a879570dfb47f541706ea`.
 - Baseline HEAD before the GF-8A implementation commit: `004093209c04ad5cc27f0222c3293d0cd7292d37`.
 - Baseline HEAD before the GF-7A implementation commit: `9b6b058530c9ee15e7cf223427a0a97d8131086c`.
 - Baseline HEAD before the GF-6B implementation commit: `ae87011c91ee678607784713e0717347935f8ba8`.
@@ -26,7 +27,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and documented but is not yet the visible resolution core. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8 is in progress: GF-8A orchestration authority/mode contracts and failure/compatibility gates are verified, while GF-8B controlled group-first-primary execution has not started. The runtime remains legacy-primary and visible G1/G2-v1 behavior remains unchanged.
+The group-first architecture is approved and documented but is not yet the visible reader contract. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8A orchestration authority contracts and GF-8B controlled runtime integration are verified, so GF-8 is complete. Runtime authority can now be selected explicitly between legacy-primary and group-first-primary, while the default remains legacy-primary and all visible G1/G2-v1 readers remain unchanged until GF-9.
 
 ## GF-1 canonical scan-record catalog
 
@@ -340,7 +341,39 @@ GF-8A defines a pure, immutable planning boundary without changing execution.
   current-selector, API, frontend, export, review, advisory, or provider
   dependency. GF-8A adds no schema or migration.
 - The visible projection contract remains `G2_V1` in both modes throughout
-  GF-8A. GF-8B execution and GF-9 product-reader inversion remain unstarted.
+  GF-8. GF-8B now consumes these contracts; GF-9 product-reader inversion
+  remains unstarted.
+
+## GF-8B controlled group-first-primary runtime
+
+Normal scans now resolve the explicit `IDENTITY_ORCHESTRATION_MODE`, consume
+the frozen GF-8A policy/plan, record categorical stage results, and use the
+GF-8A outcome evaluator as the readiness classification boundary.
+
+- `legacy_primary` remains the default and preserves the verified pre-GF-8
+  ordering and failure isolation: GF-5C, GF-6B, and GF-7B failures remain
+  non-visible while legacy pair/G1/G2-v1 stays authoritative.
+- `group_first_primary` makes GF-1 through GF-6 primary-required. A failed
+  GF-5C or GF-6B stage fails the scan before compatibility work and cannot be
+  rescued by legacy output.
+- After primary success, legacy pair persistence, G1, and G2-v1 execute as one
+  compatibility boundary. A compatibility failure leaves completed GF-5/GF-6
+  history intact but makes compatibility and visible readiness false.
+- G2-v2 remains structurally non-current. G2-v1 remains the selected visible
+  projection for `snapshot_available`, G3, G5, G6, and G7 readers in both modes.
+- GF-7 shadow comparison remains optional diagnostic work. Failure is audited
+  without failing a scan whose primary and compatibility stages succeeded.
+- Additive `scan_orchestration_run` and `scan_orchestration_stage_result`
+  tables preserve the exact mode, policy/plan fingerprints, stage authority,
+  execution order, categorical status, bounded safe failure, and same-scan
+  source-run references. Historical scans are not backfilled and reads create
+  no audit row.
+- One scan has at most one immutable orchestration run and one row per planned
+  stage/order. Stage writes are bounded by the nine-stage plan, never by record
+  or candidate volume. Process-crash resume is not introduced; GF-11 retains
+  resumability and scale hardening.
+- Mode selection comes only from configuration. GF-7 metrics cannot promote or
+  demote a mode, and deterministic execution makes zero provider calls.
 
 ## Reusable current capabilities
 
@@ -375,8 +408,7 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-7 are verified. GF-8 is in progress: GF-8A orchestration
-contracts and authority gates are verified, and GF-8B controlled
-group-first-primary scan orchestration has not started. GF-8B is the next
-frozen-roadmap boundary; no runtime authority, current selection, or visible
-projection change has started.
+GF-0 through GF-8 are verified. GF-8A contracts and GF-8B controlled runtime
+orchestration are complete. GF-9 API/UI/export group-first inversion is the
+next frozen-roadmap boundary. No current-reader selection, public API, UI,
+export, review, advisory, or pair-write deprecation has started.

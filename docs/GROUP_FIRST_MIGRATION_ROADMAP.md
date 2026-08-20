@@ -383,6 +383,10 @@ Graduation, business UI changes, provider benchmarking.
 
 ## GF-8 — Group-first scan orchestration
 
+Implementation status: verified through GF-8A frozen orchestration contracts
+and GF-8B controlled legacy-primary/group-first-primary runtime integration.
+G2-v1 remains the visible compatibility projection until GF-9.
+
 ### Goal
 
 Make canonical snapshot, discovery, evidence acquisition, resolver, and G2 v2 the required normal scan stages after graduation gates pass.

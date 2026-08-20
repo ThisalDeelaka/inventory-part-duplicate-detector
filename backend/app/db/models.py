@@ -977,6 +977,95 @@ class ShadowComparisonRun(Base):
     overlap_graph_edge_count = Column(Integer, nullable=False, default=0)
 
 
+class ScanOrchestrationRun(Base):
+    __tablename__ = "scan_orchestration_run"
+    __table_args__ = (
+        UniqueConstraint("scan_id", name="uq_scan_orchestration_scan"),
+        CheckConstraint(
+            "mode IN ('legacy_primary', 'group_first_primary')",
+            name="ck_scan_orchestration_mode",
+        ),
+        CheckConstraint(
+            "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
+            name="ck_scan_orchestration_status",
+        ),
+        CheckConstraint(
+            "primary_identity_pipeline IN ('LEGACY_PAIR_G1', 'GROUP_FIRST_GF1_GF6')",
+            name="ck_scan_orchestration_primary_pipeline",
+        ),
+        CheckConstraint(
+            "visible_projection_contract = 'G2_V1'",
+            name="ck_scan_orchestration_visible_v1",
+        ),
+        Index("ix_scan_orchestration_scan_status", "scan_id", "status"),
+        Index("ix_scan_orchestration_mode_status", "mode", "status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    mode = Column(String(40), nullable=False, index=True)
+    policy_version = Column(String(100), nullable=False)
+    policy_fingerprint = Column(String(64), nullable=False)
+    plan_fingerprint = Column(String(64), nullable=False)
+    primary_identity_pipeline = Column(String(40), nullable=False)
+    visible_projection_contract = Column(String(20), nullable=False)
+    compatibility_projection_required = Column(Boolean, nullable=False)
+    status = Column(String(20), nullable=False, default="RUNNING", index=True)
+    started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    primary_identity_ready = Column(Boolean)
+    compatibility_projection_ready = Column(Boolean)
+    visible_product_ready = Column(Boolean)
+    shadow_diagnostics_ready = Column(Boolean)
+    safe_failure_category = Column(String(80))
+
+
+class ScanOrchestrationStageResultRow(Base):
+    __tablename__ = "scan_orchestration_stage_result"
+    __table_args__ = (
+        UniqueConstraint(
+            "orchestration_run_id", "stage_id",
+            name="uq_scan_orchestration_stage",
+        ),
+        UniqueConstraint(
+            "orchestration_run_id", "execution_order",
+            name="uq_scan_orchestration_stage_order",
+        ),
+        CheckConstraint(
+            "stage_id IN ('CANONICAL_CATALOG', 'DISCOVERY', 'SIGNED_EVIDENCE', "
+            "'GROUP_RESOLUTION', 'G2_V2_PROJECTION', 'LEGACY_PAIR_COMPATIBILITY', "
+            "'G1_COMPATIBILITY_PROJECTION', 'G2_V1_COMPATIBILITY_PROJECTION', "
+            "'SHADOW_COMPARISON')",
+            name="ck_scan_orchestration_stage_id",
+        ),
+        CheckConstraint(
+            "stage_authority IN ('PRIMARY_REQUIRED', 'COMPATIBILITY_REQUIRED', "
+            "'OPTIONAL_DIAGNOSTIC', 'NOT_APPLICABLE')",
+            name="ck_scan_orchestration_stage_authority",
+        ),
+        CheckConstraint(
+            "status IN ('SUCCEEDED', 'FAILED', 'SKIPPED', 'NOT_APPLICABLE')",
+            name="ck_scan_orchestration_stage_status",
+        ),
+        CheckConstraint("execution_order >= 0", name="ck_scan_orchestration_order"),
+        Index("ix_scan_orchestration_stage_run_status", "orchestration_run_id", "status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    orchestration_run_id = Column(
+        Integer, ForeignKey("scan_orchestration_run.id"), nullable=False, index=True
+    )
+    stage_id = Column(String(50), nullable=False, index=True)
+    stage_authority = Column(String(40), nullable=False)
+    execution_order = Column(Integer, nullable=False)
+    status = Column(String(30), nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=False)
+    safe_failure_category = Column(String(80))
+    source_run_reference = Column(String(200))
+    diagnostic_summary = Column(String(500))
+
+
 class ShadowComparisonCaseRow(Base):
     __tablename__ = "shadow_comparison_case"
     __table_args__ = (
@@ -1511,3 +1600,32 @@ for _shadow_comparison_snapshot_model in (
         "before_delete",
         _reject_shadow_comparison_snapshot_mutation,
     )
+
+
+def _reject_terminal_orchestration_run_update(_mapper, _connection, target):
+    history = sa_inspect(target).attrs.status.history
+    prior_status = history.deleted[0] if history.deleted else target.status
+    if prior_status in {"COMPLETED", "FAILED"}:
+        raise ValueError("terminal scan orchestration runs are immutable")
+
+
+def _reject_orchestration_history_mutation(_mapper, _connection, _target):
+    raise ValueError("scan orchestration stage history is immutable")
+
+
+event.listen(
+    ScanOrchestrationRun, "before_update", _reject_terminal_orchestration_run_update
+)
+event.listen(
+    ScanOrchestrationRun, "before_delete", _reject_orchestration_history_mutation
+)
+event.listen(
+    ScanOrchestrationStageResultRow,
+    "before_update",
+    _reject_orchestration_history_mutation,
+)
+event.listen(
+    ScanOrchestrationStageResultRow,
+    "before_delete",
+    _reject_orchestration_history_mutation,
+)

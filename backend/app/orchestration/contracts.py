@@ -50,6 +50,19 @@ class OrchestrationFailureCategory(str, Enum):
     MULTIPLE_REQUIRED_STAGE_FAILURES = "MULTIPLE_REQUIRED_STAGE_FAILURES"
 
 
+class OrchestrationRunStatus(str, Enum):
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class ScanStageExecutionStatus(str, Enum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
 @dataclass(frozen=True)
 class ScanOrchestrationPolicy:
     mode: ScanOrchestrationMode
@@ -89,6 +102,7 @@ class ScanStageResult:
     stage: ScanStage
     succeeded: bool
     safe_failure_category: str | None = None
+    skipped: bool = False
 
 
 @dataclass(frozen=True)

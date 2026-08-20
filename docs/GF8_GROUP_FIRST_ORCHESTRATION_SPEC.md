@@ -6,11 +6,12 @@ GF-8 remains one phase in the frozen GF-0 through GF-12 roadmap:
 
 - GF-8A defines pure orchestration mode, stage-authority, readiness, failure,
   compatibility, and explicit-selection contracts.
-- GF-8B may later wire controlled group-first-primary execution into normal
-  scans.
+- GF-8B wires controlled group-first-primary execution and immutable per-scan
+  audit into normal scans without changing current product readers.
 
-GF-8A changes no scan execution, persistence, current-result selection, API,
-UI, export, review, advisory, pair write, provider, or source-data behavior.
+GF-8B changes runtime authority only when explicitly configured. It changes no
+current-result selection, API, UI, export, review, advisory, pair semantics,
+provider, or source-data behavior.
 
 ## Transitional authority model
 
@@ -146,3 +147,77 @@ default-legacy configuration field. It adds no schema, migration, execution,
 current-selection, API, frontend, export, review, advisory, pair deprecation,
 provider, or secret behavior. GF-8B owns controlled execution. GF-9 owns reader
 and visible-projection inversion, and GF-10 owns pair-write deprecation.
+
+## GF-8B runtime wiring
+
+At scan start, the runner resolves `IDENTITY_ORCHESTRATION_MODE`, builds the
+frozen GF-8A policy and deterministic plan, establishes a durable RUNNING audit
+row, and executes the existing narrow services in plan order. Each committed
+stage produces one immutable categorical stage result. Terminal readiness is
+derived by `evaluate_scan_orchestration_outcome`; the runner does not duplicate
+the stage-authority matrix.
+
+The exact `legacy_primary` order is:
+
+```text
+GF-1 catalog -> GF-2/GF-3 discovery -> GF-4 evidence
+-> failure-isolated GF-5C -> failure-isolated GF-6B
+-> legacy pair persistence -> G1 -> current G2-v1
+-> optional GF-7B -> visible completion
+```
+
+The exact `group_first_primary` order is:
+
+```text
+GF-1 catalog -> GF-2/GF-3 discovery -> GF-4 evidence
+-> required GF-5C -> required GF-6B
+-> required legacy pair compatibility -> required G1 compatibility
+-> required current G2-v1 compatibility -> optional GF-7B
+-> visible completion
+```
+
+GF-1, discovery, evidence, GF-5C, and GF-6B retain their existing committed
+immutable checkpoints. Compatibility pair/G1/G2-v1 work retains its current
+atomic transaction. Consequently, a compatibility rollback does not erase a
+completed resolution or v2 projection. The orchestration audit commits RUNNING
+before business stages, checkpoints at most once per stage, and commits its
+terminal outcome separately. Failure to establish or persist the audit fails
+the scan closed.
+
+## Durable audit contract
+
+`scan_orchestration_run` has one unique row per scan and records mode, policy
+version and fingerprint, plan fingerprint, primary pipeline, visible contract,
+compatibility requirement, RUNNING/COMPLETED/FAILED lifecycle, timestamps,
+four separate readiness flags, and a bounded categorical failure.
+
+`scan_orchestration_stage_result` has one unique row per stage and execution
+order within the run. It records the frozen stage identifier and authority,
+SUCCEEDED/FAILED/SKIPPED/NOT_APPLICABLE status, timestamps, bounded safe
+failure/diagnostic text, and a nullable stable source-run reference. References
+are validated against the same scan for discovery, evidence, resolution, v2,
+v1, and shadow runs. Pair work has no invented run identity.
+
+Terminal runs and every stage row are immutable. Re-establishing the same plan
+for the same scan reuses the existing run; a different plan is rejected.
+Historical scans have no row, are not backfilled, and are never reinterpreted
+from the current configuration. Process-crash resume is not claimed in GF-8B.
+
+## Failure and visibility behavior
+
+In group-first-primary mode, GF-5C or GF-6B failure leaves primary readiness
+false, skips later compatibility work, fails the scan, and cannot be rescued by
+G2-v1. After primary success, compatibility failure leaves primary readiness
+true and its artifacts immutable, but compatibility and visible readiness are
+false before GF-9. Skipped downstream work is not mislabeled as an independent
+required-stage failure.
+
+Shadow failure makes only shadow diagnostic readiness false. Shadow-disabled
+plans record the stage as not applicable. Neither case changes primary,
+compatibility, or visible readiness.
+
+For both modes, `visible_projection_contract` remains `G2_V1`; G2-v2 has no
+current flag. Current/latest selection, `snapshot_available`, G3 queries, G5
+exports, G6 review, and G7 advisory eligibility remain v1-backed. GF-7
+agreement metrics and safety deltas are never read for mode selection. Only the
+explicit configured mode can select authority.

@@ -1,6 +1,7 @@
 import json
 import re
 from collections import Counter
+from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -51,6 +52,22 @@ from app.services.identity_group_query_service import IdentityGroupQueryService
 from app.services.shadow_comparison_service import (
     build_and_persist_shadow_comparison,
 )
+from app.orchestration.contracts import (
+    ScanOrchestrationMode,
+    ScanStage,
+    ScanStageExecutionStatus,
+)
+from app.orchestration.planning import (
+    build_scan_orchestration_plan,
+    scan_orchestration_policy,
+)
+from app.services.scan_orchestration_service import (
+    complete_scan_orchestration,
+    fail_scan_orchestration_audit,
+    record_scan_stage_result,
+    source_run_reference,
+    start_scan_orchestration,
+)
 
 
 class ScanRunner:
@@ -82,6 +99,19 @@ class ScanRunner:
 
     def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
         scan_mode = normalize_scan_mode(scan_mode)
+        policy = scan_orchestration_policy(
+            getattr(
+                self.configuration,
+                "identity_orchestration_mode",
+                ScanOrchestrationMode.LEGACY_PRIMARY.value,
+            ),
+            shadow_comparison_enabled=bool(getattr(
+                self.configuration,
+                "group_first_shadow_comparison_enabled",
+                False,
+            )),
+        )
+        plan = build_scan_orchestration_plan(policy)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
@@ -89,7 +119,50 @@ class ScanRunner:
         scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode)
         discovery_run_id = None
         evidence_run_id = None
+        orchestration_run_id = None
+        current_stage = None
+        current_stage_started_at = None
+
+        def begin_stage(stage):
+            nonlocal current_stage, current_stage_started_at
+            current_stage = stage
+            current_stage_started_at = datetime.now(timezone.utc)
+
+        def record_stage(
+            stage,
+            status,
+            *,
+            safe_failure_category=None,
+            source_reference=None,
+            diagnostic_summary=None,
+        ):
+            nonlocal current_stage, current_stage_started_at
+            row = record_scan_stage_result(
+                self.db,
+                orchestration_run_id=orchestration_run_id,
+                plan=plan,
+                stage=stage,
+                status=status,
+                started_at=(
+                    current_stage_started_at if current_stage == stage else None
+                ),
+                safe_failure_category=safe_failure_category,
+                source_reference=source_reference,
+                diagnostic_summary=diagnostic_summary,
+            )
+            if current_stage == stage:
+                current_stage = None
+                current_stage_started_at = None
+            return row
+
         try:
+            orchestration = start_scan_orchestration(
+                self.db, scan_id=scan.id, plan=plan
+            )
+            orchestration_run_id = orchestration.orchestration_run_id
+            if orchestration.status != "RUNNING":
+                raise ValueError("scan orchestration execution is already terminal")
+            begin_stage(ScanStage.CANONICAL_CATALOG)
             for warning in validation["warnings"]:
                 self.warnings.save(scan.id, warning)
 
@@ -106,6 +179,11 @@ class ScanRunner:
             # The catalog is a completed prerequisite stage. Candidate discovery
             # never begins against a partial or merely in-memory record set.
             self.db.commit()
+            record_stage(
+                ScanStage.CANONICAL_CATALOG,
+                ScanStageExecutionStatus.SUCCEEDED,
+            )
+            begin_stage(ScanStage.DISCOVERY)
             discovery_run = start_discovery_run(
                 self.db,
                 scan_id=scan.id,
@@ -247,6 +325,14 @@ class ScanRunner:
             # GF-1 and completed GF-2/GF-3 survive a later required evidence
             # failure. Legacy candidate business writes have not occurred yet.
             self.db.commit()
+            record_stage(
+                ScanStage.DISCOVERY,
+                ScanStageExecutionStatus.SUCCEEDED,
+                source_reference=source_run_reference(
+                    "identity_discovery_run", discovery_run_id
+                ),
+            )
+            begin_stage(ScanStage.SIGNED_EVIDENCE)
             evidence_run = start_identity_evidence_run(
                 self.db,
                 scan_id=scan.id,
@@ -260,11 +346,20 @@ class ScanRunner:
             self.db.commit()
             acquire_identity_evidence(self.db, evidence_run_id=evidence_run_id)
             self.db.commit()
+            record_stage(
+                ScanStage.SIGNED_EVIDENCE,
+                ScanStageExecutionStatus.SUCCEEDED,
+                source_reference=source_run_reference(
+                    "identity_evidence_run", evidence_run_id
+                ),
+            )
 
             # GF-5C is an internal, non-visible shadow stage. Its service commits
             # either a complete immutable result or a safe FAILED run and never
             # changes the authoritative legacy candidate/G1/G2-v1 path below.
             v2_projection = None
+            resolution = None
+            begin_stage(ScanStage.GROUP_RESOLUTION)
             try:
                 resolution = resolve_and_persist_identity_groups(
                     self.db,
@@ -273,18 +368,74 @@ class ScanRunner:
                     evidence_run_id=evidence_run_id,
                 )
                 if resolution.status == "COMPLETED":
+                    record_stage(
+                        ScanStage.GROUP_RESOLUTION,
+                        ScanStageExecutionStatus.SUCCEEDED,
+                        source_reference=source_run_reference(
+                            "identity_resolution_run", resolution.resolution_run_id
+                        ),
+                    )
+                    begin_stage(ScanStage.G2_V2_PROJECTION)
                     v2_projection = build_and_persist_g2_v2_projection(
                         self.db,
                         scan_id=scan.id,
                         resolution_run_id=resolution.resolution_run_id,
                     )
+                    if v2_projection.status == "COMPLETED":
+                        record_stage(
+                            ScanStage.G2_V2_PROJECTION,
+                            ScanStageExecutionStatus.SUCCEEDED,
+                            source_reference=source_run_reference(
+                                "g2_v2_projection_run",
+                                v2_projection.projection_run_id,
+                            ),
+                        )
+                    else:
+                        record_stage(
+                            ScanStage.G2_V2_PROJECTION,
+                            ScanStageExecutionStatus.FAILED,
+                            safe_failure_category=(
+                                v2_projection.safe_failure_category
+                                or "G2_V2_PROJECTION_FAILED"
+                            ),
+                            source_reference=source_run_reference(
+                                "g2_v2_projection_run",
+                                v2_projection.projection_run_id,
+                            ),
+                        )
+                        if policy.mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY:
+                            raise RuntimeError("required G2-v2 projection failed")
+                else:
+                    record_stage(
+                        ScanStage.GROUP_RESOLUTION,
+                        ScanStageExecutionStatus.FAILED,
+                        safe_failure_category=(
+                            resolution.safe_failure_category
+                            or "GROUP_RESOLUTION_FAILED"
+                        ),
+                        source_reference=source_run_reference(
+                            "identity_resolution_run", resolution.resolution_run_id
+                        ),
+                    )
+                    if policy.mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY:
+                        raise RuntimeError("required group resolution failed")
             except Exception:
                 # Defensive isolation for failures before GF-5C/GF-6B can
                 # create their RUNNING checkpoints. GF-4 is already committed.
                 self.db.rollback()
+                if current_stage is not None:
+                    failed_stage = current_stage
+                    record_stage(
+                        failed_stage,
+                        ScanStageExecutionStatus.FAILED,
+                        safe_failure_category=f"{failed_stage.value}_FAILED",
+                    )
+                if policy.mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY:
+                    raise
 
             # Preserve the legacy visible pair path after required independent
             # evidence is complete; GF-4 is not an authority for G1/G2 v1.
+            begin_stage(ScanStage.LEGACY_PAIR_COMPATIBILITY)
             for kind, pair, result in standard_write_plan:
                 if kind == "candidate":
                     self.candidates.save(
@@ -328,8 +479,26 @@ class ScanRunner:
             # G2 consumes the complete persisted legacy deterministic evidence set. Its
             # own transaction is atomic and fingerprint-idempotent, and the scan
             # is exposed as COMPLETED only after that snapshot is available.
+            current_stage = ScanStage.G2_V1_COMPATIBILITY_PROJECTION
             v1_projection = self.persist_initial_identity_group_projection(
                 scan, usable, selected_fields
+            )
+            record_stage(
+                ScanStage.LEGACY_PAIR_COMPATIBILITY,
+                ScanStageExecutionStatus.SUCCEEDED,
+            )
+            projection_reference = source_run_reference(
+                "identity_group_projection_run", v1_projection.projection_run_id
+            )
+            record_stage(
+                ScanStage.G1_COMPATIBILITY_PROJECTION,
+                ScanStageExecutionStatus.SUCCEEDED,
+                source_reference=projection_reference,
+            )
+            record_stage(
+                ScanStage.G2_V1_COMPATIBILITY_PROJECTION,
+                ScanStageExecutionStatus.SUCCEEDED,
+                source_reference=projection_reference,
             )
             # GF-7B is explicitly controlled and diagnostic only. It reuses the
             # ordinary current-v1 selector after G2-v1 is complete, and failures
@@ -343,20 +512,52 @@ class ScanRunner:
                 and v2_projection is not None
                 and v2_projection.status == "COMPLETED"
             ):
+                begin_stage(ScanStage.SHADOW_COMPARISON)
                 try:
                     current_v1 = IdentityGroupQueryService(self.db).resolve_run(scan.id)
                     if (
                         current_v1 is not None
                         and current_v1.id == v1_projection.projection_run_id
                     ):
-                        build_and_persist_shadow_comparison(
+                        shadow = build_and_persist_shadow_comparison(
                             self.db,
                             scan_id=scan.id,
                             v1_projection_run_id=current_v1.id,
                             v2_projection_run_id=v2_projection.projection_run_id,
                         )
+                        record_stage(
+                            ScanStage.SHADOW_COMPARISON,
+                            (
+                                ScanStageExecutionStatus.SUCCEEDED
+                                if shadow.status == "COMPLETED"
+                                else ScanStageExecutionStatus.FAILED
+                            ),
+                            safe_failure_category=shadow.safe_failure_category,
+                            source_reference=source_run_reference(
+                                "shadow_comparison_run", shadow.comparison_run_id
+                            ),
+                        )
+                    else:
+                        record_stage(
+                            ScanStage.SHADOW_COMPARISON,
+                            ScanStageExecutionStatus.SKIPPED,
+                            diagnostic_summary="current G2-v1 projection was unavailable",
+                        )
                 except Exception:
                     self.db.rollback()
+                    if current_stage == ScanStage.SHADOW_COMPARISON:
+                        record_stage(
+                            ScanStage.SHADOW_COMPARISON,
+                            ScanStageExecutionStatus.FAILED,
+                            safe_failure_category="SHADOW_COMPARISON_FAILED",
+                        )
+            orchestration = complete_scan_orchestration(
+                self.db,
+                orchestration_run_id=orchestration_run_id,
+                plan=plan,
+            )
+            if not orchestration.outcome.visible_product_ready:
+                raise RuntimeError("scan orchestration did not produce a visible result")
             warning_count = self.warnings.count_for_scan(scan.id)
             return self.scans.update_status(
                 scan,
@@ -374,5 +575,36 @@ class ScanRunner:
             if discovery_run_id is not None:
                 mark_discovery_failed(self.db, discovery_run_id, exc)
                 self.db.commit()
+            if orchestration_run_id is not None:
+                try:
+                    compatibility_stages = {
+                        ScanStage.LEGACY_PAIR_COMPATIBILITY,
+                        ScanStage.G1_COMPATIBILITY_PROJECTION,
+                        ScanStage.G2_V1_COMPATIBILITY_PROJECTION,
+                    }
+                    if current_stage in compatibility_stages:
+                        for stage in compatibility_stages:
+                            record_stage(
+                                stage,
+                                ScanStageExecutionStatus.FAILED,
+                                safe_failure_category="COMPATIBILITY_TRANSACTION_FAILED",
+                                diagnostic_summary="compatibility transaction rolled back",
+                            )
+                    elif current_stage is not None:
+                        record_stage(
+                            current_stage,
+                            ScanStageExecutionStatus.FAILED,
+                            safe_failure_category=type(exc).__name__,
+                        )
+                    complete_scan_orchestration(
+                        self.db,
+                        orchestration_run_id=orchestration_run_id,
+                        plan=plan,
+                    )
+                except Exception:
+                    self.db.rollback()
+                    fail_scan_orchestration_audit(
+                        self.db, orchestration_run_id=orchestration_run_id
+                    )
             self.scans.update_status(scan, "FAILED", total_records=len(df))
             raise

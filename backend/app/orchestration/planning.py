@@ -199,10 +199,16 @@ def evaluate_scan_orchestration_outcome(
             requirement.stage
             for requirement in plan.stage_requirements
             if requirement.classification == classification
-            and not results.get(
-                requirement.stage,
-                ScanStageResult(requirement.stage, False),
-            ).succeeded
+            and (
+                not results.get(
+                    requirement.stage,
+                    ScanStageResult(requirement.stage, False),
+                ).succeeded
+                and not results.get(
+                    requirement.stage,
+                    ScanStageResult(requirement.stage, False),
+                ).skipped
+            )
         )
         for classification in (
             StageRequirementClassification.PRIMARY_REQUIRED,
