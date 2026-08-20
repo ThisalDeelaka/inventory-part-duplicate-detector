@@ -138,7 +138,10 @@ function PairDiagnostics({ scanId, onClose }) {
     let active = true
     api.get(`/api/scans/${scanId}/candidates`)
       .then(items => active && setState({ items }))
-      .catch(error => active && setState({ error: error.message }))
+      .catch(error => active && setState({
+        error: error.message,
+        notApplicable: error.category === 'PAIR_DIAGNOSTICS_NOT_APPLICABLE',
+      }))
     return () => { active = false }
   }, [scanId])
   return <>
@@ -147,7 +150,9 @@ function PairDiagnostics({ scanId, onClose }) {
       <button type="button" className="secondary" onClick={onClose}>Return to identity groups</button>
     </section>
     <section className="panel table-wrap" aria-label="Advanced legacy pair diagnostics">
-      {state.loading ? <p>Loading pair diagnostics…</p> : state.error ? <p className="error">{state.error}</p> :
+      {state.loading ? <p>Loading pair diagnostics…</p> : state.notApplicable ?
+        <p className="empty">Legacy pair diagnostics were not generated because they are not applicable to this group-first scan.</p> :
+        state.error ? <p className="error">{state.error}</p> :
         !state.items.length ? <p className="empty">No legacy pair diagnostics.</p> : <table>
           <thead><tr><th>Diagnostic pair</th><th>Status</th><th>Explanation</th></tr></thead>
           <tbody>{state.items.map(item => <tr key={item.id}><td>{item.part_no_a} / {item.part_no_b}</td><td>{item.business_status}</td><td>{item.explanation}</td></tr>)}</tbody>

@@ -57,9 +57,10 @@ from app.orchestration.contracts import (
     ScanStage,
     ScanStageExecutionStatus,
 )
-from app.orchestration.planning import (
-    build_scan_orchestration_plan,
-    scan_orchestration_policy,
+from app.orchestration.pair_path_deprecation import (
+    build_post_gf9_orchestration_plan,
+    pair_path_write_policy,
+    post_gf9_orchestration_policy,
 )
 from app.services.scan_orchestration_service import (
     complete_scan_orchestration,
@@ -99,19 +100,25 @@ class ScanRunner:
 
     def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
         scan_mode = normalize_scan_mode(scan_mode)
-        policy = scan_orchestration_policy(
-            getattr(
-                self.configuration,
-                "identity_orchestration_mode",
-                ScanOrchestrationMode.LEGACY_PRIMARY.value,
-            ),
-            shadow_comparison_enabled=bool(getattr(
-                self.configuration,
-                "group_first_shadow_comparison_enabled",
-                False,
-            )),
+        mode = getattr(
+            self.configuration,
+            "identity_orchestration_mode",
+            ScanOrchestrationMode.LEGACY_PRIMARY.value,
         )
-        plan = build_scan_orchestration_plan(policy)
+        shadow_enabled = bool(getattr(
+            self.configuration,
+            "group_first_shadow_comparison_enabled",
+            False,
+        ))
+        policy = post_gf9_orchestration_policy(
+            mode, shadow_comparison_enabled=shadow_enabled
+        )
+        plan = build_post_gf9_orchestration_plan(policy)
+        write_policy = pair_path_write_policy(
+            mode, shadow_comparison_enabled=shadow_enabled
+        )
+        if write_policy.policy_version != plan.policy.policy_version:
+            raise ValueError("pair-path write policy differs from orchestration plan")
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
@@ -433,82 +440,76 @@ class ScanRunner:
                 if policy.mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY:
                     raise
 
-            # Preserve the legacy visible pair path after required independent
-            # evidence is complete; GF-4 is not an authority for G1/G2 v1.
-            begin_stage(ScanStage.LEGACY_PAIR_COMPATIBILITY)
-            for kind, pair, result in standard_write_plan:
-                if kind == "candidate":
-                    self.candidates.save(
-                        scan.id, pair["record_a"], pair["record_b"], result
-                    )
-                else:
-                    self.rejections.save(
-                        scan.id, pair["record_a"], pair["record_b"], result
-                    )
-            for left, right, result, retrieved in hybrid_write_plan:
-                candidate = self.candidates.save(scan.id, left, right, result)
-                self.db.flush()
-                self.db.add(CandidateDiscoveryMetadata(
-                    candidate_id=candidate.id,
-                    source="HYBRID_RETRIEVAL",
-                    signals_json=json.dumps(list(retrieved.evidence.blocking_signals), separators=(",", ":")),
-                    retrieval_sources_json=json.dumps(list(retrieved.evidence.retrieval_sources), separators=(",", ":")),
-                    retrieval_score=retrieved.retrieval_score,
-                    retrieval_priority=retrieved.retrieval_priority,
-                    retrieval_tier=retrieved.retrieval_tier.value,
-                    lexical_score=retrieved.evidence.lexical_score,
-                    vector_score=retrieved.evidence.vector_score,
-                    description_specificity_score=retrieved.evidence.description_specificity_score,
-                    generic_description_penalty=retrieved.evidence.generic_description_penalty,
-                    retrieval_conflict_signals_json=json.dumps(
-                        list(retrieved.evidence.conflict_signals), separators=(",", ":")
-                    ),
-                    reciprocal_sources_json=json.dumps(
-                        list(retrieved.evidence.reciprocal_sources), separators=(",", ":")
-                    ),
-                    uom_relationship=retrieved.evidence.uom_relationship,
-                    uom_evidence=retrieved.evidence.uom_evidence,
-                    uom_penalty=retrieved.evidence.uom_penalty,
-                    mapping_quality=retrieved.evidence.mapping_quality,
-                    retrieval_rank=retrieved.retrieval_rank,
-                    embedding_model_version=retrieval.embedding_model_version,
-                ))
-            if hybrid_run_values is not None:
-                self.db.add(HybridRetrievalRun(**hybrid_run_values))
+            v1_projection = None
+            if write_policy.write_legacy_pairs:
+                begin_stage(ScanStage.LEGACY_PAIR_COMPATIBILITY)
+                for kind, pair, result in standard_write_plan:
+                    if kind == "candidate":
+                        self.candidates.save(
+                            scan.id, pair["record_a"], pair["record_b"], result
+                        )
+                    else:
+                        self.rejections.save(
+                            scan.id, pair["record_a"], pair["record_b"], result
+                        )
+                for left, right, result, retrieved in hybrid_write_plan:
+                    candidate = self.candidates.save(scan.id, left, right, result)
+                    self.db.flush()
+                    self.db.add(CandidateDiscoveryMetadata(
+                        candidate_id=candidate.id,
+                        source="HYBRID_RETRIEVAL",
+                        signals_json=json.dumps(list(retrieved.evidence.blocking_signals), separators=(",", ":")),
+                        retrieval_sources_json=json.dumps(list(retrieved.evidence.retrieval_sources), separators=(",", ":")),
+                        retrieval_score=retrieved.retrieval_score,
+                        retrieval_priority=retrieved.retrieval_priority,
+                        retrieval_tier=retrieved.retrieval_tier.value,
+                        lexical_score=retrieved.evidence.lexical_score,
+                        vector_score=retrieved.evidence.vector_score,
+                        description_specificity_score=retrieved.evidence.description_specificity_score,
+                        generic_description_penalty=retrieved.evidence.generic_description_penalty,
+                        retrieval_conflict_signals_json=json.dumps(
+                            list(retrieved.evidence.conflict_signals), separators=(",", ":")
+                        ),
+                        reciprocal_sources_json=json.dumps(
+                            list(retrieved.evidence.reciprocal_sources), separators=(",", ":")
+                        ),
+                        uom_relationship=retrieved.evidence.uom_relationship,
+                        uom_evidence=retrieved.evidence.uom_evidence,
+                        uom_penalty=retrieved.evidence.uom_penalty,
+                        mapping_quality=retrieved.evidence.mapping_quality,
+                        retrieval_rank=retrieved.retrieval_rank,
+                        embedding_model_version=retrieval.embedding_model_version,
+                    ))
+                if hybrid_run_values is not None:
+                    self.db.add(HybridRetrievalRun(**hybrid_run_values))
 
-            # G2 consumes the complete persisted legacy deterministic evidence set. Its
-            # own transaction is atomic and fingerprint-idempotent, and the scan
-            # is exposed as COMPLETED only after that snapshot is available.
-            current_stage = ScanStage.G2_V1_COMPATIBILITY_PROJECTION
-            v1_projection = self.persist_initial_identity_group_projection(
-                scan, usable, selected_fields
-            )
-            record_stage(
-                ScanStage.LEGACY_PAIR_COMPATIBILITY,
-                ScanStageExecutionStatus.SUCCEEDED,
-            )
-            projection_reference = source_run_reference(
-                "identity_group_projection_run", v1_projection.projection_run_id
-            )
-            record_stage(
-                ScanStage.G1_COMPATIBILITY_PROJECTION,
-                ScanStageExecutionStatus.SUCCEEDED,
-                source_reference=projection_reference,
-            )
-            record_stage(
-                ScanStage.G2_V1_COMPATIBILITY_PROJECTION,
-                ScanStageExecutionStatus.SUCCEEDED,
-                source_reference=projection_reference,
-            )
+            if write_policy.write_g1_projection and write_policy.write_g2_v1_projection:
+                current_stage = ScanStage.G2_V1_COMPATIBILITY_PROJECTION
+                v1_projection = self.persist_initial_identity_group_projection(
+                    scan, usable, selected_fields
+                )
+                record_stage(
+                    ScanStage.LEGACY_PAIR_COMPATIBILITY,
+                    ScanStageExecutionStatus.SUCCEEDED,
+                )
+                projection_reference = source_run_reference(
+                    "identity_group_projection_run", v1_projection.projection_run_id
+                )
+                record_stage(
+                    ScanStage.G1_COMPATIBILITY_PROJECTION,
+                    ScanStageExecutionStatus.SUCCEEDED,
+                    source_reference=projection_reference,
+                )
+                record_stage(
+                    ScanStage.G2_V1_COMPATIBILITY_PROJECTION,
+                    ScanStageExecutionStatus.SUCCEEDED,
+                    source_reference=projection_reference,
+                )
             # GF-7B is explicitly controlled and diagnostic only. It reuses the
             # ordinary current-v1 selector after G2-v1 is complete, and failures
             # cannot alter or suppress that visible result.
             if (
-                bool(getattr(
-                    self.configuration,
-                    "group_first_shadow_comparison_enabled",
-                    False,
-                ))
+                write_policy.run_shadow_comparison
                 and v2_projection is not None
                 and v2_projection.status == "COMPLETED"
             ):
@@ -563,10 +564,10 @@ class ScanRunner:
                 scan,
                 "COMPLETED",
                 total_records=len(df),
-                total_candidates=candidates_found,
-                rejections_count=rejections_found,
+                total_candidates=(candidates_found if write_policy.write_legacy_pairs else 0),
+                rejections_count=(rejections_found if write_policy.write_legacy_pairs else 0),
                 warnings_count=warning_count,
-            ), len(pairs)
+            ), (len(pairs) if write_policy.write_legacy_pairs else 0)
         except Exception as exc:
             self.db.rollback()
             if evidence_run_id is not None:

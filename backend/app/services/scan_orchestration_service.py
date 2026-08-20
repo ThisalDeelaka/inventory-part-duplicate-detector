@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
+    DuplicateCandidate,
     G2V2ProjectionRun,
     IdentityDiscoveryRun,
     IdentityEvidenceRun,
@@ -26,7 +27,15 @@ from app.orchestration.contracts import (
     ScanStageResult,
     StageRequirementClassification,
 )
-from app.orchestration.planning import evaluate_scan_orchestration_outcome
+from app.orchestration.pair_path_deprecation import (
+    HISTORICAL_ORCHESTRATION_POLICY_VERSION,
+    POST_GF9_ORCHESTRATION_POLICY_VERSION,
+    PairDiagnosticsAvailability,
+    PairDiagnosticsState,
+    evaluate_persisted_orchestration_outcome,
+    pair_diagnostics_state,
+    pair_path_write_policy,
+)
 from app.repositories.scan_orchestration_repository import ScanOrchestrationRepository
 
 
@@ -72,6 +81,22 @@ def _bounded_summary(value: str | None) -> str | None:
 
 def source_run_reference(kind: str, run_id: int) -> str:
     return f"{kind}:{int(run_id)}"
+
+
+def pair_diagnostics_state_for_scan(db, scan_id: int) -> PairDiagnosticsState:
+    """Return persisted-policy truth, never an inference from an empty row set."""
+    run = ScanOrchestrationRepository(db).run_for_scan(scan_id)
+    count = db.query(DuplicateCandidate).filter_by(scan_id=scan_id).count()
+    if run is None or run.policy_version == HISTORICAL_ORCHESTRATION_POLICY_VERSION:
+        return PairDiagnosticsState(
+            PairDiagnosticsAvailability.GENERATED_AVAILABLE,
+            count,
+            "historical policy generated legacy pair diagnostics",
+        )
+    if run.policy_version != POST_GF9_ORCHESTRATION_POLICY_VERSION:
+        raise ValueError("unknown persisted orchestration policy")
+    return pair_diagnostics_state(pair_path_write_policy(run.mode),
+                                  generated_candidate_count=count)
 
 
 def _validate_source_reference(db, scan_id: int, stage: ScanStage, value: str | None):
@@ -282,7 +307,7 @@ def fail_scan_orchestration_audit(db, *, orchestration_run_id: int):
 
 
 def _evaluate(plan, rows):
-    return evaluate_scan_orchestration_outcome(
+    return evaluate_persisted_orchestration_outcome(
         plan,
         tuple(
             ScanStageResult(

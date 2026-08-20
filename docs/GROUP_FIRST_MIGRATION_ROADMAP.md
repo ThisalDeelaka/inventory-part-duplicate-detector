@@ -433,7 +433,7 @@ Removing pair tables or changing provider defaults.
 
 Implementation status: verified and complete through GF-9A read-authority
 contracts, GF-9B backend inversion, and GF-9C frontend/export end-to-end
-graduation. GF-10 pair-path write deprecation has not started.
+graduation. GF-10 pair-path write deprecation is verified and complete.
 
 ### Goal
 
@@ -479,9 +479,11 @@ Deleting legacy endpoints/data or adding AI UI.
 
 ## GF-10 — Pair-path write deprecation
 
-Implementation status: IN PROGRESS. GF-10A has verified the residual
-dependency inventory and frozen the post-GF-9 policy-v2 contracts. GF-10B
-runtime write deprecation has not started.
+Implementation status: VERIFIED AND COMPLETE. GF-10A verified the residual
+dependency inventory and froze the post-GF-9 policy-v2 contracts. GF-10B-PRE
+verified truthful G2-v2 audit persistence, and GF-10B runtime deprecation now
+suppresses pair/G1/G2-v1/shadow writes for explicit group-first scans while
+preserving policy-v2 legacy behavior and historical policy-v1 reads.
 
 GF-10 remains one roadmap phase with two bounded delivery units:
 

@@ -1,8 +1,4 @@
-"""Pure GF-10A contracts for post-GF-9 pair-path write deprecation.
-
-Nothing in this module is selected by the scan runner.  Policy v1 remains the
-runtime contract until GF-10B explicitly wires policy v2 for future scans.
-"""
+"""Pure contracts for post-GF-9 pair-path write deprecation."""
 
 from __future__ import annotations
 
@@ -119,10 +115,6 @@ def post_gf9_orchestration_policy(
             "invalid identity orchestration mode"
         ) from error
     group_first = mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY
-    if group_first and shadow_comparison_enabled:
-        raise OrchestrationConfigurationError(
-            "policy-v2 group-first scans cannot fabricate v1 for shadow comparison"
-        )
     return ScanOrchestrationPolicy(
         mode=mode,
         policy_version=POST_GF9_ORCHESTRATION_POLICY_VERSION,
@@ -425,7 +417,7 @@ C = PairPathDependencyClass
 # direct legacy candidate, G1, or G2-v1 dependency.  Multiple entries are used
 # where one module has distinct read and write responsibilities.
 PAIR_PATH_DEPENDENCIES = (
-    _dependency("normal-scan legacy candidate transaction", "backend/app/services/scan_runner.py", D.PAIR_WRITE, C.DEPRECATED_WRITE, False, "GF-8 compatibility writes remain runtime-only until GF-10B", "GF-4 independent evidence"),
+    _dependency("normal-scan legacy candidate transaction", "backend/app/services/scan_runner.py", D.PAIR_WRITE, C.DEPRECATED_WRITE, False, "policy-v2 permits this writer only for legacy-primary scans", "GF-4 independent evidence"),
     _dependency("normal-scan G1 compatibility projection", "backend/app/services/scan_runner.py", D.G1_WRITE, C.DEPRECATED_WRITE, False, "G1 is not product authority for group-first policy-v2", "GF-5 constrained resolver"),
     _dependency("normal-scan G2-v1 compatibility projection", "backend/app/services/scan_runner.py", D.G2_V1_WRITE, C.DEPRECATED_WRITE, False, "G2-v1 is not product authority for group-first policy-v2", "GF-6 G2-v2 projection"),
     _dependency("candidate repository persistence", "backend/app/repositories/candidate_repository.py", D.PAIR_WRITE, C.DEPRECATED_WRITE, False, "new DuplicateCandidate business writes are deprecated for group-first policy-v2", "GF-4 independent evidence"),

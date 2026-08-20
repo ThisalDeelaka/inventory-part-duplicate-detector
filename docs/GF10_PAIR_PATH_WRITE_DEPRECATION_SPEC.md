@@ -7,12 +7,11 @@ GF-10 remains one phase in the frozen GF-0 through GF-12 roadmap:
 - GF-10A defines the residual dependency inventory, post-GF-9 orchestration
   policy v2, write-deprecation policy, diagnostics availability, and historical
   policy-version interpretation.
-- GF-10B will wire policy v2 into future scans and stop legacy pair/G1/G2-v1
-  writes for `group_first_primary` only.
+- GF-10B wires policy v2 into new scans and stops legacy pair/G1/G2-v1 writes
+  for `group_first_primary` only.
 
-GF-10A is pure. It does not change `scan_runner.py`, configuration selection,
-schema, migrations, APIs, frontend, exports, G6/G7 behavior, provider behavior,
-or any persisted row. Current execution remains policy v1 until GF-10B.
+GF-10A remains the pure contract boundary. GF-10B is now verified as the
+runtime consumer of those frozen contracts.
 
 ## GF-10B prerequisite: truthful orchestration-audit persistence
 
@@ -32,10 +31,46 @@ keys, unrelated checks, types, nullability, defaults, IDs, timestamps, status,
 readiness, and failure fields remain intact. Historical policy-v1 legacy and
 group-first rows remain `G2_V1`; there is no backfill.
 
-This prerequisite proves that a future policy-v2 group-first audit can persist
-and read back `G2_V2`. It does not activate policy v2 in `scan_runner.py` and
-does not stop pair, G1, G2-v1, or shadow writes. GF-10B runtime pair-path write
-deprecation remains pending.
+This prerequisite proved policy-v2 G2-v2 persistence before runtime activation;
+the verified runtime behavior is recorded below.
+
+## GF-10B verified runtime behavior
+
+Every new scan now persists `group-first-orchestration-policy-v2` and executes
+the frozen plan together with `PairPathWritePolicy`. The default mode remains
+`legacy_primary`; neither shadow metrics nor current configuration can promote
+a scan automatically.
+
+An explicit `group_first_primary` scan executes canonical catalog, discovery,
+signed evidence, constrained resolution, and G2-v2 projection in order. The
+legacy pair, G1, G2-v1, and shadow stages are persisted as `NOT_APPLICABLE`.
+Their writers/services are not invoked, including when the legacy shadow gate
+is enabled. Primary GF-1 through GF-6 success directly makes the v2 product
+visible; GF-5/GF-6 failure remains a primary failure with no v1 rescue.
+
+GF-2 neighbor proposals, GF-4 signed `CANNOT_LINK`/`STRONG_SUPPORT`/
+`REVIEW_SUPPORT` evidence, GF-5 targeted evidence, and GF-6 evidence provenance
+remain intact. Controlled regression input avoids all candidate/rejection,
+G1/G2-v1, and shadow rows while retaining nonzero proposal/evidence rows and a
+completed resolution/G2-v2 snapshot. Equivalent legacy-mode execution retains
+candidate, v1, and gated shadow artifacts.
+
+Pair diagnostics for policy-v2 group-first scans report
+`NOT_GENERATED_NOT_APPLICABLE` with no candidate count. Candidate/rejection and
+pair-advisory exports fail with a typed not-applicable response rather than an
+empty CSV. Advanced diagnostics display that explicit absence. Historical and
+policy-v2 legacy scans retain generated-zero versus generated-nonzero semantics,
+candidate APIs, pair exports, and legacy numeric v1 routes.
+
+Authority-selected summary/list/detail and System Group, Reviewed Identity,
+Conflict, and Deferred exports operate from G2-v2 without v1. Projection-safe
+G6 review chains and constraints work without legacy artifacts; G7 complete-
+pairwise review eligibility builds its request from v2, while progressive and
+likely groups remain ineligible. Review never auto-runs GF-5/GF-6.
+
+Historical policy-v1 audits retain their persisted compatibility semantics and
+are neither backfilled nor reinterpreted. GF-10 is complete; GF-11 scale
+hardening has not started.
 
 ## Dependency-audit conclusion
 

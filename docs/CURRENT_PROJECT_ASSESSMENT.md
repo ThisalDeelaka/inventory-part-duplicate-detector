@@ -32,7 +32,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-5, including the GF-4-PRE safety correction and GF-5A/GF-5B/GF-5C subdivision, are verified. GF-6A and GF-6B are verified, so GF-6 is complete. GF-7A pure comparison contracts/metrics and GF-7B persisted controlled shadow runs are verified, so GF-7 is complete. GF-8A orchestration authority contracts and GF-8B controlled runtime integration are verified, so GF-8 is complete. GF-9A read contracts, GF-9B backend inversion, and GF-9C frontend/export graduation are verified, so GF-9 is complete. Legacy numeric group routes remain v1-only compatibility endpoints while the normal frontend, reviews, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-10 is IN PROGRESS: GF-10A policy and dependency contracts are verified, while GF-10B runtime write deprecation has not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 has not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -507,8 +507,8 @@ behavior.
 
 ## GF-10B prerequisite orchestration-audit schema migration
 
-GF-10B is in progress. Its prerequisite orchestration-audit migration is
-verified, while runtime pair-path write deprecation is not yet complete.
+The prerequisite orchestration-audit migration was verified before GF-10B
+runtime activation.
 
 - The previous non-null `visible_projection_contract = 'G2_V1'` check could not
   truthfully persist the frozen policy-v2 group-first plan.
@@ -520,9 +520,28 @@ verified, while runtime pair-path write deprecation is not yet complete.
   indexes, triggers, and unrelated checks preserved.
 - A valid policy-v2 `group_first_primary` audit with visible `G2_V2` and
   `compatibility_projection_required=false` now persists and reads back.
-- `scan_runner.py` and pair, G1, G2-v1, shadow, API, frontend, export, G6/G7,
-  provider, and secret behavior remain unchanged. GF-10B runtime activation
-  and write shutdown remain the next bounded unit.
+- At this prerequisite boundary, runtime behavior remained unchanged; the
+  subsequent verified activation is recorded below.
+
+## GF-10B runtime pair-path write deprecation
+
+GF-10B is verified and completes GF-10.
+
+- New scans persist policy v2. Explicit group-first execution completes GF-1
+  through GF-6, exposes G2-v2, and records pair/G1/G2-v1/shadow stages as
+  `NOT_APPLICABLE` without invoking their writers.
+- Independent proposals, signed and targeted evidence, resolver results, and
+  G2-v2 evidence/provenance remain present. GF-5/GF-6 failure has no v1 rescue.
+- Pair diagnostics and pair CSVs are explicitly not applicable rather than
+  generated empty output. Advanced diagnostics presents that distinction.
+- Canonical reads/exports, versioned G6 review/constraints, and G7 eligibility
+  work against v2 without pair, G1, v1, or shadow rows.
+- Policy-v2 legacy mode retains candidates, G1/G2-v1 authority, legacy routes,
+  diagnostics/exports, review/advisory behavior, and the existing shadow gate.
+- Historical policy-v1 audit rows remain immutable and version-interpreted.
+  Default orchestration remains `legacy_primary`; provider calls remain zero.
+- No schema/migration change was required beyond GF-10B-PRE, and no GF-11
+  scale-readiness claim is made.
 
 ## Reusable current capabilities
 
@@ -551,15 +570,14 @@ These are reusable transitional capabilities. Their presence does not mean that 
 
 ## Current and target pair-path status
 
-Current pair machinery remains operational for compatibility. Policy-v2
-deprecation behavior is frozen but not wired, so the current runner still
-writes the complete GF-8 pair/G1/G2-v1 compatibility path in both modes.
+Pair machinery remains operational for historical and policy-v2 legacy
+compatibility. Explicit policy-v2 group-first scans no longer write the legacy
+pair/G1/G2-v1 path or run GF-7 shadow comparison.
 
 The approved target makes groups the business-domain center. Pair machinery will be reduced non-destructively after independent discovery, evidence, resolver, G2 adapter, and shadow-graduation prerequisites exist. Historical pair data remains readable.
 
 ## Next phase boundary
 
-GF-0 through GF-9 are verified and complete. GF-10 is IN PROGRESS: GF-10A is
-verified and GF-10B Runtime Pair-Path Write Deprecation is the next bounded
-unit. No runtime pair-write shutdown, GF-11 scale-hardening claim, or GF-12
-production graduation work is included here.
+GF-0 through GF-10 are verified and complete. GF-11 100k Scale Hardening is the
+next bounded phase and has not started. No GF-11 scale-readiness or GF-12
+production-graduation claim is included here.

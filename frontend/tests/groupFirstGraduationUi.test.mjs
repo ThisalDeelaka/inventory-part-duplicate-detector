@@ -103,6 +103,8 @@ test('F14 pair diagnostics are demoted under Advanced and have no review control
   assert.match(page, /Advanced legacy pair diagnostics/)
   assert.match(page, /It is not the business result, review unit, or export unit/)
   assert.doesNotMatch(page, /postJson\(`\/api\/candidates|CandidateLlmTools/)
+  assert.match(page, /not generated because they are not applicable to this group-first scan/)
+  assert.match(client, /error\.category = category/)
 })
 
 test('F15 product export controls use only canonical authority-selected endpoints', () => {

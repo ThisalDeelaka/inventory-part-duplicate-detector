@@ -308,7 +308,7 @@ def test_gf9_product_g6_g7_v2_paths_do_not_require_pair_g1_or_v1():
     assert "IDENTITY_ORCHESTRATION_MODE" not in read_source
 
 
-def test_gf10a_contract_is_pure_and_scan_runner_is_not_wired_to_policy_v2():
+def test_gf10b_runner_consumes_frozen_policy_and_write_guards():
     from app.orchestration import pair_path_deprecation
     from app.services import scan_runner
 
@@ -317,6 +317,10 @@ def test_gf10a_contract_is_pure_and_scan_runner_is_not_wired_to_policy_v2():
     assert not any(token in contract_source for token in (
         "sqlalchemy", "Session", "app.db", "create_llm_provider", ".env"
     ))
-    assert "pair_path_deprecation" not in runner_source
-    assert "scan_orchestration_policy(" in runner_source
-    assert "project_and_persist_identity_groups(" in runner_source
+    assert "pair_path_deprecation" in runner_source
+    assert "post_gf9_orchestration_policy(" in runner_source
+    assert "build_post_gf9_orchestration_plan(" in runner_source
+    assert "pair_path_write_policy(" in runner_source
+    assert "if write_policy.write_legacy_pairs:" in runner_source
+    assert "if write_policy.write_g1_projection and write_policy.write_g2_v1_projection:" in runner_source
+    assert "write_policy.run_shadow_comparison" in runner_source

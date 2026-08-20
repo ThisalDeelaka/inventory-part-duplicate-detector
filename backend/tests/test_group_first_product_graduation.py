@@ -73,7 +73,7 @@ def test_e7_historical_v1_nonaffirmative_review_exports_no_operational_set(
 def test_e2_e3_group_first_system_export_uses_v2_not_compatibility_v1(db, client):
     scan = review_scan(db)
     snapshot, group = authoritative_group(db, scan)
-    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 1
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
     exported = rows(client.get(
         f"/api/scans/{scan.id}/identity-read/system-groups/export.csv"
     ))
@@ -130,21 +130,7 @@ def test_e5_e6_conflict_and_deferred_are_separate_typed_exports(
 def test_e8_e9_v2_reviewed_export_uses_only_exact_v2_review_chain(db, client):
     scan = review_scan(db)
     snapshot, group = authoritative_group(db, scan)
-    legacy_run = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
-    legacy_group = db.query(IdentityGroupSnapshot).filter_by(
-        projection_run_id=legacy_run.id
-    ).one()
-    legacy = IdentityGroupReviewService(db)
-    legacy_members = legacy.group_members(
-        scan.id, legacy_run.id, legacy_group.id, legacy_group.hypothesis_key
-    )
-    legacy.create_review(
-        scan_id=scan.id, projection_run_id=legacy_run.id,
-        group_snapshot_id=legacy_group.id,
-        group_hypothesis_key=legacy_group.hypothesis_key,
-        decision_type=GroupReviewDecision.CONFIRM_ALL_AS_ONE,
-        reviewer="legacy", submitted_members=legacy_members,
-    )
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
     assert rows(client.get(
         f"/api/scans/{scan.id}/identity-read/reviewed-identities/export.csv"
     )) == []
@@ -162,24 +148,10 @@ def test_e8_e9_v2_reviewed_export_uses_only_exact_v2_review_chain(db, client):
     assert {row["reviewer"] for row in exported} == {"v2"}
 
 
-def test_group_list_review_state_cannot_leak_from_v1_to_v2(db, client):
+def test_group_list_review_state_is_v2_scoped_without_v1(db, client):
     scan = review_scan(db)
     _, group = authoritative_group(db, scan)
-    legacy_run = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
-    legacy_group = db.query(IdentityGroupSnapshot).filter_by(
-        projection_run_id=legacy_run.id
-    ).one()
-    legacy = IdentityGroupReviewService(db)
-    legacy_refs = legacy.group_members(
-        scan.id, legacy_run.id, legacy_group.id, legacy_group.hypothesis_key
-    )
-    legacy.create_review(
-        scan_id=scan.id, projection_run_id=legacy_run.id,
-        group_snapshot_id=legacy_group.id,
-        group_hypothesis_key=legacy_group.hypothesis_key,
-        decision_type=GroupReviewDecision.CONFIRM_ALL_AS_ONE,
-        reviewer="legacy", submitted_members=legacy_refs,
-    )
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
     before = client.get(f"/api/scans/{scan.id}/identity-read/groups").json()
     assert before["items"][0]["review_state"]["reviewed"] is False
     refs = tuple(member.stable_record_reference for member in group.members)

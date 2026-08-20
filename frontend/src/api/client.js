@@ -19,9 +19,16 @@ async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, options)
   if (!response.ok) {
     let message = `Request failed (${response.status})`
-    try { const body = await response.json(); message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail || body) } catch {}
+    let category = null
+    try {
+      const body = await response.json()
+      const detail = body.detail || body
+      message = typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail))
+      category = typeof detail === 'object' ? detail.category : null
+    } catch {}
     const error = new Error(message)
     error.status = response.status
+    error.category = category
     throw error
   }
   return response

@@ -33,7 +33,7 @@ from app.services.group_llm_eligibility import (
     group_candidate_is_llm_eligible,
 )
 from app.services.identity_group_export_service import identity_groups_to_csv
-from app.services.identity_group_query_service import InvalidSnapshotSelectionError
+from app.services.identity_group_query_service import SnapshotNotFoundError
 from app.services.identity_group_review_service import (
     GroupReviewDecision,
     IdentityGroupReviewService,
@@ -87,11 +87,11 @@ def test_b2_legacy_primary_reads_v1(db):
     assert snapshot.projection_contract == IdentityReadProjectionContract.G2_V1
 
 
-def test_b3_group_first_with_both_projections_reads_only_v2(db, client):
+def test_b3_group_first_without_v1_reads_only_v2(db, client):
     scan = review_scan(db)
     snapshot, group = authoritative_group(db, scan)
-    v1 = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
     v2 = db.query(G2V2ProjectionRun).filter_by(scan_id=scan.id).one()
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
     assert snapshot.projection_contract == IdentityReadProjectionContract.G2_V2
     assert snapshot.source_projection_run_id == v2.id
     response = client.get(f"/api/scans/{scan.id}/identity-read/groups")
@@ -112,7 +112,7 @@ def test_b4_group_first_missing_v2_never_falls_back_to_existing_v1(db, client):
     response = client.get(f"/api/scans/{scan.id}/identity-read/summary")
     assert response.status_code == 409
     assert "G2_V2_PROJECTION_MISSING" in response.json()["detail"]
-    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 1
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
 
 
 def test_b5_no_current_configuration_can_reinterpret_persisted_mode(db):
@@ -253,24 +253,10 @@ def test_g7_complete_v2_review_group_is_eligible_then_exact_v2_review_blocks(db)
     assert blocked.reason_code == GroupLlmEligibilityReason.INELIGIBLE_HUMAN_REVIEW_EXISTS
 
 
-def test_g7_legacy_v1_review_does_not_block_authoritative_v2_target(db):
+def test_g7_authoritative_v2_target_needs_no_legacy_review_state(db):
     scan = review_scan(db)
     snapshot, group = authoritative_group(db, scan)
-    v1_run = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
-    v1_group = db.query(IdentityGroupSnapshot).filter_by(
-        projection_run_id=v1_run.id
-    ).one()
-    legacy = IdentityGroupReviewService(db)
-    members = legacy.group_members(
-        scan.id, v1_run.id, v1_group.id, v1_group.hypothesis_key
-    )
-    legacy.create_review(
-        scan_id=scan.id, projection_run_id=v1_run.id,
-        group_snapshot_id=v1_group.id,
-        group_hypothesis_key=v1_group.hypothesis_key,
-        decision_type=GroupReviewDecision.UNSURE,
-        reviewer="legacy reviewer", submitted_members=members,
-    )
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
     key = serialize_versioned_identity_group_key(group.versioned_group_key)
     result = GroupAdvisoryContractService(db).eligibility_for_versioned_group(
         scan.id, key
@@ -318,17 +304,16 @@ def test_g7_projection_identity_changes_request_fingerprint(db):
     assert group_advisory_request_fingerprint(request) != group_advisory_request_fingerprint(v1_request)
 
 
-def test_group_first_system_export_is_blocked_while_legacy_export_is_unchanged(db):
+def test_group_first_legacy_system_export_has_no_v1_snapshot(db):
     scan = review_scan(db)
-    with pytest.raises(InvalidSnapshotSelectionError, match="pending GF-9C"):
+    with pytest.raises(SnapshotNotFoundError, match="No completed identity projection"):
         identity_groups_to_csv(db, scan.id)
 
 
-def test_group_first_system_export_route_maps_pending_migration_to_conflict(db, client):
+def test_group_first_legacy_system_export_route_returns_no_v1(db, client):
     scan = review_scan(db)
     response = client.get(f"/api/scans/{scan.id}/identity-groups/export.csv")
-    assert response.status_code == 409
-    assert "pending GF-9C" in response.json()["detail"]
+    assert response.status_code == 404
 
 
 def test_authoritative_list_query_shapes_are_bounded(db):

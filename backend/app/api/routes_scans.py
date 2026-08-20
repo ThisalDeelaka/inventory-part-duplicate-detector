@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.core.config import Settings
-from app.db.models import CandidateDiscoveryMetadata, DuplicateCandidate, LlmAdvisorySnapshot, LlmEnhancementRun, utcnow
+from app.db.models import (
+    CandidateDiscoveryMetadata,
+    DuplicateCandidate,
+    DuplicateScan,
+    LlmAdvisorySnapshot,
+    LlmEnhancementRun,
+    ScanOrchestrationRun,
+    utcnow,
+)
 from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
@@ -31,11 +39,38 @@ from app.services.llm_triage_service import (
 from app.services.llm_enhancement_service import discovery_values, enhancement_metrics
 from app.services.recall_rescue_service import prepare_recall_rescue
 from app.services.hybrid_retrieval_metrics import hybrid_retrieval_metrics
+from app.services.scan_orchestration_service import pair_diagnostics_state_for_scan
+from app.orchestration.pair_path_deprecation import (
+    POST_GF9_ORCHESTRATION_POLICY_VERSION,
+    PairDiagnosticsAvailability,
+    pair_path_write_policy,
+)
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
+
+
+def _require_pair_diagnostics(db: Session, scan_id: int):
+    selected = db.query(DuplicateScan, ScanOrchestrationRun).outerjoin(
+        ScanOrchestrationRun, ScanOrchestrationRun.scan_id == DuplicateScan.id
+    ).filter(DuplicateScan.id == scan_id).one_or_none()
+    if selected is None:
+        raise HTTPException(404, "Scan not found")
+    scan, run = selected
+    unavailable = (
+        run is not None
+        and run.policy_version == POST_GF9_ORCHESTRATION_POLICY_VERSION
+        and not pair_path_write_policy(run.mode).pair_diagnostics_available_for_new_scan
+    )
+    if unavailable:
+        raise HTTPException(409, {
+            "category": "PAIR_DIAGNOSTICS_NOT_APPLICABLE",
+            "availability": PairDiagnosticsAvailability.NOT_GENERATED_NOT_APPLICABLE.value,
+            "message": "legacy pair diagnostics were not generated for this policy-v2 scan",
+        })
+    return scan
 
 
 def _json_attr(obj, name, default):
@@ -120,7 +155,7 @@ def scan_detail(scan_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{scan_id}/candidates")
 def candidates(scan_id: int, db: Session = Depends(get_db)):
-    if not get_scan(db, scan_id): raise HTTPException(404, "Scan not found")
+    _require_pair_diagnostics(db, scan_id)
     records = get_scan_candidates(db, scan_id)
     candidate_ids = [candidate.id for candidate in records]
     snapshots = db.query(LlmAdvisorySnapshot).filter(
@@ -141,7 +176,7 @@ def candidates(scan_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{scan_id}/groups")
 def duplicate_groups(scan_id: int, db: Session = Depends(get_db)):
-    if not get_scan(db, scan_id): raise HTTPException(404, "Scan not found")
+    _require_pair_diagnostics(db, scan_id)
     return build_duplicate_groups(get_scan_candidates(db, scan_id))
 
 
@@ -153,7 +188,7 @@ def warnings(scan_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{scan_id}/rejections")
 def rejections(scan_id: int, db: Session = Depends(get_db)):
-    if not get_scan(db, scan_id): raise HTTPException(404, "Scan not found")
+    _require_pair_diagnostics(db, scan_id)
     return [{
         "id": item.id,
         "scan_id": item.scan_id,
@@ -197,8 +232,11 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
     try:
         scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode), configuration=configuration)
+        pair_diagnostics = pair_diagnostics_state_for_scan(db, scan.id)
         try:
-            if configuration.hybrid_retrieval_enabled:
+            if pair_diagnostics.availability == PairDiagnosticsAvailability.NOT_GENERATED_NOT_APPLICABLE:
+                pass
+            elif configuration.hybrid_retrieval_enabled:
                 if db.query(LlmEnhancementRun).filter_by(scan_id=scan.id).first() is None:
                     db.add(LlmEnhancementRun(
                         scan_id=scan.id,
@@ -212,19 +250,20 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
             if db.query(LlmEnhancementRun).filter_by(scan_id=scan.id).first() is None:
                 db.add(LlmEnhancementRun(scan_id=scan.id, rescue_failed_count=1))
                 db.commit()
-        try:
-            schedule_automatic_triage(
-                db, background_tasks, scan.id, configuration, triage_scheduler
-            )
-        except Exception:
-            db.rollback()
-            run = get_triage_run(db, scan.id)
-            if run is not None:
-                run.state = "FAILED"
-                run.last_safe_error_category = "scheduling_failure"
-                run.completed_at = utcnow()
-                run.updated_at = utcnow()
-                db.commit()
+        if pair_diagnostics.availability == PairDiagnosticsAvailability.GENERATED_AVAILABLE:
+            try:
+                schedule_automatic_triage(
+                    db, background_tasks, scan.id, configuration, triage_scheduler
+                )
+            except Exception:
+                db.rollback()
+                run = get_triage_run(db, scan.id)
+                if run is not None:
+                    run.state = "FAILED"
+                    run.last_safe_error_category = "scheduling_failure"
+                    run.completed_at = utcnow()
+                    run.updated_at = utcnow()
+                    db.commit()
         privacy = security_transparency(file_hash=metadata["file_sha256"], sensitive_mode=sensitive_mode)
         privacy["file_size_bytes"] = metadata["file_size_bytes"]
         return scan_json(scan, privacy=privacy, retrieval=hybrid_retrieval_metrics(db, scan.id))
@@ -234,15 +273,13 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
 
 @router.get("/{scan_id}/export")
 def export(scan_id: int, db: Session = Depends(get_db)):
-    scan = get_scan(db, scan_id)
-    if not scan: raise HTTPException(404, "Scan not found")
+    scan = _require_pair_diagnostics(db, scan_id)
     return Response(candidates_to_csv(get_scan_candidates(db, scan_id)), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-candidates.csv"'})
 
 
 @router.get("/{scan_id}/rejections/export")
 def export_rejections(scan_id: int, db: Session = Depends(get_db)):
-    scan = get_scan(db, scan_id)
-    if not scan: raise HTTPException(404, "Scan not found")
+    scan = _require_pair_diagnostics(db, scan_id)
     return Response(
         rejections_to_csv(get_scan_rejections(db, scan_id)),
         media_type="text/csv",
@@ -252,9 +289,7 @@ def export_rejections(scan_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{scan_id}/export-with-llm")
 def export_with_llm(scan_id: int, db: Session = Depends(get_db)):
-    scan = get_scan(db, scan_id)
-    if not scan:
-        raise HTTPException(404, "Scan not found")
+    scan = _require_pair_diagnostics(db, scan_id)
     candidates = get_scan_candidates(db, scan_id)
     candidate_ids = [candidate.id for candidate in candidates]
     snapshots = []
@@ -294,9 +329,7 @@ def export_with_llm(scan_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{scan_id}/rejections/export-with-llm")
 def export_rejections_with_llm(scan_id: int, db: Session = Depends(get_db)):
-    scan = get_scan(db, scan_id)
-    if not scan:
-        raise HTTPException(404, "Scan not found")
+    scan = _require_pair_diagnostics(db, scan_id)
     return Response(
         rejections_with_llm_to_csv(get_scan_rejections(db, scan_id)),
         media_type="text/csv",
@@ -329,8 +362,7 @@ def start_llm_triage(
     configuration: Settings = Depends(get_llm_settings),
     triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler),
 ):
-    if not get_scan(db, scan_id):
-        raise HTTPException(404, "Scan not found")
+    _require_pair_diagnostics(db, scan_id)
     _require_triage_ready(configuration)
     run, should_schedule = prepare_triage_run(
         db,
@@ -375,8 +407,7 @@ def retry_failed_llm_triage(
     configuration: Settings = Depends(get_llm_settings),
     triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler),
 ):
-    if not get_scan(db, scan_id):
-        raise HTTPException(404, "Scan not found")
+    _require_pair_diagnostics(db, scan_id)
     _require_triage_ready(configuration)
     run, should_schedule = prepare_triage_run(
         db,

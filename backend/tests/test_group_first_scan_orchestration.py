@@ -12,12 +12,12 @@ from app.db.models import (
     G2V2ProjectionRun,
     IdentityGroupMemberSnapshot,
     IdentityGroupProjectionRun,
-    IdentityGroupSnapshot,
     IdentityResolutionGroupMember,
     IdentityResolutionRun,
     ScanOrchestrationRun,
     ScanOrchestrationStageResultRow,
     ShadowComparisonCaseRecordRow,
+    ShadowComparisonRun,
 )
 from app.orchestration.contracts import (
     OrchestrationFailureCategory,
@@ -26,18 +26,14 @@ from app.orchestration.contracts import (
     ScanStageExecutionStatus,
     StageRequirementClassification,
 )
-from app.orchestration.planning import (
-    build_scan_orchestration_plan,
-    scan_orchestration_policy,
+from app.orchestration.pair_path_deprecation import (
+    build_post_gf9_orchestration_plan,
+    post_gf9_orchestration_policy,
 )
-from app.services.group_llm_eligibility import GroupAdvisoryContractService
-from app.services.identity_group_export_service import identity_groups_to_csv
-from app.services.identity_group_query_service import (
-    IdentityGroupQueryService,
-    InvalidSnapshotSelectionError,
-)
-from app.services.identity_group_review_service import IdentityGroupReviewService
+from app.services.identity_group_query_service import IdentityGroupQueryService
 from app.services.scan_orchestration_service import start_scan_orchestration
+from app.services.g2_v2_projection_service import load_persisted_g2_v2_manifest
+from app.services.identity_read_service import IdentityReadService
 from app.services.scan_runner import ScanRunner
 from test_scan_identity_group_projection import (
     SELECTED_FIELDS,
@@ -71,7 +67,7 @@ def stages_by_id(rows):
     return {row.stage_id: row for row in rows}
 
 
-def test_group_first_success_persists_exact_plan_and_keeps_v1_current(db, monkeypatch):
+def test_group_first_success_persists_policy_v2_without_compatibility_artifacts(db, monkeypatch):
     def provider_called(*_args, **_kwargs):
         raise AssertionError("deterministic orchestration invoked a provider")
 
@@ -92,16 +88,22 @@ def test_group_first_success_persists_exact_plan_and_keeps_v1_current(db, monkey
     assert [row.stage_authority for row in stages[:5]] == [
         StageRequirementClassification.PRIMARY_REQUIRED.value
     ] * 5
-    assert [row.stage_authority for row in stages[5:8]] == [
-        StageRequirementClassification.COMPATIBILITY_REQUIRED.value
-    ] * 3
-    assert all(row.status == "SUCCEEDED" for row in stages[:8])
-    assert stages[8].status == "NOT_APPLICABLE"
-    v1 = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
+    assert [row.stage_authority for row in stages[5:]] == [
+        StageRequirementClassification.NOT_APPLICABLE.value
+    ] * 4
+    assert all(row.status == "SUCCEEDED" for row in stages[:5])
+    assert all(row.status == "NOT_APPLICABLE" for row in stages[5:])
     v2 = db.query(G2V2ProjectionRun).filter_by(scan_id=scan.id).one()
-    assert v1.status == v2.status == "COMPLETED"
+    assert v2.status == "COMPLETED"
+    assert run.policy_version == "group-first-orchestration-policy-v2"
+    assert run.visible_projection_contract == "G2_V2"
+    assert run.compatibility_projection_required is False
+    assert db.query(DuplicateCandidate).filter_by(scan_id=scan.id).count() == 0
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
     assert not hasattr(v2, "is_current")
-    assert IdentityGroupQueryService(db).resolve_run(scan.id).id == v1.id
+    assert IdentityReadService(db).load_identity_read_snapshot(
+        scan.id
+    ).projection_contract.value == "G2_V2"
 
 
 def test_legacy_success_uses_legacy_authority_and_same_visible_contract(db):
@@ -169,7 +171,7 @@ def test_group_first_gf5_failure_fails_without_legacy_rescue(db):
     assert run.visible_product_ready is False
     assert run.safe_failure_category == "PRIMARY_IDENTITY_FAILED"
     assert by_stage[ScanStage.GROUP_RESOLUTION.value].status == "FAILED"
-    assert by_stage[ScanStage.LEGACY_PAIR_COMPATIBILITY.value].status == "SKIPPED"
+    assert by_stage[ScanStage.LEGACY_PAIR_COMPATIBILITY.value].status == "NOT_APPLICABLE"
     assert db.query(DuplicateCandidate).filter_by(scan_id=scan.id).count() == 0
     assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
 
@@ -194,27 +196,25 @@ def test_group_first_gf6_failure_fails_and_retains_completed_resolution(db):
 
 
 @pytest.mark.parametrize("model", [DuplicateCandidate, IdentityGroupMemberSnapshot])
-def test_group_first_compatibility_failure_preserves_primary_and_fails_visible(db, model):
+def test_group_first_never_invokes_compatibility_writers(db, model):
     def fail(*_args):
         raise RuntimeError("forced compatibility failure")
 
     event.listen(model, "before_insert", fail)
     try:
-        with pytest.raises(RuntimeError, match="forced compatibility failure"):
-            run_scan(db)
+        scan = run_scan(db)
     finally:
         event.remove(model, "before_insert", fail)
-    scan = db.query(DuplicateScan).one()
     run, rows = audit(db, scan.id)
-    assert scan.status == run.status == "FAILED"
+    assert scan.status == run.status == "COMPLETED"
     assert run.primary_identity_ready is True
-    assert run.compatibility_projection_ready is False
-    assert run.visible_product_ready is False
-    assert run.safe_failure_category == "COMPATIBILITY_OUTPUT_FAILED"
+    assert run.compatibility_projection_ready is True
+    assert run.visible_product_ready is True
+    assert run.safe_failure_category is None
     assert db.query(IdentityResolutionRun).filter_by(scan_id=scan.id).one().status == "COMPLETED"
     assert db.query(G2V2ProjectionRun).filter_by(scan_id=scan.id).one().status == "COMPLETED"
     assert all(
-        stages_by_id(rows)[stage.value].status == "FAILED"
+        stages_by_id(rows)[stage.value].status == "NOT_APPLICABLE"
         for stage in (
             ScanStage.LEGACY_PAIR_COMPATIBILITY,
             ScanStage.G1_COMPATIBILITY_PROJECTION,
@@ -223,7 +223,7 @@ def test_group_first_compatibility_failure_preserves_primary_and_fails_visible(d
     )
 
 
-def test_group_first_shadow_failure_is_optional_and_visible_scan_completes(db):
+def test_group_first_shadow_gate_enabled_still_never_invokes_shadow(db):
     def fail(*_args):
         raise RuntimeError("forced shadow failure")
 
@@ -237,9 +237,10 @@ def test_group_first_shadow_failure_is_optional_and_visible_scan_completes(db):
     assert run.primary_identity_ready is True
     assert run.compatibility_projection_ready is True
     assert run.visible_product_ready is True
-    assert run.shadow_diagnostics_ready is False
-    assert run.safe_failure_category == "OPTIONAL_DIAGNOSTIC_FAILED"
-    assert stages_by_id(rows)[ScanStage.SHADOW_COMPARISON.value].status == "FAILED"
+    assert run.shadow_diagnostics_ready is True
+    assert run.safe_failure_category is None
+    assert stages_by_id(rows)[ScanStage.SHADOW_COMPARISON.value].status == "NOT_APPLICABLE"
+    assert db.query(ShadowComparisonRun).filter_by(scan_id=scan.id).count() == 0
 
 
 def test_group_first_shadow_disabled_is_not_applicable(db):
@@ -251,19 +252,42 @@ def test_group_first_shadow_disabled_is_not_applicable(db):
     assert shadow.status == ScanStageExecutionStatus.NOT_APPLICABLE.value
 
 
-def test_explicit_modes_do_not_change_deterministic_v1_visible_result(db):
+def test_write_deprecation_does_not_change_deterministic_v2_semantics(db):
     legacy = run_scan(db, mode="legacy_primary", name="legacy")
     group = run_scan(db, mode="group_first_primary", name="group")
     legacy_run = db.query(ScanOrchestrationRun).filter_by(scan_id=legacy.id).one()
     group_run = db.query(ScanOrchestrationRun).filter_by(scan_id=group.id).one()
-    legacy_v1 = IdentityGroupQueryService(db).summary(legacy.id)
-    group_v1 = IdentityGroupQueryService(db).summary(group.id)
+    legacy_v2 = db.query(G2V2ProjectionRun).filter_by(scan_id=legacy.id).one()
+    group_v2 = db.query(G2V2ProjectionRun).filter_by(scan_id=group.id).one()
+    legacy_manifest = load_persisted_g2_v2_manifest(db, legacy_v2.id)
+    group_manifest = load_persisted_g2_v2_manifest(db, group_v2.id)
     assert (legacy_run.mode, group_run.mode) == (
         "legacy_primary", "group_first_primary"
     )
-    assert legacy_v1["accepted_groups"] == group_v1["accepted_groups"]
-    assert legacy_v1["likely_groups"] == group_v1["likely_groups"]
-    assert legacy_v1["review_groups"] == group_v1["review_groups"]
+    assert [item.status for item in legacy_manifest.groups] == [
+        item.status for item in group_manifest.groups
+    ]
+    assert [
+        (item.member_count, item.validation_mode, item.validation_coverage)
+        for item in legacy_manifest.groups
+    ] == [
+        (item.member_count, item.validation_mode, item.validation_coverage)
+        for item in group_manifest.groups
+    ]
+    assert [
+        tuple((edge.edge_class, edge.evidence_origin, edge.required_for_validation)
+              for edge in item.internal_evidence)
+        for item in legacy_manifest.groups
+    ] == [
+        tuple((edge.edge_class, edge.evidence_origin, edge.required_for_validation)
+              for edge in item.internal_evidence)
+        for item in group_manifest.groups
+    ]
+    assert len(legacy_manifest.conflicts) == len(group_manifest.conflicts)
+    assert len(legacy_manifest.deferred_work_units) == len(
+        group_manifest.deferred_work_units
+    )
+    assert legacy_manifest.unassigned_record_count == group_manifest.unassigned_record_count
 
 
 def test_shadow_metrics_cannot_promote_or_demote_explicit_mode(db):
@@ -276,7 +300,9 @@ def test_shadow_metrics_cannot_promote_or_demote_explicit_mode(db):
 def test_start_is_idempotent_and_terminal_audit_is_immutable(db):
     scan = run_scan(db)
     run, rows = audit(db, scan.id)
-    plan = build_scan_orchestration_plan(scan_orchestration_policy("group_first_primary"))
+    plan = build_post_gf9_orchestration_plan(post_gf9_orchestration_policy(
+        "group_first_primary"
+    ))
     repeated = start_scan_orchestration(db, scan_id=scan.id, plan=plan)
     assert repeated.idempotent is True
     assert repeated.orchestration_run_id == run.id
@@ -310,20 +336,12 @@ def test_historical_scan_read_does_not_create_orchestration_audit(db):
     assert db.query(ScanOrchestrationRun).filter_by(scan_id=historical.id).count() == 0
 
 
-def test_group_first_legacy_readers_remain_v1_backed_but_system_export_is_blocked(db):
+def test_group_first_product_reader_uses_v2_without_legacy_projection(db):
     scan = run_scan(db)
-    v1 = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
-    group = db.query(IdentityGroupSnapshot).filter_by(projection_run_id=v1.id).one()
-    query = IdentityGroupQueryService(db)
-    assert query.summary(scan.id)["selected_projection"]["projection_run_id"] == v1.id
-    assert query.list_groups(scan.id)["selected_projection"]["projection_run_id"] == v1.id
-    assert query.group_detail(scan.id, group.id)["projection"]["projection_run_id"] == v1.id
-    with pytest.raises(InvalidSnapshotSelectionError, match="pending GF-9C"):
-        identity_groups_to_csv(db, scan.id)
-    assert IdentityGroupReviewService(db).group_members(
-        scan.id, v1.id, group.id, group.hypothesis_key
-    )
-    assert GroupAdvisoryContractService(db).load(scan.id, v1.id, group.id)[0].id == v1.id
+    assert db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).count() == 0
+    snapshot = IdentityReadService(db).load_identity_read_snapshot(scan.id)
+    assert snapshot.projection_contract.value == "G2_V2"
+    assert IdentityGroupQueryService(db).summary(scan.id)["snapshot_available"] is False
 
 
 def test_audit_schema_is_additive_and_writes_are_bounded_by_stage_count(db):
@@ -347,7 +365,9 @@ def test_audit_schema_is_additive_and_writes_are_bounded_by_stage_count(db):
     assert statements.count("update") == 1
     assert len(statements) < 80
     assert dataclasses.is_dataclass(
-        build_scan_orchestration_plan(scan_orchestration_policy()).policy
+        build_post_gf9_orchestration_plan(post_gf9_orchestration_policy(
+            "legacy_primary"
+        )).policy
     )
     assert run.policy_fingerprint and run.plan_fingerprint
 
@@ -363,10 +383,8 @@ def test_source_run_references_are_same_scan_and_bounded(db):
     assert references[ScanStage.SIGNED_EVIDENCE.value].startswith("identity_evidence_run:")
     assert references[ScanStage.GROUP_RESOLUTION.value].startswith("identity_resolution_run:")
     assert references[ScanStage.G2_V2_PROJECTION.value].startswith("g2_v2_projection_run:")
-    assert references[ScanStage.G2_V1_COMPATIBILITY_PROJECTION.value].startswith(
-        "identity_group_projection_run:"
-    )
-    assert references[ScanStage.SHADOW_COMPARISON.value].startswith("shadow_comparison_run:")
+    assert ScanStage.G2_V1_COMPATIBILITY_PROJECTION.value not in references
+    assert ScanStage.SHADOW_COMPARISON.value not in references
     assert all(len(value) <= 200 for value in references.values())
     assert all(row.diagnostic_summary is None or len(row.diagnostic_summary) <= 500 for row in rows)
 
