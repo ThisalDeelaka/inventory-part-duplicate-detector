@@ -1459,6 +1459,105 @@ class HumanIdentityConstraint(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class VersionedIdentityGroupReviewEvent(Base):
+    __tablename__ = "versioned_identity_group_review_event"
+    __table_args__ = (
+        CheckConstraint(
+            "projection_contract IN ('G2_V1', 'G2_V2')",
+            name="ck_versioned_group_review_projection",
+        ),
+        CheckConstraint(
+            "decision_type IN ('CONFIRM_ALL_AS_ONE', 'CONFIRM_SELECTED', "
+            "'SPLIT_PARTITIONS', 'KEEP_ALL_SEPARATE', 'UNSURE')",
+            name="ck_versioned_group_review_decision",
+        ),
+        UniqueConstraint(
+            "supersedes_review_event_id", name="uq_versioned_group_review_superseded_once"
+        ),
+        UniqueConstraint("initial_target_key", name="uq_versioned_group_review_initial_target"),
+        Index(
+            "ix_versioned_group_review_target",
+            "scan_id", "projection_contract", "group_reference",
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    projection_contract = Column(String(10), nullable=False, index=True)
+    source_projection_run_id = Column(Integer, nullable=False, index=True)
+    group_reference = Column(String(200), nullable=False)
+    versioned_group_key = Column(String(500), nullable=False, index=True)
+    source_group_fingerprint = Column(String(64), nullable=False)
+    decision_type = Column(String(40), nullable=False, index=True)
+    reviewer = Column(String(100), nullable=False)
+    comment = Column(Text)
+    supersedes_review_event_id = Column(
+        Integer, ForeignKey("versioned_identity_group_review_event.id"), index=True
+    )
+    initial_target_key = Column(String(500))
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class VersionedIdentityGroupReviewPartition(Base):
+    __tablename__ = "versioned_identity_group_review_partition"
+    __table_args__ = (
+        UniqueConstraint("review_event_id", "partition_index", name="uq_versioned_review_partition_index"),
+        CheckConstraint("partition_index >= 0", name="ck_versioned_review_partition_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    review_event_id = Column(
+        Integer, ForeignKey("versioned_identity_group_review_event.id"), nullable=False, index=True
+    )
+    partition_index = Column(Integer, nullable=False)
+
+
+class VersionedIdentityGroupReviewPartitionMember(Base):
+    __tablename__ = "versioned_identity_group_review_partition_member"
+    __table_args__ = (
+        UniqueConstraint("review_event_id", "record_ref_key", name="uq_versioned_review_member_once"),
+        UniqueConstraint("partition_id", "member_index", name="uq_versioned_review_partition_member_index"),
+        CheckConstraint("member_index >= 0", name="ck_versioned_review_member_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    review_event_id = Column(
+        Integer, ForeignKey("versioned_identity_group_review_event.id"), nullable=False, index=True
+    )
+    partition_id = Column(
+        Integer, ForeignKey("versioned_identity_group_review_partition.id"), nullable=False, index=True
+    )
+    member_index = Column(Integer, nullable=False)
+    record_ref_key = Column(String(64), nullable=False, index=True)
+
+
+class VersionedHumanIdentityConstraint(Base):
+    __tablename__ = "versioned_human_identity_constraint"
+    __table_args__ = (
+        CheckConstraint("left_record_ref_key < right_record_ref_key", name="ck_versioned_constraint_order"),
+        CheckConstraint("constraint_type IN ('MUST_LINK', 'CANNOT_LINK')", name="ck_versioned_constraint_type"),
+        CheckConstraint("projection_contract IN ('G2_V1', 'G2_V2')", name="ck_versioned_constraint_projection"),
+        UniqueConstraint(
+            "source_review_event_id", "left_record_ref_key", "right_record_ref_key",
+            name="uq_versioned_constraint_event_pair",
+        ),
+        Index(
+            "ix_versioned_constraint_target",
+            "scan_id", "projection_contract", "group_reference",
+        ),
+    )
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
+    projection_contract = Column(String(10), nullable=False)
+    source_projection_run_id = Column(Integer, nullable=False)
+    group_reference = Column(String(200), nullable=False)
+    versioned_group_key = Column(String(500), nullable=False)
+    left_record_ref_key = Column(String(64), nullable=False, index=True)
+    right_record_ref_key = Column(String(64), nullable=False, index=True)
+    constraint_type = Column(String(20), nullable=False, index=True)
+    source_review_event_id = Column(
+        Integer, ForeignKey("versioned_identity_group_review_event.id"), nullable=False, index=True
+    )
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 def _reject_review_history_mutation(_mapper, _connection, _target):
     raise ValueError("group review history is append-only")
 
@@ -1468,6 +1567,10 @@ for _append_only_model in (
     IdentityGroupReviewPartition,
     IdentityGroupReviewPartitionMember,
     HumanIdentityConstraint,
+    VersionedIdentityGroupReviewEvent,
+    VersionedIdentityGroupReviewPartition,
+    VersionedIdentityGroupReviewPartitionMember,
+    VersionedHumanIdentityConstraint,
 ):
     event.listen(_append_only_model, "before_update", _reject_review_history_mutation)
     event.listen(_append_only_model, "before_delete", _reject_review_history_mutation)

@@ -31,3 +31,8 @@ from app.identity_read.validation import (
     IdentityReadValidationError,
     validate_identity_read_snapshot,
 )
+from app.identity_read.key_codec import (
+    InvalidVersionedIdentityGroupKey,
+    parse_versioned_identity_group_key,
+    serialize_versioned_identity_group_key,
+)

@@ -14,7 +14,16 @@ from app.db.models import (
     IdentityGroupReviewEvent,
     IdentityGroupSnapshot,
     ScanRecordSnapshot,
+    VersionedIdentityGroupReviewEvent,
 )
+from app.identity_read.contracts import (
+    IdentityReadProjectionContract,
+)
+from app.identity_read.key_codec import (
+    parse_versioned_identity_group_key,
+    serialize_versioned_identity_group_key,
+)
+from app.services.identity_read_service import IdentityReadService
 from app.llm.group_contracts import (
     GROUP_ADVISORY_REQUEST_VERSION,
     GroupAdvisoryCriticalMismatch,
@@ -42,6 +51,9 @@ class GroupLlmEligibilityReason(str, Enum):
     INELIGIBLE_MAPPING_ONLY_UNCERTAINTY = "INELIGIBLE_MAPPING_ONLY_UNCERTAINTY"
     INELIGIBLE_SCOPE_OR_ADMIN_ONLY_UNCERTAINTY = "INELIGIBLE_SCOPE_OR_ADMIN_ONLY_UNCERTAINTY"
     INELIGIBLE_NO_IDENTITY_AMBIGUITY = "INELIGIBLE_NO_IDENTITY_AMBIGUITY"
+    INELIGIBLE_PROGRESSIVE_VALIDATION_NOT_SUPPORTED = (
+        "INELIGIBLE_PROGRESSIVE_VALIDATION_NOT_SUPPORTED"
+    )
 
 
 class ReviewReasonCategory(str, Enum):
@@ -105,6 +117,8 @@ class GroupEligibilityContext:
     internal_pair_count: int
     evidence_completeness: float
     current_human_review_exists: bool = False
+    projection_contract: str = "G2_V1"
+    validation_mode: str = "LEGACY_COMPLETE_PAIRWISE"
 
 
 @dataclass(frozen=True)
@@ -123,6 +137,10 @@ def group_candidate_is_llm_eligible(
         return fail(GroupLlmEligibilityReason.INELIGIBLE_PROJECTION_NOT_COMPLETED)
     if context.group_status != "POSSIBLE_DUPLICATE_GROUP_REVIEW":
         return fail(GroupLlmEligibilityReason.INELIGIBLE_SYSTEM_STATUS)
+    if context.validation_mode == "PROGRESSIVE_TARGETED":
+        return fail(
+            GroupLlmEligibilityReason.INELIGIBLE_PROGRESSIVE_VALIDATION_NOT_SUPPORTED
+        )
     limit = min(context.max_group_validation_members, MAX_GROUP_ADVISORY_MEMBERS)
     if context.group_size > limit:
         return fail(GroupLlmEligibilityReason.INELIGIBLE_OVERSIZED_GROUP)
@@ -394,6 +412,161 @@ class GroupAdvisoryContractService:
                 missing_or_wildcard_pair_count=group.missing_or_wildcard_pair_count,
                 malformed_or_unknown_pair_count=group.malformed_or_unknown_pair_count,
                 possible_mapping_error_count=group.possible_mapping_error_count,
+                identity_authority=False,
+            ),
+            unresolved_identity_questions=eligibility.details,
+        )
+        return eligibility, request
+
+    def _authoritative_current_review_exists(self, snapshot, group) -> bool:
+        key = group.versioned_group_key
+        if key.projection_contract == IdentityReadProjectionContract.G2_V2:
+            target = serialize_versioned_identity_group_key(key)
+            successor = aliased(VersionedIdentityGroupReviewEvent)
+            return self.db.query(VersionedIdentityGroupReviewEvent.id).outerjoin(
+                successor,
+                successor.supersedes_review_event_id == VersionedIdentityGroupReviewEvent.id,
+            ).filter(
+                VersionedIdentityGroupReviewEvent.versioned_group_key == target,
+                successor.id.is_(None),
+            ).first() is not None
+        row = self.db.query(IdentityGroupSnapshot.id).filter_by(
+            scan_id=snapshot.scan_id,
+            projection_run_id=snapshot.source_projection_run_id,
+            hypothesis_key=key.group_reference,
+        ).one_or_none()
+        if row is None:
+            return False
+        successor = aliased(IdentityGroupReviewEvent)
+        return self.db.query(IdentityGroupReviewEvent.id).outerjoin(
+            successor,
+            successor.supersedes_review_event_id == IdentityGroupReviewEvent.id,
+        ).filter(
+            IdentityGroupReviewEvent.group_snapshot_id == row[0],
+            successor.id.is_(None),
+        ).first() is not None
+
+    def load_authoritative(self, scan_id: int, versioned_group_key: str):
+        key = parse_versioned_identity_group_key(versioned_group_key)
+        service = IdentityReadService(self.db)
+        snapshot = service.load_identity_read_snapshot(scan_id)
+        group = service.load_identity_read_group(scan_id, key)
+        coverage = group.validation_coverage
+        members = tuple(
+            GroupEligibilityMember(member.stable_record_reference, member.member_order)
+            for member in group.members
+        )
+        edges = []
+        for item in group.internal_evidence:
+            left, right = sorted((
+                item.stable_record_reference_1,
+                item.stable_record_reference_2,
+            ))
+            edge_class = item.edge_class.value if hasattr(item.edge_class, "value") else item.edge_class
+            edges.append(GroupEligibilityEdge(
+                left, right, edge_class, tuple(item.reason_codes), (),
+            ))
+        edges = tuple(sorted(edges, key=lambda item: (
+            item.left_record_ref_key, item.right_record_ref_key
+        )))
+        context = GroupEligibilityContext(
+            projection_status="COMPLETED",
+            group_status=group.status.value,
+            group_size=group.member_count,
+            max_group_validation_members=MAX_GROUP_ADVISORY_MEMBERS,
+            members=members,
+            internal_edges=edges,
+            internal_pair_count=coverage.evaluated_internal_pair_count,
+            evidence_completeness=(
+                1.0 if coverage.evaluated_internal_pair_count
+                == coverage.possible_internal_pair_count else
+                coverage.evaluated_internal_pair_count
+                / coverage.possible_internal_pair_count
+            ),
+            current_human_review_exists=self._authoritative_current_review_exists(
+                snapshot, group
+            ),
+            projection_contract=snapshot.projection_contract.value,
+            validation_mode=group.validation_mode.value,
+        )
+        return snapshot, group, context
+
+    def eligibility_for_versioned_group(self, scan_id: int, versioned_group_key: str):
+        return group_candidate_is_llm_eligible(
+            self.load_authoritative(scan_id, versioned_group_key)[2]
+        )
+
+    def build_request_for_versioned_group(
+        self, scan_id: int, versioned_group_key: str
+    ):
+        snapshot, group, context = self.load_authoritative(
+            scan_id, versioned_group_key
+        )
+        eligibility = group_candidate_is_llm_eligible(context)
+        if not eligibility.eligible:
+            return eligibility, None
+        members = tuple(GroupAdvisoryMember(
+            record_ref_key=item.stable_record_reference,
+            part_no=item.part_no[:200],
+            normalized_part_no=item.normalized_part_no[:512],
+            description=item.description[:2048],
+            normalized_description=item.normalized_description[:2048],
+            site_or_contract=item.contract[:200] if item.contract else None,
+            uom=item.uom[:200] if item.uom else None,
+            product_category=(item.product_category_id[:200]
+                              if item.product_category_id else None),
+            hsn_sac=item.hsn_sac_code[:200] if item.hsn_sac_code else None,
+        ) for item in sorted(
+            group.members, key=lambda member: member.stable_record_reference
+        ))
+        edges = tuple(GroupAdvisoryEdge(
+            left_record_ref_key=edge.left_record_ref_key,
+            right_record_ref_key=edge.right_record_ref_key,
+            edge_class=edge.edge_class,
+            reason_codes=tuple(sorted(set(edge.reason_codes))),
+            evidence_source="G2_V2_INTERNAL_EVIDENCE",
+            deterministic_status=None,
+            critical_mismatches=(),
+        ) for edge in context.internal_edges)
+        reasons = tuple(sorted({reason for edge in edges for reason in edge.reason_codes}))
+        distinct_uoms = tuple(sorted({member.uom for member in group.members if member.uom}))
+        possible = group.validation_coverage.possible_internal_pair_count
+        same_uom = sum(
+            left.uom and left.uom == right.uom
+            for index, left in enumerate(group.members)
+            for right in group.members[index + 1:]
+        )
+        request = GroupAdvisoryRequest(
+            contract_version=GROUP_ADVISORY_REQUEST_VERSION,
+            scan_id=scan_id,
+            projection_run_id=snapshot.source_projection_run_id,
+            group_snapshot_id=snapshot.source_projection_run_id,
+            group_hypothesis_key=group.versioned_group_key.group_reference,
+            projection_contract=snapshot.projection_contract.value,
+            source_projection_run_id=snapshot.source_projection_run_id,
+            versioned_group_key=versioned_group_key,
+            source_group_fingerprint=group.source_group_fingerprint,
+            projection_algorithm_version="identity-read-contract-v1",
+            group_status=group.status.value,
+            group_size=group.member_count,
+            members=members,
+            internal_edges=edges,
+            group_identity_evidence_summary=GroupIdentityEvidenceSummary(
+                strong_support_count=group.validation_coverage.strong_support_count,
+                review_support_count=group.validation_coverage.review_support_count,
+                non_groupable_count=group.validation_coverage.non_groupable_count,
+                internal_pair_count=len(edges),
+                evidence_completeness=1.0,
+                reason_codes=reasons,
+            ),
+            group_uom_mapping_summary=GroupUomMappingSummary(
+                distinct_uoms=distinct_uoms,
+                same_uom_pair_count=same_uom,
+                convertible_uom_pair_count=0,
+                different_basis_pair_count=0,
+                missing_or_wildcard_pair_count=possible - same_uom,
+                malformed_or_unknown_pair_count=0,
+                possible_mapping_error_count=0,
                 identity_authority=False,
             ),
             unresolved_identity_questions=eligibility.details,

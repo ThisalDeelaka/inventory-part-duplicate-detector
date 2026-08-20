@@ -84,3 +84,50 @@ class GroupReviewStateResponse(BaseModel):
     reviewer: str | None = None
     reviewed_at: datetime | None = None
     current_review_event_id: int | None = None
+
+
+class VersionedGroupReviewCreateRequest(BaseModel):
+    decision_type: GroupReviewDecisionType
+    reviewer: str = Field(min_length=1, max_length=100)
+    comment: str | None = Field(default=None, max_length=2000)
+    supersedes_review_event_id: int | None = Field(default=None, gt=0)
+    selected_record_ref_keys: list[RecordRefKey] = Field(default_factory=list, max_length=20)
+    partitions: list[list[RecordRefKey]] = Field(default_factory=list, max_length=20)
+
+    @field_validator("reviewer")
+    @classmethod
+    def versioned_reviewer_must_be_nonblank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("reviewer must be nonblank")
+        return value
+
+
+class VersionedGroupReviewEventResponse(BaseModel):
+    review_event_id: int
+    scan_id: int
+    projection_contract: str
+    source_projection_run_id: int
+    versioned_group_key: str
+    group_reference: str
+    source_group_fingerprint: str
+    decision_type: GroupReviewDecisionType
+    reviewer: str
+    comment: str | None
+    created_at: datetime
+    supersedes_review_event_id: int | None
+    is_current: bool
+    partitions: list[list[str]]
+    derived_constraint_counts: DerivedConstraintCountsResponse
+
+
+class VersionedGroupReviewHistoryResponse(BaseModel):
+    scan_id: int
+    versioned_group_key: str
+    current_review_event_id: int | None
+    items: list[VersionedGroupReviewEventResponse]
+
+
+class VersionedGroupReviewCurrentResponse(BaseModel):
+    reviewed: bool
+    current_review: VersionedGroupReviewEventResponse | None

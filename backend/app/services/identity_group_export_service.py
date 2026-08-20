@@ -11,11 +11,17 @@ from app.db.models import (
     IdentityFamilyDiagnosticMemberSnapshot,
     IdentityFamilyDiagnosticSnapshot,
     IdentityGroupMemberSnapshot,
+    IdentityGroupProjectionRun,
     IdentityGroupSnapshot,
     ScanRecordSnapshot,
+    ScanOrchestrationRun,
 )
 from app.services.export_service import sanitize_csv_cell
-from app.services.identity_group_query_service import IdentityGroupQueryService, SnapshotNotFoundError
+from app.services.identity_group_query_service import (
+    IdentityGroupQueryService,
+    InvalidSnapshotSelectionError,
+    SnapshotNotFoundError,
+)
 
 
 IDENTITY_GROUP_EXPORT_FIELDS = [
@@ -78,7 +84,34 @@ def _csv(fields, rows):
 
 def identity_groups_to_csv(db, scan_id: int, projection_run_id: int | None = None) -> str:
     """Export one adjacent row per accepted-group member in canonical snapshot order."""
-    run = IdentityGroupQueryService(db).resolve_run(scan_id, projection_run_id)
+    selection = db.query(
+        IdentityGroupProjectionRun, ScanOrchestrationRun.mode
+    ).outerjoin(
+        ScanOrchestrationRun, ScanOrchestrationRun.scan_id == IdentityGroupProjectionRun.scan_id
+    ).filter(
+        IdentityGroupProjectionRun.scan_id == scan_id
+    )
+    if projection_run_id is not None:
+        selected = selection.filter(IdentityGroupProjectionRun.id == projection_run_id).one_or_none()
+        if selected is None:
+            raise SnapshotNotFoundError("Identity projection snapshot not found for scan")
+        run, orchestration_mode = selected
+        if run.status != "COMPLETED":
+            raise InvalidSnapshotSelectionError(
+                "Selected projection run is not a completed data snapshot"
+            )
+    else:
+        selected = selection.filter(
+            IdentityGroupProjectionRun.status == "COMPLETED"
+        ).order_by(
+            IdentityGroupProjectionRun.created_at.desc(),
+            IdentityGroupProjectionRun.id.desc(),
+        ).first()
+        run, orchestration_mode = selected if selected is not None else (None, None)
+    if orchestration_mode == "group_first_primary":
+        raise InvalidSnapshotSelectionError(
+            "Authoritative group-first System Group Export is pending GF-9C"
+        )
     if run is None:
         raise SnapshotNotFoundError("No completed identity projection snapshot exists for scan")
     status_order = case((IdentityGroupSnapshot.group_status == "LIKELY_DUPLICATE_GROUP", 0), else_=1)

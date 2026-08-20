@@ -90,3 +90,71 @@ human-authoritative.
 Future APIs add projection and source metadata without discarding v2-only
 coverage, conflict, deferred, and unassigned semantics. Those reader, API,
 review, advisory, UI, and export changes belong exclusively to GF-9B/GF-9C.
+
+## GF-9B verified backend boundary
+
+GF-9B implements `IdentityReadRepository` and `IdentityReadService` as the
+canonical backend product-reader boundary. The service reads the persisted
+orchestration run and exact stage source references, calls the GF-9A decision,
+loads only the selected source, adapts and validates it, and accepts no current
+configuration input.
+
+Historical/no-audit and legacy-primary scans read v1. Completed
+group-first-primary scans read v2 even when compatibility v1 exists. Missing or
+failed v2 maps to HTTP 409. Invalid, cross-scan, provenance-incompatible, or
+projection-mismatched authority maps to HTTP 422. There is no v1 fallback.
+
+### API identity and compatibility
+
+Existing `/identity-groups/{group_snapshot_id}` routes use v1 auto-increment
+IDs and cannot encode projection-scoped targets. They remain v1-only
+compatibility routes until GF-9C.
+
+New `/identity-read` summary, list, detail, outcome, review, and advisory
+eligibility routes use deterministic URL-safe `igk1` serialization of
+`(scan_id, projection_contract, group_reference)`. Responses carry projection
+and source-run metadata, validation mode and coverage, and fingerprints. V2
+conflicts, deferred work, and unassigned records remain distinct typed outcomes.
+
+A progressive three-member fixture remains two evaluated of three possible,
+one missing non-required, and two evidence entries. No synthetic pair is
+created. Pair/candidate routes remain compatibility diagnostics and never
+construct authoritative groups, reviews, or advisories.
+
+### Version-scoped G6 review
+
+Historical G6 tables remain unchanged and semantically `G2_V1` only.
+Authority-selected v1 review delegates to that chain. Additive append-only
+versioned event, partition, member, and constraint tables hold v2 review
+history; no historical row is rewritten or backfilled.
+
+Chain-head lookup uses the exact opaque target. Actions validate the selected
+read group's immutable stable references and retain existing safety bounds.
+Derived constraints persist projection, source run, group key, source review,
+and canonical endpoints. The normalized constraint loader can consume both
+histories, but review never automatically re-runs or mutates GF-5/GF-6.
+
+### Version-scoped G7 advisory
+
+Authority-selected eligibility and requests use the opaque key. Canonical
+request content and fingerprints include projection contract, source projection
+run, versioned key, and source group fingerprint. Existing G7 execution is
+provider-neutral and in-memory; there is no durable group-advisory table to
+migrate. Historical legacy request construction defaults explicitly to v1.
+
+A v2 `COMPLETE_PAIRWISE` review group may be eligible only when every frozen
+G7 rule passes. `PROGRESSIVE_TARGETED` is ineligible with
+`INELIGIBLE_PROGRESSIVE_VALIDATION_NOT_SUPPORTED`; likely groups remain
+ineligible. A v1 review does not block v2, while a current review of the exact
+v2 target does.
+
+### Selector and export transition
+
+`IdentityReadService` is canonical for new product backend reads. The old v1
+latest/current selector remains unchanged for compatibility internals.
+
+System Group Export is not inverted in GF-9B. Historical and legacy-primary
+output remains unchanged. Group-first-primary export is temporarily rejected
+with `Authoritative group-first System Group Export is pending GF-9C`, mapped
+to HTTP 409, rather than exporting v1 compatibility data as authority. Reviewed
+Identity Export remains unchanged. GF-9C owns frontend and final export work.

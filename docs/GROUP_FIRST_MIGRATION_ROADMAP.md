@@ -431,6 +431,10 @@ Removing pair tables or changing provider defaults.
 
 ## GF-9 — Group-first API, UI, and export inversion
 
+Implementation status: IN PROGRESS. GF-9A read-authority/projection contracts
+and GF-9B backend read/API/review/advisory inversion are verified. GF-9C
+frontend and final export inversion plus end-to-end graduation has not started.
+
 ### Goal
 
 Make group counts, groups, conflicts, and human review the complete normal business workflow while keeping advanced pair diagnostics available.

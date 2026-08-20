@@ -8,7 +8,13 @@ from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel, ConfigDict, Field, StrictInt, StringConstraints, ValidationError,
+    model_validator,
 )
+from app.identity_read.contracts import (
+    IdentityReadProjectionContract,
+    VersionedIdentityGroupKey,
+)
+from app.identity_read.key_codec import serialize_versioned_identity_group_key
 
 
 GROUP_ADVISORY_REQUEST_VERSION = "group-advisory-request-v1"
@@ -87,7 +93,11 @@ class GroupAdvisoryRequest(StrictContract):
     scan_id: int = Field(gt=0)
     projection_run_id: int = Field(gt=0)
     group_snapshot_id: int = Field(gt=0)
-    group_hypothesis_key: RecordRef
+    group_hypothesis_key: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    projection_contract: Literal["G2_V1", "G2_V2"] = "G2_V1"
+    source_projection_run_id: int = Field(gt=0)
+    versioned_group_key: Annotated[str, StringConstraints(min_length=1, max_length=500)]
+    source_group_fingerprint: RecordRef
     projection_algorithm_version: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     group_status: Literal["POSSIBLE_DUPLICATE_GROUP_REVIEW"]
     group_size: int = Field(ge=2, le=MAX_GROUP_ADVISORY_MEMBERS)
@@ -96,6 +106,25 @@ class GroupAdvisoryRequest(StrictContract):
     group_identity_evidence_summary: GroupIdentityEvidenceSummary
     group_uom_mapping_summary: GroupUomMappingSummary
     unresolved_identity_questions: tuple[ReasonCode, ...] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_projection_defaults(cls, value):
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        projection = data.setdefault("projection_contract", "G2_V1")
+        data.setdefault("source_projection_run_id", data.get("projection_run_id"))
+        if "versioned_group_key" not in data and data.get("scan_id") and data.get("group_hypothesis_key"):
+            data["versioned_group_key"] = serialize_versioned_identity_group_key(
+                VersionedIdentityGroupKey(
+                    int(data["scan_id"]),
+                    IdentityReadProjectionContract(projection),
+                    str(data["group_hypothesis_key"]),
+                )
+            )
+        data.setdefault("source_group_fingerprint", data.get("group_hypothesis_key"))
+        return data
 
 
 def canonical_group_advisory_request_json(request: GroupAdvisoryRequest) -> str:

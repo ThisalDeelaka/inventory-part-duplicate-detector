@@ -32,7 +32,10 @@ from app.orchestration.planning import (
 )
 from app.services.group_llm_eligibility import GroupAdvisoryContractService
 from app.services.identity_group_export_service import identity_groups_to_csv
-from app.services.identity_group_query_service import IdentityGroupQueryService
+from app.services.identity_group_query_service import (
+    IdentityGroupQueryService,
+    InvalidSnapshotSelectionError,
+)
 from app.services.identity_group_review_service import IdentityGroupReviewService
 from app.services.scan_orchestration_service import start_scan_orchestration
 from app.services.scan_runner import ScanRunner
@@ -307,7 +310,7 @@ def test_historical_scan_read_does_not_create_orchestration_audit(db):
     assert db.query(ScanOrchestrationRun).filter_by(scan_id=historical.id).count() == 0
 
 
-def test_group_first_current_readers_remain_v1_backed(db):
+def test_group_first_legacy_readers_remain_v1_backed_but_system_export_is_blocked(db):
     scan = run_scan(db)
     v1 = db.query(IdentityGroupProjectionRun).filter_by(scan_id=scan.id).one()
     group = db.query(IdentityGroupSnapshot).filter_by(projection_run_id=v1.id).one()
@@ -315,7 +318,8 @@ def test_group_first_current_readers_remain_v1_backed(db):
     assert query.summary(scan.id)["selected_projection"]["projection_run_id"] == v1.id
     assert query.list_groups(scan.id)["selected_projection"]["projection_run_id"] == v1.id
     assert query.group_detail(scan.id, group.id)["projection"]["projection_run_id"] == v1.id
-    assert f",{v1.id}," in identity_groups_to_csv(db, scan.id)
+    with pytest.raises(InvalidSnapshotSelectionError, match="pending GF-9C"):
+        identity_groups_to_csv(db, scan.id)
     assert IdentityGroupReviewService(db).group_members(
         scan.id, v1.id, group.id, group.hypothesis_key
     )

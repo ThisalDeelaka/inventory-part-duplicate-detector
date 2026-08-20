@@ -17,7 +17,14 @@ from app.db.models import (
     IdentityGroupReviewPartition,
     IdentityGroupReviewPartitionMember,
     IdentityGroupSnapshot,
+    VersionedHumanIdentityConstraint,
+    VersionedIdentityGroupReviewEvent,
+    VersionedIdentityGroupReviewPartition,
+    VersionedIdentityGroupReviewPartitionMember,
 )
+from app.identity_read.contracts import IdentityReadProjectionContract
+from app.identity_read.key_codec import serialize_versioned_identity_group_key
+from app.services.identity_read_service import IdentityReadService
 
 
 class GroupReviewDecision(str, Enum):
@@ -412,8 +419,30 @@ class IdentityGroupReviewService:
             HumanIdentityConstraint.right_record_ref_key,
             IdentityGroupReviewEvent.id,
         ).all()
+        versioned_successor = aliased(VersionedIdentityGroupReviewEvent)
+        versioned_rows = self.db.query(
+            VersionedHumanIdentityConstraint, VersionedIdentityGroupReviewEvent
+        ).join(
+            VersionedIdentityGroupReviewEvent,
+            VersionedIdentityGroupReviewEvent.id
+            == VersionedHumanIdentityConstraint.source_review_event_id,
+        ).outerjoin(
+            versioned_successor,
+            versioned_successor.supersedes_review_event_id
+            == VersionedIdentityGroupReviewEvent.id,
+        ).filter(
+            VersionedHumanIdentityConstraint.scan_id == scan_id,
+            versioned_successor.id.is_(None),
+        ).order_by(
+            VersionedHumanIdentityConstraint.left_record_ref_key,
+            VersionedHumanIdentityConstraint.right_record_ref_key,
+            VersionedIdentityGroupReviewEvent.id,
+        ).all()
         by_pair = {}
         for constraint, event in rows:
+            pair = (constraint.left_record_ref_key, constraint.right_record_ref_key)
+            by_pair.setdefault(pair, []).append((constraint.constraint_type, event.id))
+        for constraint, event in versioned_rows:
             pair = (constraint.left_record_ref_key, constraint.right_record_ref_key)
             by_pair.setdefault(pair, []).append((constraint.constraint_type, event.id))
         effective = []
@@ -438,3 +467,223 @@ class IdentityGroupReviewService:
             human_constraints=self.effective_constraints(scan_id),
             **projection_inputs,
         )
+
+
+class VersionedIdentityGroupReviewService:
+    """Append-only review chains for authoritative v2 targets.
+
+    V1 targets deliberately delegate to the historical G6 tables so existing
+    review history remains one unchanged v1 chain.
+    """
+
+    def __init__(self, db):
+        self.db = db
+        self.read_service = IdentityReadService(db)
+        self.legacy = IdentityGroupReviewService(db)
+
+    def _target(self, scan_id, key):
+        group = self.read_service.load_identity_read_group(scan_id, key)
+        snapshot = self.read_service.load_identity_read_snapshot(scan_id)
+        return snapshot, group, serialize_versioned_identity_group_key(key)
+
+    def _legacy_group(self, snapshot, group):
+        row = self.db.query(IdentityGroupSnapshot).filter_by(
+            scan_id=snapshot.scan_id,
+            projection_run_id=snapshot.source_projection_run_id,
+            hypothesis_key=group.versioned_group_key.group_reference,
+        ).one_or_none()
+        if row is None:
+            raise GroupReviewTargetNotFoundError("authoritative legacy group not found")
+        return row
+
+    def current_review(self, target_key: str):
+        successor = aliased(VersionedIdentityGroupReviewEvent)
+        return self.db.query(VersionedIdentityGroupReviewEvent).outerjoin(
+            successor,
+            successor.supersedes_review_event_id == VersionedIdentityGroupReviewEvent.id,
+        ).filter(
+            VersionedIdentityGroupReviewEvent.versioned_group_key == target_key,
+            successor.id.is_(None),
+        ).order_by(VersionedIdentityGroupReviewEvent.id.desc()).first()
+
+    def _v2_history(self, target_key: str):
+        events = self.db.query(VersionedIdentityGroupReviewEvent).filter_by(
+            versioned_group_key=target_key
+        ).order_by(VersionedIdentityGroupReviewEvent.id).all()
+        if not events:
+            return ()
+        event_ids = [row.id for row in events]
+        partition_rows = self.db.query(
+            VersionedIdentityGroupReviewPartition,
+            VersionedIdentityGroupReviewPartitionMember,
+        ).join(
+            VersionedIdentityGroupReviewPartitionMember,
+            VersionedIdentityGroupReviewPartitionMember.partition_id
+            == VersionedIdentityGroupReviewPartition.id,
+        ).filter(
+            VersionedIdentityGroupReviewPartition.review_event_id.in_(event_ids)
+        ).order_by(
+            VersionedIdentityGroupReviewPartition.review_event_id,
+            VersionedIdentityGroupReviewPartition.partition_index,
+            VersionedIdentityGroupReviewPartitionMember.member_index,
+        ).all()
+        count_rows = self.db.query(
+            VersionedHumanIdentityConstraint.source_review_event_id,
+            VersionedHumanIdentityConstraint.constraint_type,
+            func.count(VersionedHumanIdentityConstraint.id),
+        ).filter(
+            VersionedHumanIdentityConstraint.source_review_event_id.in_(event_ids)
+        ).group_by(
+            VersionedHumanIdentityConstraint.source_review_event_id,
+            VersionedHumanIdentityConstraint.constraint_type,
+        ).all()
+        partitions = {}
+        for partition, member in partition_rows:
+            partitions.setdefault(partition.review_event_id, {}).setdefault(
+                partition.partition_index, []
+            ).append(member.record_ref_key)
+        counts = {(event_id, kind): count for event_id, kind, count in count_rows}
+        superseded = {
+            row.supersedes_review_event_id for row in events
+            if row.supersedes_review_event_id is not None
+        }
+        return tuple({
+            "review_event_id": row.id,
+            "scan_id": row.scan_id,
+            "projection_contract": row.projection_contract,
+            "source_projection_run_id": row.source_projection_run_id,
+            "versioned_group_key": row.versioned_group_key,
+            "group_reference": row.group_reference,
+            "source_group_fingerprint": row.source_group_fingerprint,
+            "decision_type": row.decision_type,
+            "reviewer": row.reviewer,
+            "comment": row.comment,
+            "created_at": row.created_at,
+            "supersedes_review_event_id": row.supersedes_review_event_id,
+            "is_current": row.id not in superseded,
+            "partitions": [
+                members for _, members in sorted(partitions.get(row.id, {}).items())
+            ],
+            "derived_constraint_counts": {
+                "must_link_count": counts.get((row.id, "MUST_LINK"), 0),
+                "cannot_link_count": counts.get((row.id, "CANNOT_LINK"), 0),
+            },
+        } for row in events)
+
+    def review_history(self, scan_id, key):
+        snapshot, group, target_key = self._target(scan_id, key)
+        if key.projection_contract == IdentityReadProjectionContract.G2_V1:
+            legacy_group = self._legacy_group(snapshot, group)
+            return tuple({
+                **item,
+                "projection_contract": "G2_V1",
+                "source_projection_run_id": snapshot.source_projection_run_id,
+                "versioned_group_key": target_key,
+                "group_reference": key.group_reference,
+                "source_group_fingerprint": group.source_group_fingerprint,
+            } for item in self.legacy.review_history(scan_id, legacy_group.id))
+        return self._v2_history(target_key)
+
+    def current_review_state(self, scan_id, key):
+        history = self.review_history(scan_id, key)
+        current = next((row for row in reversed(history) if row["is_current"]), None)
+        return {"reviewed": current is not None, "current_review": current}
+
+    def create_review(
+        self, *, scan_id, key, decision_type, reviewer,
+        submitted_members=(), partitions=(), comment=None,
+        supersedes_review_event_id=None,
+    ):
+        snapshot, group, target_key = self._target(scan_id, key)
+        immutable_members = tuple(
+            member.stable_record_reference for member in group.members
+        )
+        decision_type = GroupReviewDecision(decision_type)
+        submitted_members = tuple(submitted_members)
+        partitions = tuple(tuple(block) for block in partitions)
+        if key.projection_contract == IdentityReadProjectionContract.G2_V1:
+            legacy_group = self._legacy_group(snapshot, group)
+            return self.legacy.create_review(
+                scan_id=scan_id,
+                projection_run_id=snapshot.source_projection_run_id,
+                group_snapshot_id=legacy_group.id,
+                group_hypothesis_key=legacy_group.hypothesis_key,
+                decision_type=decision_type,
+                reviewer=reviewer,
+                submitted_members=submitted_members,
+                partitions=partitions,
+                comment=comment,
+                supersedes_review_event_id=supersedes_review_event_id,
+            )
+        reviewer = str(reviewer or "").strip()
+        if not reviewer:
+            raise GroupReviewValidationError("reviewer is required")
+        blocks = canonical_review_partitions(
+            decision_type, immutable_members,
+            submitted_members=submitted_members, partitions=partitions,
+        )
+        constraints = derive_human_identity_constraints(
+            decision_type, immutable_members,
+            submitted_members=submitted_members, partitions=partitions,
+        )
+        current = self.current_review(target_key)
+        if current is None and supersedes_review_event_id is not None:
+            raise StaleGroupReviewError("review changed; reload the current review before saving")
+        if current is not None and supersedes_review_event_id != current.id:
+            raise StaleGroupReviewError("review changed; reload the current review before saving")
+        try:
+            event = VersionedIdentityGroupReviewEvent(
+                scan_id=scan_id,
+                projection_contract=key.projection_contract.value,
+                source_projection_run_id=snapshot.source_projection_run_id,
+                group_reference=key.group_reference,
+                versioned_group_key=target_key,
+                source_group_fingerprint=group.source_group_fingerprint,
+                decision_type=decision_type.value,
+                reviewer=reviewer,
+                comment=comment,
+                supersedes_review_event_id=supersedes_review_event_id,
+                initial_target_key=target_key if supersedes_review_event_id is None else None,
+            )
+            self.db.add(event)
+            self.db.flush()
+            for partition_index, block in enumerate(blocks):
+                partition = VersionedIdentityGroupReviewPartition(
+                    review_event_id=event.id, partition_index=partition_index
+                )
+                self.db.add(partition)
+                self.db.flush()
+                self.db.add_all([
+                    VersionedIdentityGroupReviewPartitionMember(
+                        review_event_id=event.id,
+                        partition_id=partition.id,
+                        member_index=index,
+                        record_ref_key=record_ref,
+                    ) for index, record_ref in enumerate(block)
+                ])
+            self.db.add_all([
+                VersionedHumanIdentityConstraint(
+                    scan_id=scan_id,
+                    projection_contract=key.projection_contract.value,
+                    source_projection_run_id=snapshot.source_projection_run_id,
+                    group_reference=key.group_reference,
+                    versioned_group_key=target_key,
+                    left_record_ref_key=item.left_record_ref_key,
+                    right_record_ref_key=item.right_record_ref_key,
+                    constraint_type=item.constraint_type.value,
+                    source_review_event_id=event.id,
+                ) for item in constraints
+            ])
+            self.db.commit()
+            return CreatedGroupReview(
+                event.id, decision_type, len(blocks), len(constraints),
+                supersedes_review_event_id,
+            )
+        except IntegrityError:
+            self.db.rollback()
+            raise StaleGroupReviewError(
+                "review changed; reload the current review before saving"
+            ) from None
+        except Exception:
+            self.db.rollback()
+            raise

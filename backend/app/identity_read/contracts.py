@@ -44,9 +44,11 @@ class IdentityReadSourceRecord:
     record_id: int
     scan_id: int
     stable_record_reference: str
-    source_row_index: int
+    source_row_index: int | None
     part_no: str
     description: str
+    normalized_part_no: str = ""
+    normalized_description: str = ""
     contract: str | None = None
     uom: str | None = None
     type_code: str | None = None
@@ -136,10 +138,12 @@ class IdentityReadValidationCoverage:
 class IdentityReadGroupMember:
     record_id: int
     stable_record_reference: str
-    source_row_index: int
+    source_row_index: int | None
     member_order: int
     part_no: str
     description: str
+    normalized_part_no: str
+    normalized_description: str
     contract: str | None
     uom: str | None
     type_code: str | None
@@ -201,7 +205,7 @@ class IdentityReadDeferredWork:
 class IdentityReadUnassignedRecord:
     record_id: int
     stable_record_reference: str
-    source_row_index: int
+    source_row_index: int | None
 
 
 @dataclass(frozen=True)

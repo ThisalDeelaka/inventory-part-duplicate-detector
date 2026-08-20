@@ -3,6 +3,8 @@
 from datetime import datetime
 from enum import Enum
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from app.schemas.identity_group_reviews import GroupReviewStateResponse
@@ -158,3 +160,86 @@ class PaginatedIdentityDiagnosticsResponse(BaseModel):
     offset: int
     total: int
     items: list[IdentityDiagnosticListItem]
+
+
+class IdentityReadProjectionMetadataResponse(BaseModel):
+    projection_contract: str
+    source_projection_run_id: int
+    source_orchestration_run_id: int | None
+    source_resolution_run_id: int | None
+
+
+class IdentityReadValidationCoverageResponse(BaseModel):
+    validation_mode: str
+    member_count: int
+    possible_internal_pair_count: int
+    evaluated_internal_pair_count: int
+    required_validation_evidence_count: int
+    strong_support_count: int
+    review_support_count: int
+    non_groupable_count: int
+    cannot_link_count: int
+    missing_nonrequired_pair_count: int
+    targeted_evidence_count: int
+    proposal_evidence_count: int
+
+
+class IdentityReadGroupResponse(BaseModel):
+    versioned_group_key: str
+    group_reference: str
+    projection_contract: str
+    group_status: AcceptedIdentityGroupStatus
+    group_size: int
+    validation_mode: str
+    validation_coverage: IdentityReadValidationCoverageResponse
+    source_group_fingerprint: str
+    read_group_fingerprint: str
+    group_evidence_summary: dict[str, Any] | None = None
+    bridge_risk_summary: dict[str, Any] | None = None
+    genericity_risk_summary: dict[str, Any] | None = None
+    missing_evidence_summary: dict[str, Any] | None = None
+
+
+class IdentityReadGroupDetailResponse(IdentityReadGroupResponse):
+    members: list[dict[str, Any]]
+    internal_evidence: list[dict[str, Any]]
+
+
+class PaginatedIdentityReadGroupsResponse(BaseModel):
+    projection: IdentityReadProjectionMetadataResponse
+    limit: int
+    offset: int
+    total: int
+    items: list[IdentityReadGroupResponse]
+
+
+class IdentityReadSummaryApiResponse(BaseModel):
+    snapshot_available: bool
+    read_ready: bool
+    projection: IdentityReadProjectionMetadataResponse
+    canonical_record_count: int
+    group_count: int
+    likely_group_count: int
+    review_group_count: int
+    conflict_count: int
+    deferred_count: int
+    unassigned_count: int
+    snapshot_fingerprint: str
+
+
+class IdentityReadOutcomesResponse(BaseModel):
+    projection: IdentityReadProjectionMetadataResponse
+    conflicts: list[dict[str, Any]]
+    deferred_work_units: list[dict[str, Any]]
+    unassigned_records: list[dict[str, Any]]
+
+
+class VersionedGroupAdvisoryEligibilityResponse(BaseModel):
+    versioned_group_key: str
+    projection_contract: str
+    source_projection_run_id: int
+    source_group_fingerprint: str
+    eligible: bool
+    reason_code: str
+    details: list[str]
+    request_fingerprint: str | None = None

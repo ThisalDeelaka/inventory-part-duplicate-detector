@@ -148,6 +148,10 @@ def ensure_group_review_tables(engine):
         IdentityGroupReviewEvent,
         IdentityGroupReviewPartition,
         IdentityGroupReviewPartitionMember,
+        VersionedHumanIdentityConstraint,
+        VersionedIdentityGroupReviewEvent,
+        VersionedIdentityGroupReviewPartition,
+        VersionedIdentityGroupReviewPartitionMember,
     )
 
     tables = [
@@ -155,6 +159,10 @@ def ensure_group_review_tables(engine):
         IdentityGroupReviewPartition.__table__,
         IdentityGroupReviewPartitionMember.__table__,
         HumanIdentityConstraint.__table__,
+        VersionedIdentityGroupReviewEvent.__table__,
+        VersionedIdentityGroupReviewPartition.__table__,
+        VersionedIdentityGroupReviewPartitionMember.__table__,
+        VersionedHumanIdentityConstraint.__table__,
     ]
     IdentityGroupReviewEvent.metadata.create_all(bind=engine, tables=tables, checkfirst=True)
     if engine.url.get_backend_name().startswith("sqlite"):

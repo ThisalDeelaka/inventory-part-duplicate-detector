@@ -59,6 +59,8 @@ def _member(record, reference, order):
         member_order=order,
         part_no=record.part_no,
         description=record.description,
+        normalized_part_no=getattr(record, "normalized_part_no", ""),
+        normalized_description=getattr(record, "normalized_description", ""),
         contract=getattr(record, "contract", None),
         uom=getattr(record, "uom", None),
         type_code=getattr(record, "type_code", None),
