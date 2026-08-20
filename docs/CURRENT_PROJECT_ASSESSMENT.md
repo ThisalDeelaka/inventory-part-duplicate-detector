@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-11A implementation commit: `2dcc948c46675b57ff521a824c186bcad35758bb`.
 - Baseline HEAD before the GF-10B prerequisite schema-migration commit: `bb5f5775e0e93a8ec80d9e8411840c9ca5d0b72a`.
 - Baseline HEAD before the GF-10A implementation commit: `53aa554095f1e4b476102d9e25d8fbd841493836`.
 - Baseline HEAD before the GF-9C implementation commit: `e8dcd5795b7e522129827e85316739ab64fed661`.
@@ -32,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 has not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A is verified and GF-11B has not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -543,6 +544,27 @@ GF-10B is verified and completes GF-10.
 - No schema/migration change was required beyond GF-10B-PRE, and no GF-11
   scale-readiness claim is made.
 
+## GF-11A scale baseline and benchmark harness
+
+GF-11A is verified as the measurement and observability unit of GF-11.
+
+- Immutable benchmark contracts, safe environment metadata, deterministic
+  semantic fingerprints, stable JSON, and optional Markdown output are present.
+- The fixed-seed S1-S8 generator supports 500, 5k, 20k, and 100k without a
+  global negative-pair matrix; synthetic truth never enters product inputs.
+- The command runs policy-v2 group-first semantics against a disposable SQLite
+  database with provider none and records stage, persistence, query, resource,
+  safety, complexity, and synthetic-quality observations.
+- B1-B16 verify determinism, source-row distinctness, truth isolation, bounded
+  100k generation, schema stability, persistence reconciliation, safety
+  detection, deprecated-write absence, database isolation, timeout truthfulness,
+  fingerprint stability, and environment privacy.
+- Measured 5k fails safely in group resolution with
+  `IDENTITYRESOLUTIONVALIDATIONERROR`; 20k times out with GF5 running; 100k
+  times out in discovery. These results establish a baseline, not readiness.
+- Discovery retrieval/fanout is the single measured GF-11B recommendation.
+  GF-11B, GF-11C, GF-11D, and GF-12 have not started.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -578,6 +600,6 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-10 are verified and complete. GF-11 100k Scale Hardening is the
-next bounded phase and has not started. No GF-11 scale-readiness or GF-12
-production-graduation claim is included here.
+GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS and GF-11A
+is verified. GF-11B is the next bounded unit and has not started. No 100k
+readiness or GF-12 production-graduation claim is included here.
