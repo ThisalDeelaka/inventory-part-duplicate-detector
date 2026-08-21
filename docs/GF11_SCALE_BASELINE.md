@@ -125,3 +125,87 @@ GF4-GF6 output on golden corpora.
 
 The oversized overlapping-work-unit and 5k resolver validation observations
 remain measured candidates for GF-11C only after GF-11B is benchmarked.
+
+## GF-11B-PRE Character Retrieval Contract Decision
+
+### Current contract and tie stability
+
+The current character channel is a `HashingVectorizer` with 384 bins,
+`char_wb` 3..5-grams, nonnegative contributions, and L2 normalization. It uses
+exact brute-force cosine retrieval, requests configured top-k plus one for the
+self result, excludes self afterward, rounds retained scores to two decimals,
+and reconstructs reciprocal pairs. No contract or test previously selected a
+canonical member when multiple records tie at the kth boundary. The observed
+membership is therefore implementation-dependent on scikit-learn 1.7.0,
+NumPy 2.4.6, input position, and its internal selection behavior.
+
+Repeated runs and query batches of 64 versus 256 were identical. Shuffling the
+same records while preserving their original references changed 767 undirected
+character-pair memberships at 500 records and 9,195 at 5,000. There were 279
+and 2,826 anchors respectively with kth-boundary ties. A deterministic
+score-descending/reference-ascending selector changed 715 and 8,526 pair
+memberships. Every changed membership was at the exact kth-boundary cosine
+score; no unequal-score difference occurred. The current top-k-plus-self
+mechanism can also retain one extra neighbor when an equal-vector record is
+selected in place of the anchor itself.
+
+Freezing canonical tie semantics alone does not address scale. Every 5k hashed
+anchor still has positive overlap with all other 4,999 records, requiring
+24,995,000 exact comparisons.
+
+### Sparse character experiment
+
+The benchmark-only alternative uses normalized descriptions, deterministic
+token-bounded character 3..5-grams, TF-IDF from the existing scikit-learn
+dependency, exact sparse cosine accumulation over shared postings, and
+score-descending/reference-ascending top-k. It is classified
+`SEMANTICALLY_CHANGED_RETRIEVAL`; it is not equivalent to the collision-heavy
+384-bin channel.
+
+| Records | Current dense | Deterministic dense | Sparse feature + query | Current/sparse pairs | Jaccard | Sparse exact evaluations | Zero comparisons avoided |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 500 | 27.32 ms | 78.36 ms | 95.20 ms | 1,834 / 1,871 | 0.216749 | 160,118 | 89,382 |
+| 5,000 | 2,973.05 ms | 8,286.36 ms | 2,627.93 ms | 19,029 / 18,089 | 0.151124 | 16,024,184 | 8,970,816 |
+
+At 5k the sparse index contained 22,785 features and 349,832 posting entries;
+maximum/p95 posting sizes were 2,500/20, maximum anchor accumulation was 4,374,
+and feature-posting traversal counted 268,947,350 contributions. It reduced
+unique exact similarities by 35.89%, but 64.11% of all directed pairs still
+overlapped. Holding that measured density constant would imply roughly 6.4
+billion exact evaluations at 100k, so this experiment is not a credible 100k
+graduation design by itself.
+
+Current, deterministic-tie, and sparse variants each covered all synthetic
+truth sets at both measured sizes: 60/60 and 591/591 overall, 31/31 and 312/312
+protected-conflict fixtures, 20/20 and 204/204 cross-site sets, and 21/21 and
+208/208 bridge sets. Sparse generic-hub pair volume was lower (300 versus 357
+at 500; 3,110 versus 3,729 at 5k) without suppression. Truth remained outside
+runtime inputs.
+
+A disposable normal GF1-through-GF6 comparison at 64 records was identical for
+all three variants: 285 proposals/evidence edges, 64 neighborhoods and 634
+memberships, five accepted groups/13 members, six conflicts/42 members, three
+deferred work units/32 members, 51 unassigned records, maximum neighborhood and
+work-unit size 16, and three targeted checks. All runs completed with zero
+cannot-link violations, duplicate accepted memberships, singleton groups,
+cross-scan contamination, legacy pair/G1/G2-v1/shadow rows, and provider calls.
+
+### Decision matrix
+
+| Option | Semantic change | Determinism / exactness | Measured value | Risk/dependency | 100k plausibility |
+|---|---|---|---|---|---|
+| A. 384-bin/current selector | none | repeatable only at fixed order; exact brute force | 27 ms / 2.97 s at 500/5k; full overlap | current library-dependent ties; no new dependency | no |
+| B. 384-bin/canonical tie | equal-boundary membership only | deterministic and exact | coverage/safety unchanged; 78 ms / 8.29 s experimental selector | low semantic risk; no new dependency | no; still full overlap |
+| C. sparse exact character | material retrieval change | deterministic and exact over shared n-grams | 35.89% fewer 5k exact comparisons; coverage unchanged on synthetic corpus | explicit architecture authorization required; no new dependency | insufficient evidence; measured overlap remains high |
+| D. bounded blocking scope | unknown/material | could be deterministic/exact only inside declared scope | not implemented or measured | recall and protected-coverage contract risk | unknown |
+| E. future approximate index | material | deterministic configuration possible; not exact | not implemented or measured | separate architecture/dependency/quality decision | potentially credible, unproven |
+
+### Decision
+
+GF-11B-PRE establishes that current tie membership is unspecified, and option B
+is safe on the measured fixtures, but B is not scale hardening. Option C changes
+retrieval semantics and does not reduce the measured exact work enough to make
+100k plausible. Options D and E were not implemented. The next action is a
+separate ANN/approximate-retrieval architecture decision with explicit recall,
+protected-conflict, dependency, determinism, and rollback gates. GF-11B remains
+blocked and is not verified.
