@@ -93,6 +93,10 @@ One versioned, resumable candidate-discovery execution for a scan.
 
 - The run does not assign duplicate identity.
 - Identical canonical records, versions, and configuration produce the same fingerprint.
+- Channel top-k ordering is score descending; candidates with exactly equal
+  effective scores are ordered and selected by immutable `record_ref_key`
+  ascending after self exclusion. Input position and source-row ordinal are
+  not retrieval tie breakers.
 - `COMPLETED_DEGRADED` names every degraded channel and affected coverage.
 - A failed required channel cannot be represented as ordinary completion.
 

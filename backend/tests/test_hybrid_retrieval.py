@@ -10,8 +10,9 @@ from sqlalchemy import event
 from app.core.config import Settings
 from app.db.models import CandidateDiscoveryMetadata, DuplicateCandidate, HybridRetrievalRun, LocalEmbeddingCache
 from app.services.hybrid_retrieval import (
-    CHANNEL_WEIGHTS, RRF_K, HybridCandidateRetriever, MemoryEmbeddingVectorCache,
-    RetrievalSource, RetrievalTier, SklearnHashingEmbedder, canonical_record_pair,
+    CANONICAL_RECORD_REF_FIELD, CHANNEL_WEIGHTS, RRF_K, HybridCandidateRetriever,
+    MemoryEmbeddingVectorCache, RetrievalSource, RetrievalTier,
+    SklearnHashingEmbedder, canonical_record_pair,
     description_specificity_statistics, part_number_family_keys,
 )
 from app.services.hybrid_retrieval_benchmark import (
@@ -29,8 +30,15 @@ from app.services.scan_runner import ScanRunner
 
 def frame(rows):
     return pd.DataFrame([
-        {"PART_NO": part, "DESCRIPTION": description, "CONTRACT": site, "UNIT_MEAS": "EA", **extra}
-        for part, description, site, extra in rows
+        {
+            "PART_NO": part,
+            "DESCRIPTION": description,
+            "CONTRACT": site,
+            "UNIT_MEAS": "EA",
+            CANONICAL_RECORD_REF_FIELD: f"test-record-{index:04d}",
+            **extra,
+        }
+        for index, (part, description, site, extra) in enumerate(rows)
     ])
 
 

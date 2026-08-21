@@ -18,7 +18,9 @@ from app.db.migrations import ensure_identity_discovery_tables
 from app.discovery.contracts import DiscoveryChannel, NeighborProposal
 from app.engine.candidate_generator import generate_candidate_pairs
 from app.services.canonical_record_service import create_or_get_scan_record_catalog
-from app.services.hybrid_retrieval import HybridCandidateRetriever, MemoryEmbeddingVectorCache
+from app.services.hybrid_retrieval import (
+    CANONICAL_RECORD_REF_FIELD, HybridCandidateRetriever, MemoryEmbeddingVectorCache,
+)
 from app.services.identity_discovery_service import (
     discovery_fingerprint,
     load_discovery_run,
@@ -57,6 +59,9 @@ def frame(rows):
         for part_no, description, contract in rows
     ])
     result[SOURCE_ROW_INDEX_FIELD] = range(len(result))
+    result[CANONICAL_RECORD_REF_FIELD] = [
+        f"test-record-{index:04d}" for index in range(len(result))
+    ]
     return result
 
 

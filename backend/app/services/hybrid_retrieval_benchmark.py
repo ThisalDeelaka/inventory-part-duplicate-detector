@@ -3,7 +3,9 @@ from dataclasses import asdict, dataclass
 import pandas as pd
 
 from app.core.config import Settings
-from app.services.hybrid_retrieval import HybridCandidateRetriever, RetrievalTier
+from app.services.hybrid_retrieval import (
+    CANONICAL_RECORD_REF_FIELD, HybridCandidateRetriever, RetrievalTier,
+)
 
 
 SILVER_PART_PAIRS = (
@@ -48,8 +50,14 @@ def ranking_v2_fixture() -> pd.DataFrame:
     rows.extend((f"BOARD-{index}", "Circuit Board") for index in range(6))
     rows.extend((f"DISTRACTOR-{index}", f"Warehouse Consumable Item {index}") for index in range(8))
     return pd.DataFrame([
-        {"PART_NO": part, "DESCRIPTION": description, "CONTRACT": "S1", "UNIT_MEAS": "EA"}
-        for part, description in rows
+        {
+            "PART_NO": part,
+            "DESCRIPTION": description,
+            "CONTRACT": "S1",
+            "UNIT_MEAS": "EA",
+            CANONICAL_RECORD_REF_FIELD: f"benchmark-record-{index:04d}",
+        }
+        for index, (part, description) in enumerate(rows)
     ])
 
 

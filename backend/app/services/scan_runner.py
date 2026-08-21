@@ -24,7 +24,8 @@ from app.services.canonical_record_service import (
     load_scan_record_catalog,
 )
 from app.services.hybrid_retrieval import (
-    HybridCandidateRetriever, SqlAlchemyEmbeddingVectorCache, canonical_record_pair,
+    CANONICAL_RECORD_REF_FIELD, HybridCandidateRetriever,
+    SqlAlchemyEmbeddingVectorCache, canonical_record_pair,
 )
 from app.services.identity_discovery_service import (
     mark_discovery_failed,
@@ -231,10 +232,19 @@ class ScanRunner:
                 row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()
             ]
             if self.configuration.hybrid_retrieval_enabled:
+                retrieval_input = usable.copy()
+                canonical_refs_by_source = {
+                    row.source_row_index: row.record_ref_key
+                    for row in catalog_result.records
+                }
+                retrieval_input[CANONICAL_RECORD_REF_FIELD] = [
+                    canonical_refs_by_source[int(source_row_index)]
+                    for source_row_index in retrieval_input[SOURCE_ROW_INDEX_FIELD]
+                ]
                 retrieval = HybridCandidateRetriever(
                     self.configuration,
                     cache=SqlAlchemyEmbeddingVectorCache(self.db),
-                ).retrieve(usable, scan_mode, standard_candidate_pairs)
+                ).retrieve(retrieval_input, scan_mode, standard_candidate_pairs)
                 added = 0
                 added_with_uom_difference = 0
                 added_with_uom_unknown = 0

@@ -19,7 +19,15 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 
 from app.benchmarks.group_first_scale_generator import generate_scale_corpus
-from app.services.hybrid_retrieval import SklearnHashingEmbedder, semantic_retrieval_text
+from app.benchmarks.group_first_scale import benchmark_configuration
+from app.benchmarks.contracts import stable_fingerprint
+from app.services.canonical_record_service import canonical_record_ref_key
+from app.services.hybrid_retrieval import (
+    CANONICAL_RECORD_REF_FIELD, HybridCandidateRetriever,
+    MemoryEmbeddingVectorCache, SklearnHashingEmbedder,
+    _deterministic_directed_neighbors, _deterministic_nearest_pairs,
+    semantic_retrieval_text,
+)
 
 
 def _token_character_ngrams(text):
@@ -131,6 +139,207 @@ def _pairs(directed):
     return result
 
 
+def _semantic_pair_signature(matrix, refs, *, top_k=5):
+    rows = _deterministic_nearest_pairs(matrix, top_k, refs)
+    return tuple(
+        (
+            *sorted((refs[left], refs[right])),
+            score,
+            reciprocal,
+        )
+        for left, right, score, reciprocal in rows
+    )
+
+
+def _directed_semantic_pair_signature(directed, refs):
+    rows = _production_pair_rows(directed)
+    values = [
+        (
+            *sorted((refs[left], refs[right])),
+            score,
+            reciprocal,
+        )
+        for left, right, score, reciprocal in rows
+    ]
+    return tuple(sorted(values, key=lambda item: (-item[2], item[0], item[1])))
+
+
+def run_production_tie_experiment(records, *, seed=1101):
+    """Exercise the committed selector with exact GF-1 canonical references."""
+    corpus = generate_scale_corpus(records, seed=seed)
+    texts = [semantic_retrieval_text(row) for row in corpus.records.to_dict("records")]
+    dense = normalize(SklearnHashingEmbedder().encode(texts))
+    refs = np.asarray(
+        [canonical_record_ref_key(1, index) for index in range(records)], dtype=object
+    )
+    positions = np.arange(records, dtype=np.int64)
+
+    historical_started = time.perf_counter()
+    historical = _current_directed(dense, positions)
+    historical_ms = (time.perf_counter() - historical_started) * 1000
+    deterministic_started = time.perf_counter()
+    deterministic = _deterministic_directed_neighbors(dense, 5, refs)
+    deterministic_signature = _directed_semantic_pair_signature(deterministic, refs)
+    deterministic_ms = (time.perf_counter() - deterministic_started) * 1000
+
+    unequal = 0
+    substitutions = 0
+    for anchor in positions:
+        old = {target: score for target, score in historical[int(anchor)]}
+        new = {target: score for target, score in deterministic[int(anchor)]}
+        removed, added = set(old) - set(new), set(new) - set(old)
+        substitutions += len(removed) + len(added)
+        if removed or added:
+            boundary = min(new.values())
+            changed_scores = [old[target] for target in removed] + [new[target] for target in added]
+            unequal += int(any(score != boundary for score in changed_scores))
+
+    signatures = {"original": deterministic_signature}
+    permutations = {
+        "reversed": positions[::-1],
+        **{
+            f"shuffle_{shuffle_seed}": np.random.default_rng(shuffle_seed).permutation(records)
+            for shuffle_seed in (7, 19, 1101)
+        },
+    }
+    for name, permutation in permutations.items():
+        signatures[name] = _semantic_pair_signature(
+            dense[permutation], refs[permutation]
+        )
+
+    historical_pairs = _pairs(historical)
+    historical_signature = tuple(
+        (
+            *sorted((refs[left], refs[right])),
+            score,
+            reciprocal,
+        )
+        for left, right, score, reciprocal in _production_pair_rows(historical)
+    )
+    deterministic_pairs = {
+        tuple(sorted((left, right)))
+        for left, neighbors in deterministic.items()
+        for right, _score in neighbors
+    }
+    generic_refs = {
+        index for index, code in enumerate(corpus.truth.scenario_by_source_row)
+        if code == "S3"
+    }
+    return {
+        "records": records,
+        "historical_ms": round(historical_ms, 3),
+        "deterministic_ms": round(deterministic_ms, 3),
+        "tie_substitutions": substitutions,
+        "unequal_score_substitution_anchors": unequal,
+        "all_permutations_equal": all(
+            value == deterministic_signature for value in signatures.values()
+        ),
+        "permutation_pair_differences": {
+            name: len(set(value) ^ set(deterministic_signature))
+            for name, value in signatures.items()
+        },
+        "historical_proposal_fingerprint": stable_fingerprint(historical_signature),
+        "deterministic_proposal_fingerprint": stable_fingerprint(deterministic_signature),
+        "historical_pair_count": len(historical_pairs),
+        "deterministic_pair_count": len(deterministic_pairs),
+        "historical_coverage": _coverage(historical_pairs, corpus.truth),
+        "deterministic_coverage": _coverage(deterministic_pairs, corpus.truth),
+        "historical_generic_hub_pairs": sum(
+            left in generic_refs and right in generic_refs
+            for left, right in historical_pairs
+        ),
+        "deterministic_generic_hub_pairs": sum(
+            left in generic_refs and right in generic_refs
+            for left, right in deterministic_pairs
+        ),
+    }
+
+
+def run_hybrid_tie_comparison(records=500, *, seed=1101):
+    """Compare historical and deterministic character selection after fusion/caps."""
+    from app.services import hybrid_retrieval
+
+    corpus = generate_scale_corpus(records, seed=seed)
+    data = corpus.records.copy()
+    refs = tuple(canonical_record_ref_key(1, index) for index in range(records))
+    data[CANONICAL_RECORD_REF_FIELD] = refs
+    original = hybrid_retrieval._deterministic_nearest_pairs
+
+    def run(historical):
+        if historical:
+            hybrid_retrieval._deterministic_nearest_pairs = (
+                lambda matrix, top_k, _refs: hybrid_retrieval._nearest_pairs(
+                    matrix, top_k
+                )
+            )
+        else:
+            hybrid_retrieval._deterministic_nearest_pairs = original
+        return HybridCandidateRetriever(
+            benchmark_configuration(), cache=MemoryEmbeddingVectorCache()
+        ).retrieve(data, "DISCOVERY")
+
+    try:
+        historical = run(True)
+        deterministic = run(False)
+    finally:
+        hybrid_retrieval._deterministic_nearest_pairs = original
+
+    def signature(result):
+        return tuple(
+            {
+                "endpoints": sorted((refs[item.left_record_id], refs[item.right_record_id])),
+                "priority": item.retrieval_priority,
+                "rank": item.retrieval_rank,
+                "source": item.retrieval_source.value,
+                "tier": item.retrieval_tier.value,
+                "sources": item.evidence.retrieval_sources,
+                "channel_ranks": item.evidence.channel_ranks,
+                "channel_scores": item.evidence.channel_scores,
+                "reciprocal": item.evidence.reciprocal_sources,
+            }
+            for item in result.candidates
+        )
+
+    old_signature, new_signature = signature(historical), signature(deterministic)
+    old_pairs = {
+        tuple(sorted((item.left_record_id, item.right_record_id)))
+        for item in historical.candidates
+    }
+    new_pairs = {
+        tuple(sorted((item.left_record_id, item.right_record_id)))
+        for item in deterministic.candidates
+    }
+    old_by_pair = {
+        tuple(sorted((item.left_record_id, item.right_record_id))): item
+        for item in historical.candidates
+    }
+    new_by_pair = {
+        tuple(sorted((item.left_record_id, item.right_record_id))): item
+        for item in deterministic.candidates
+    }
+    changed_pairs = old_pairs ^ new_pairs
+    non_character_changed_memberships = sum(
+        "CHAR_VECTOR" not in (
+            old_by_pair.get(pair) or new_by_pair[pair]
+        ).evidence.retrieval_sources
+        for pair in changed_pairs
+    )
+    return {
+        "historical_fingerprint": stable_fingerprint(old_signature),
+        "deterministic_fingerprint": stable_fingerprint(new_signature),
+        "historical_candidate_count": len(historical.candidates),
+        "deterministic_candidate_count": len(deterministic.candidates),
+        "candidate_pair_symmetric_difference": len(changed_pairs),
+        "changed_memberships_without_character_source": non_character_changed_memberships,
+        "historical_coverage": _coverage(old_pairs, corpus.truth),
+        "deterministic_coverage": _coverage(new_pairs, corpus.truth),
+        "historical_provider_calls": historical.metrics.provider_request_count,
+        "deterministic_provider_calls": deterministic.metrics.provider_request_count,
+        "historical_runtime_ms": historical.metrics.retrieval_runtime_ms,
+        "deterministic_runtime_ms": deterministic.metrics.retrieval_runtime_ms,
+    }
+
+
 def _production_pair_rows(directed):
     pairs = {}
     for source, neighbors in directed.items():
@@ -158,32 +367,33 @@ def run_downstream_experiment(records=64, *, seed=1101):
     corpus = generate_scale_corpus(records, seed=seed)
     texts = [semantic_retrieval_text(row) for row in corpus.records.to_dict("records")]
     refs = np.arange(records, dtype=np.int64)
-    dense = normalize(SklearnHashingEmbedder().encode(texts))
-    stable, _anchors, _ties = _stable_dense_directed(dense, refs)
     sparse_matrix = TfidfVectorizer(
         analyzer=_token_character_ngrams, min_df=1, lowercase=False
     ).fit_transform(texts)
     sparse_result, _metrics = _sparse_directed(sparse_matrix, refs)
     alternatives = {
-        "CURRENT": None,
-        "DETERMINISTIC_TIE": _production_pair_rows(stable),
+        "HISTORICAL": "HISTORICAL",
+        "DETERMINISTIC_TIE": None,
         "SPARSE_CHARACTER": _production_pair_rows(sparse_result),
     }
-    original = hybrid_retrieval._nearest_pairs
+    original = hybrid_retrieval._deterministic_nearest_pairs
     results = {}
     try:
         with tempfile.TemporaryDirectory(prefix="gf11b-pre-") as directory:
             for name, replacement in alternatives.items():
-                calls = {"value": 0}
-                if replacement is not None:
-                    def selected(matrix, top_k, *, _replacement=replacement):
-                        calls["value"] += 1
-                        if calls["value"] % 2 == 1:
-                            return original(matrix, top_k)
-                        return _replacement
-                    hybrid_retrieval._nearest_pairs = selected
+                if replacement == "HISTORICAL":
+                    hybrid_retrieval._deterministic_nearest_pairs = (
+                        lambda matrix, top_k, _refs: hybrid_retrieval._nearest_pairs(
+                            matrix, top_k
+                        )
+                    )
+                elif replacement is not None:
+                    hybrid_retrieval._deterministic_nearest_pairs = (
+                        lambda _matrix, _top_k, _refs, _replacement=replacement:
+                            _replacement
+                    )
                 else:
-                    hybrid_retrieval._nearest_pairs = original
+                    hybrid_retrieval._deterministic_nearest_pairs = original
                 result = run_scale_benchmark(
                     records=records, seed=seed, scenario="canonical-mixed",
                     db_path=Path(directory) / f"{name.casefold()}.sqlite",
@@ -198,7 +408,7 @@ def run_downstream_experiment(records=64, *, seed=1101):
                     "complexity": dict(result.complexity_metrics),
                 }
     finally:
-        hybrid_retrieval._nearest_pairs = original
+        hybrid_retrieval._deterministic_nearest_pairs = original
     return results
 
 
@@ -311,11 +521,14 @@ def main(argv=None):
     parser.add_argument("--records", type=int, choices=(64, 500, 5000), required=True)
     parser.add_argument("--seed", type=int, default=1101)
     parser.add_argument("--downstream", action="store_true")
+    parser.add_argument("--production-tie", action="store_true")
     args = parser.parse_args(argv)
-    result = (
-        run_downstream_experiment(args.records, seed=args.seed)
-        if args.downstream else run_character_contract_experiment(args.records, seed=args.seed)
-    )
+    if args.downstream:
+        result = run_downstream_experiment(args.records, seed=args.seed)
+    elif args.production_tie:
+        result = run_production_tie_experiment(args.records, seed=args.seed)
+    else:
+        result = run_character_contract_experiment(args.records, seed=args.seed)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

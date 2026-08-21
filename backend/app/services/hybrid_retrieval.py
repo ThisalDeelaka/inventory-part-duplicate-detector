@@ -28,6 +28,7 @@ from app.engine.variant_extractor import extract_variant_attributes, find_critic
 
 
 RRF_K = 60
+CANONICAL_RECORD_REF_FIELD = "__CANONICAL_RECORD_REF_KEY"
 CHANNEL_WEIGHTS = {
     "EXACT_DESCRIPTION": 2.4,
     "PART_NUMBER_FAMILY": 2.2,
@@ -460,6 +461,72 @@ def _nearest_pairs(matrix, top_k: int) -> list[tuple[int, int, float, bool]]:
     return sorted(output, key=lambda item: (-item[2], item[0], item[1]))
 
 
+def _deterministic_directed_neighbors(
+    matrix, top_k: int, canonical_record_refs,
+) -> dict[int, tuple[tuple[int, float], ...]]:
+    """Exact cosine top-k with canonical ordering for equal-score members."""
+    count = matrix.shape[0]
+    refs = tuple(str(value or "").strip() for value in canonical_record_refs)
+    if len(refs) != count or any(not value for value in refs):
+        raise ValueError("character retrieval requires one canonical record reference per row")
+    if len(set(refs)) != count:
+        raise ValueError("character retrieval canonical record references must be unique")
+    if count < 2:
+        return {}
+
+    index = NearestNeighbors(n_neighbors=count, metric="cosine", algorithm="brute")
+    index.fit(matrix)
+    ref_values = np.asarray(refs, dtype=object)
+    directed = {}
+    for start in range(0, count, 64):
+        distances, indices = index.kneighbors(
+            matrix[start:start + 64], n_neighbors=count
+        )
+        for offset, (row_distances, row_indices) in enumerate(zip(distances, indices)):
+            source = start + offset
+            keep = row_indices != source
+            targets = row_indices[keep]
+            similarities = 1.0 - row_distances[keep]
+            order = np.lexsort((ref_values[targets], -similarities))[:top_k]
+            directed[source] = tuple(
+                (int(targets[position]), float(similarities[position]))
+                for position in order
+                if similarities[position] > 0
+            )
+    return directed
+
+
+def _deterministic_nearest_pairs(
+    matrix, top_k: int, canonical_record_refs,
+) -> list[tuple[int, int, float, bool]]:
+    refs = tuple(str(value or "").strip() for value in canonical_record_refs)
+    directed_neighbors = _deterministic_directed_neighbors(matrix, top_k, refs)
+    directed = {
+        (source, target): round(max(0.0, score) * 100, 2)
+        for source, neighbors in directed_neighbors.items()
+        for target, score in neighbors
+    }
+
+    pairs = {}
+    for (source, target), score in directed.items():
+        pair = tuple(sorted((source, target)))
+        row = pairs.setdefault(pair, {"score": 0.0, "directions": set()})
+        row["score"] = max(row["score"], score)
+        row["directions"].add((source, target))
+    output = [
+        (left, right, row["score"], len(row["directions"]) == 2)
+        for (left, right), row in pairs.items()
+        if row["score"] > 0
+    ]
+    return sorted(
+        output,
+        key=lambda item: (
+            -item[2],
+            *sorted((refs[item[0]], refs[item[1]])),
+        ),
+    )
+
+
 class HybridCandidateRetriever:
     def __init__(
         self,
@@ -578,6 +645,9 @@ class HybridCandidateRetriever:
 
         vector_pairs = []
         if self.configuration.local_embedding_enabled and records:
+            canonical_record_refs = [
+                record.get(CANONICAL_RECORD_REF_FIELD) for record in records
+            ]
             fingerprints = [record_fingerprint(text) for text in texts]
             loaded = self.cache.load(fingerprints, self.embedder.model_version)
             missing_positions = [
@@ -593,8 +663,10 @@ class HybridCandidateRetriever:
                 self.cache.save(additions, self.embedder.model_version)
                 loaded.update(additions)
             matrix = normalize(np.vstack([loaded[fingerprint] for fingerprint in fingerprints]))
-            vector_pairs = _nearest_pairs(
-                matrix, self.configuration.hybrid_retrieval_vector_top_k
+            vector_pairs = _deterministic_nearest_pairs(
+                matrix,
+                self.configuration.hybrid_retrieval_vector_top_k,
+                canonical_record_refs,
             )
         for rank, (left, right, score, reciprocal) in enumerate(vector_pairs, 1):
             add_channel(left, right, "CHAR_VECTOR", rank, score, reciprocal)

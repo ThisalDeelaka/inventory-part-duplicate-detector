@@ -209,3 +209,61 @@ retrieval semantics and does not reduce the measured exact work enough to make
 separate ANN/approximate-retrieval architecture decision with explicit recall,
 protected-conflict, dependency, determinism, and rollback gates. GF-11B remains
 blocked and is not verified.
+
+## GF-11B-PRE2 Deterministic Tie Contract
+
+GF-11B-PRE2 rejects input-position-dependent character-neighbor membership as
+incompatible with deterministic, auditable discovery. Production `CHAR_VECTOR`
+selection now retains the frozen 384-bin nonnegative `char_wb` 3..5 hashing,
+L2 normalization, exact cosine, configured top-k, two-decimal retained scores,
+reciprocal reconstruction, fusion, and caps. Self is excluded first. Raw cosine
+similarity orders candidates descending; only candidates with exactly equal raw
+similarity use immutable GF-1 `record_ref_key` ascending. Missing, blank, or
+duplicate canonical references fail closed. DataFrame position and source-row
+ordinal are not tie keys. `LEXICAL` and every other channel retain their prior
+selector and semantics.
+
+Focused clear-gap, below-boundary-tie, exact-boundary-tie, self-exclusion,
+duplicate-valued-row, reverse-order, fixed-shuffle, repeatability, reciprocal,
+cap, and non-character fixtures passed. The historical-versus-canonical
+validator observed zero unequal-score substitutions.
+
+### Measured canonical comparisons
+
+| Records | Historical character time | Deterministic character time | Historical/new character pairs | Tie substitutions | Unequal-score substitutions | Permutation differences |
+|---:|---:|---:|---:|---:|---:|---:|
+| 500 | 35.78 ms | 358.22 ms | 1,834 / 1,781 | 889 | 0 | 0 across reverse + seeds 7/19/1101 |
+| 5,000 | 1.22 s | about 21.35 s | 19,029 / 18,416 | 9,063 | 0 | 0 across reverse + seeds 7/19/1101 |
+
+The 500 character-proposal fingerprints changed from
+`988c415feeb108696952daeaf6ece6088d9b8b4e53ae2f1b14454349ad7b2818`
+to `a6e5cec3493633b1761789af6a13cd7cfe87f1f1e241a68b33afccd1f77bb2b5`.
+Character discovery coverage remained 60/60 truth sets, 31/31 protected
+conflicts, 20/20 cross-site sets, and 21/21 bridge sets. Generic-hub character
+pairs changed from 357 to 300 through exact boundary-tie selection only.
+
+After normal fusion and unchanged caps, both 500 runs retained 388 hybrid
+candidates and covered 54/60 truth sets, 20/20 cross-site sets, and 21/21 bridge
+sets; protected-conflict pairs remain intentionally blocked before final hybrid
+selection. The fused fingerprints changed from
+`759e2479b4fae176f2340cd2e8d02608215caac1ce0932150eb1adda3a14fb3c`
+to `a460b9f832003ee46c38e1ee5e17c79998ea573719911a0242ec8eada4c772c9`.
+There were 48 final pair substitutions. Nine displaced cap-boundary rows did
+not themselves carry `CHAR_VECTOR`; their displacement was a downstream effect
+of the authorized character rank substitutions, not a change to their source
+channels or to the cap algorithm.
+
+The disposable 64-record historical/deterministic normal GF1-through-GF6 runs
+remained identical: 285 proposals/evidence edges, 64 neighborhoods/634 members,
+five groups/13 members, six conflicts/42 members, three deferred work units/32
+members, 51 unassigned, maximum neighborhood/work-unit size 16, and three
+targeted checks. Both completed with zero accepted cannot-link violations,
+duplicate accepted memberships, singleton groups, cross-scan contamination,
+legacy pair/G1/G2-v1/shadow rows, and provider calls.
+
+This prerequisite does not reduce structural work. The 5k 384-bin character
+matrix still has 24,995,000 positive-overlap directed comparisons, and the
+canonical full-neighbor tie resolution is slower than the historical incidental
+selector. GF-11B remains blocked and unverified. The next required unit is a
+separate approximate character-retrieval architecture decision; no ANN,
+approximate index, or sparse production representation is introduced here.
