@@ -24,10 +24,11 @@ from app.discovery.contracts import (
 )
 from app.engine.candidate_generator import MAX_CANDIDATE_PAIRS
 from app.repositories.discovery_repository import DiscoveryRepository
+from app.services.character_retrieval import character_retrieval_contract_payload
 
 
-DISCOVERY_ALGORITHM_VERSION = "identity-discovery-v2-neighborhoods"
-DISCOVERY_CONFIGURATION_VERSION = "identity-discovery-config-v2"
+DISCOVERY_ALGORITHM_VERSION = "identity-discovery-v3-character-strategy"
+DISCOVERY_CONFIGURATION_VERSION = "identity-discovery-config-v3"
 NEIGHBOR_PROPOSAL_VERSION = "neighbor-proposal-v1"
 _MAX_WARNING_CODES = 20
 _MAX_CONTEXT_ITEMS = 20
@@ -53,7 +54,9 @@ def _sha256(value) -> str:
     return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
 
 
-def _configuration_payload(configuration, scan_mode: str, selected_fields: list[str]) -> dict:
+def _configuration_payload(
+    configuration, scan_mode: str, selected_fields: list[str], record_count: int
+) -> dict:
     hybrid_enabled = bool(getattr(configuration, "hybrid_retrieval_enabled", True))
     payload = {
         "configuration_version": DISCOVERY_CONFIGURATION_VERSION,
@@ -85,11 +88,17 @@ def _configuration_payload(configuration, scan_mode: str, selected_fields: list[
         "local_embedding_enabled": bool(value("local_embedding_enabled", True)),
         "local_embedding_model": str(value("local_embedding_model", "sklearn-hashing-domain-v1")),
     })
+    if payload["local_embedding_enabled"]:
+        payload["character_retrieval"] = character_retrieval_contract_payload(
+            record_count, payload["hybrid_vector_top_k"]
+        )
     return payload
 
 
 def discovery_fingerprint(catalog_records, configuration, scan_mode, selected_fields) -> tuple[str, str]:
-    config = _configuration_payload(configuration, scan_mode, selected_fields)
+    config = _configuration_payload(
+        configuration, scan_mode, selected_fields, len(catalog_records)
+    )
     payload = {
         "algorithm_version": DISCOVERY_ALGORITHM_VERSION,
         "configuration": config,
@@ -349,7 +358,12 @@ def mark_discovery_failed(db, discovery_run_id: int, error: Exception) -> None:
     row = db.get(IdentityDiscoveryRunRow, discovery_run_id)
     if row is None or row.status == DiscoveryRunStatus.COMPLETED.value:
         return
-    category = re.sub(r"[^A-Z0-9_]+", "_", type(error).__name__.upper())[:80]
+    safe_category = getattr(error, "safe_category", None)
+    category = (
+        re.sub(r"[^A-Z0-9_]+", "_", str(safe_category).upper())[:80]
+        if safe_category
+        else re.sub(r"[^A-Z0-9_]+", "_", type(error).__name__.upper())[:80]
+    )
     row.status = DiscoveryRunStatus.FAILED.value
     row.safe_error_category = category or "DISCOVERY_FAILURE"
     row.completed_at = datetime.now(timezone.utc)

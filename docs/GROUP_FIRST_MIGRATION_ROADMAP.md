@@ -543,9 +543,11 @@ Dropping tables, deleting rows, or migrating historical pair feedback into inven
 
 ## GF-11 — 100k scale hardening
 
-Implementation status: IN PROGRESS. GF-11A baseline/instrumentation is
-verified; GF-11B, GF-11C, and GF-11D have not started. These are bounded
-delivery units within GF-11 and do not alter the GF-0 through GF-12 order.
+Implementation status: IN PROGRESS. GF-11A and GF-11B-PRE/PRE2/ANN are
+verified. The GF-11B production adapter and quality gates are implemented, but
+GF-11B is insufficient because bounded 20k and 100k normal discovery do not
+complete; GF-11C and GF-11D have not started. These remain bounded delivery
+units within GF-11 and do not alter the GF-0 through GF-12 order.
 
 ### Goal
 

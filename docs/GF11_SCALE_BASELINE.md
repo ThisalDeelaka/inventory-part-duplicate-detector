@@ -429,3 +429,74 @@ exact current-cosine reranking**, with the measured pool-320 contract as the
 only production implementation target. GF-11B production hardening remains
 blocked and unverified until that separate production implementation,
 fingerprinting, typed failure handling, and scale regression pass.
+
+## GF-11B Production Fixed-Seed LSH Hardening
+
+Status: **INSUFFICIENT / NOT VERIFIED**. The production adapter, deterministic
+strategy boundary, fingerprinting, typed failures, and bounded work metrics are
+implemented and pass their focused and 5k quality gates. The required 20k
+normal-discovery gate does not pass, so GF-11B cannot be marked verified.
+
+The frozen production contract is `character-retrieval-strategy-v1`. Scans
+below 2,000 records retain the PRE2 exact selector; scans at or above 2,000 use
+`fixed-seed-cosine-lsh-exact-rerank-v1`: eight tables, 12 bits/table, NumPy
+PCG64 seed 1101, Hamming radius two, bucket-read bound 640, gather bound 1,280,
+candidate pool 320, and current final top-k five. Candidate retention is bit
+agreement descending then GF1 `record_ref_key` ascending. Final selection is
+exact current cosine descending then the same canonical tie key. No approximate
+score becomes output, and exact/safety channels and downstream fusion/caps are
+unchanged.
+
+The discovery configuration moved to `identity-discovery-config-v3` and the
+algorithm to `identity-discovery-v3-character-strategy`. Its configuration JSON
+includes selected strategy, activation threshold, LSH/vector/rerank versions,
+NumPy and scikit-learn versions, seed, tables, bits, probe/bucket/gather bounds,
+pool, top-k, and stable ordering policies. The observed large-scan production
+contract fingerprint was
+`4b76491de0baafcf5b147ccb2a6f69c7c44395b73f83c62cb36c8f845e092557`.
+Historical runs remain immutable.
+
+Large-scan failures are typed as `LSH_INDEX_BUILD_FAILED`, `LSH_QUERY_FAILED`,
+`LSH_CANDIDATE_POOL_INSUFFICIENT`, `LSH_CONFIGURATION_INVALID`, or
+`LSH_DETERMINISM_VALIDATION_FAILED`. They propagate as failed discovery; there
+is no large-scan brute-force fallback and no partial-success result.
+
+Measured production quality and work:
+
+| Records | Strategy | Character result | Final hybrid | Bucket reads | Exact reranks | Character time |
+|---:|---|---|---|---:|---:|---:|
+| 500 | exact | 60/60 truth, 31/31 protected, 20/20 cross-site, 21/21 bridge | exact reference 388/388 | N/A | exact reference | 0.144 s |
+| 5,000 | LSH | 591/591 truth, 312/312 protected, 204/204 cross-site, 208/208 bridge | exact reference 500/500, 100% overlap | 15,287,982 | 1,600,000 | 8.259 s |
+| 20,000 | LSH | isolated selector completed | combined hybrid retained 500 | 46,493,221 | 6,400,000 | 34.639 s in the combined final observation |
+
+The 5k normal policy-v2 pipeline completed discovery in 57.731 seconds versus
+the 73.99-second GF-11A baseline, persisted 20,500 proposals and 20,500 signed
+edges, formed 1,684 neighborhoods with maximum resolver work unit 1,250, then
+reached the same truthful `IDENTITYRESOLUTIONVALIDATIONERROR` in GF-5. Every
+persisted safety count remained zero, including provider, pair, G1, G2-v1, and
+shadow writes.
+
+The 20k normal run failed the acceptance gate twice: under the unchanged
+300-second bound it timed out in discovery after a final 11.630-second catalog,
+with zero proposals committed. This is worse than GF-11A's completed
+219.86-second discovery and therefore is not a material improvement. Isolated
+20k exact lexical construction/query took 72.181 seconds; the full in-memory
+hybrid retriever took 99.804 seconds, including 34.639 seconds for character
+LSH. The remaining greater-than-188-second discovery cost is outside the
+combined hybrid retriever and is the measured dominant residual.
+
+The canonical 100k normal attempt also timed out in discovery at 300.030
+seconds after a 61.289-second catalog, with zero proposals committed. No 100k
+production character-completion claim is made. Partial-state safety observations
+were all zero. The bound was not increased.
+
+P1-P20 passed. Canonical 5k production LSH repeat, reverse, and shuffles
+7/19/1101 all produced semantic fingerprint
+`e98e5a1ac481b6c586eea1acc26b78643bc834011d74e4b6c560ae5e59f67c96`
+with exactly 1,600,000 reranks per run. Production code imports no benchmark
+truth and has no provider surface. No schema, migration, or dependency changed.
+
+GF-11B is insufficient against its acceptance contract because full 20k
+discovery did not materially improve and 100k discovery did not complete.
+The next evidence-driven work must isolate and bound the measured non-hybrid
+discovery/cache/persistence path before any GF-11C definition or readiness claim.

@@ -586,6 +586,29 @@ frontend, resolver, provider, or secret behavior changed. GF-11B remains
 blocked and unverified until the separately reviewed production adapter,
 fingerprinting, explicit failures, and full scale regression are implemented.
 
+## GF-11B production fixed-seed LSH hardening
+
+The production adapter and its prerequisites are implemented, but GF-11B is
+**INSUFFICIENT / NOT VERIFIED** against the frozen scale gate.
+
+- `N < 2,000` retains exact deterministic character retrieval; `N >= 2,000`
+  selects fixed-seed LSH pool 320 plus exact cosine/canonical rerank.
+- P1-P20, 500 exact reference, 5k character coverage, 5k 500/500 final-hybrid
+  overlap, and 5k repeat/reverse/shuffle determinism pass with zero providers.
+- The 5k normal pipeline improves discovery from 73.99 to 57.731 seconds and
+  reaches the same GF-5 `IDENTITYRESOLUTIONVALIDATIONERROR`.
+- The normal 20k pipeline times out in discovery at 300.036 seconds rather than
+  improving on the 219.86-second GF-11A discovery baseline. The bounded 100k
+  run also times out in discovery at 300.030 seconds.
+- At 20k, combined in-memory hybrid retrieval is 99.804 seconds, of which
+  character LSH is 34.639 seconds; the greater-than-188-second residual before
+  durable discovery completion is outside the combined hybrid retriever.
+- No schema, migration, dependency, frontend, provider, resolver, identity
+  rule, pair/G1/G2-v1/shadow write, or historical-run interpretation changed.
+
+GF-11A and the GF-11B-PRE/PRE2/ANN prerequisites remain verified. GF-11B is
+insufficient; GF-11C and GF-11D are not started; GF-11 remains IN PROGRESS.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -621,8 +644,9 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A,
-GF-11B-PRE, and GF-11B-PRE2 are verified, and the GF-11B-ANN architecture
-decision is complete. The next bounded unit is the authorized fixed-seed LSH
-plus exact-rerank production implementation inside GF-11B. GF-11B itself
-remains blocked/unverified; no 100k readiness or GF-12 graduation claim exists.
+GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A and
+GF-11B-PRE/PRE2/ANN are verified prerequisites. The production LSH adapter and
+quality gates are implemented, but GF-11B is insufficient because normal 20k
+and 100k discovery still time out under the frozen bound. The next bounded
+investigation is the measured non-hybrid discovery/cache/persistence residual;
+GF-11C is not started, and no 100k readiness or GF-12 graduation claim exists.

@@ -17,6 +17,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.db.models import LocalEmbeddingCache, utcnow
+from app.services.character_retrieval import (
+    CharacterRetrievalStrategy,
+    CharacterRetrievalWorkMetrics,
+    character_retrieval_contract_fingerprint,
+    retrieve_lsh_directed_neighbors,
+    select_character_retrieval_strategy,
+)
 from app.engine.business_rules import evaluate_hard_business_rules
 from app.engine.normalizer import (
     extract_technical_tokens,
@@ -122,6 +129,7 @@ class HybridRetrievalResult:
     candidates: tuple[RetrievalCandidate, ...]
     metrics: RetrievalMetrics
     embedding_model_version: str
+    character_retrieval: CharacterRetrievalWorkMetrics | None = None
 
 
 @dataclass(frozen=True)
@@ -501,6 +509,14 @@ def _deterministic_nearest_pairs(
 ) -> list[tuple[int, int, float, bool]]:
     refs = tuple(str(value or "").strip() for value in canonical_record_refs)
     directed_neighbors = _deterministic_directed_neighbors(matrix, top_k, refs)
+    return _directed_neighbors_to_pairs(directed_neighbors, refs)
+
+
+def _directed_neighbors_to_pairs(
+    directed_neighbors, canonical_record_refs,
+) -> list[tuple[int, int, float, bool]]:
+    """Shared reciprocal reconstruction for exact and LSH-directed neighbors."""
+    refs = tuple(str(value or "").strip() for value in canonical_record_refs)
     directed = {
         (source, target): round(max(0.0, score) * 100, 2)
         for source, neighbors in directed_neighbors.items()
@@ -644,6 +660,7 @@ class HybridCandidateRetriever:
             add_channel(left, right, "LEXICAL", rank, score, reciprocal)
 
         vector_pairs = []
+        character_metrics = None
         if self.configuration.local_embedding_enabled and records:
             canonical_record_refs = [
                 record.get(CANONICAL_RECORD_REF_FIELD) for record in records
@@ -663,10 +680,32 @@ class HybridCandidateRetriever:
                 self.cache.save(additions, self.embedder.model_version)
                 loaded.update(additions)
             matrix = normalize(np.vstack([loaded[fingerprint] for fingerprint in fingerprints]))
-            vector_pairs = _deterministic_nearest_pairs(
-                matrix,
-                self.configuration.hybrid_retrieval_vector_top_k,
-                canonical_record_refs,
+            vector_top_k = self.configuration.hybrid_retrieval_vector_top_k
+            strategy = select_character_retrieval_strategy(len(records))
+            if strategy == CharacterRetrievalStrategy.EXACT:
+                character_started = time.perf_counter()
+                directed_neighbors = _deterministic_directed_neighbors(
+                    matrix, vector_top_k, canonical_record_refs
+                )
+                elapsed_ms = round(
+                    (time.perf_counter() - character_started) * 1000, 3
+                )
+                character_metrics = CharacterRetrievalWorkMetrics(
+                    strategy=strategy,
+                    contract_fingerprint=character_retrieval_contract_fingerprint(
+                        len(records), vector_top_k
+                    ),
+                    exact_rerank_evaluations=len(records) * max(0, len(records) - 1),
+                    retrieval_time_ms=elapsed_ms,
+                )
+            else:
+                lsh_result = retrieve_lsh_directed_neighbors(
+                    matrix, canonical_record_refs, vector_top_k
+                )
+                directed_neighbors = lsh_result.directed_neighbors
+                character_metrics = lsh_result.metrics
+            vector_pairs = _directed_neighbors_to_pairs(
+                directed_neighbors, canonical_record_refs
             )
         for rank, (left, right, score, reciprocal) in enumerate(vector_pairs, 1):
             add_channel(left, right, "CHAR_VECTOR", rank, score, reciprocal)
@@ -855,4 +894,6 @@ class HybridCandidateRetriever:
             ),
             retrieval_runtime_ms=round((time.perf_counter() - started) * 1000, 2),
         )
-        return HybridRetrievalResult(tuple(candidates), metrics, self.embedder.model_version)
+        return HybridRetrievalResult(
+            tuple(candidates), metrics, self.embedder.model_version, character_metrics
+        )
