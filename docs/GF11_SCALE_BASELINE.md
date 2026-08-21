@@ -267,3 +267,165 @@ canonical full-neighbor tie resolution is slower than the historical incidental
 selector. GF-11B remains blocked and unverified. The next required unit is a
 separate approximate character-retrieval architecture decision; no ANN,
 approximate index, or sparse production representation is introduced here.
+
+## GF-11B-ANN Approximate Character Retrieval Architecture Decision
+
+### Frozen two-stage boundary
+
+The architecture decision authorizes only candidate generation, never an ANN
+score as discovery output:
+
+```text
+current normalized 384-bin char vectors
+  -> fixed-seed random-hyperplane LSH candidate generation
+  -> bounded candidate pool
+  -> exact cosine over current vectors in that pool
+  -> exact score descending / GF1 record_ref_key ascending on ties
+  -> existing character top-k and reciprocal reconstruction
+  -> unchanged fusion, provenance, family/tier/per-record/global caps
+```
+
+The selected benchmark contract is
+`fixed-seed-cosine-lsh-exact-rerank-v1`: eight tables, 12 bits/table,
+NumPy PCG64 seed 1101, deterministic Hamming-radius-two probing, canonical
+GF1 insertion/query identity, bucket-read bound `2 * candidate_pool_k`, gather
+bound `4 * candidate_pool_k`, `candidate_pool_k=320`, and current final
+character `top_k=5`. Approximate bit agreement selects the pool only. Final
+scores are exact dot products of the frozen L2-normalized vectors, which are
+exact cosine values, and ANN-native ordering is discarded.
+
+Every future discovery fingerprint must include algorithm contract version,
+backend name/version, vector representation version, seed, stable insertion
+policy, table/bit/probe/bucket/gather parameters, candidate pool, exact-rerank
+version, final top-k, NumPy version, and scikit-learn version.
+
+`EXACT_DESCRIPTION`, `PART_NUMBER_FAMILY`, `TECHNICAL_IDENTITY`,
+`STANDARD_BLOCKING`, and exact `LEXICAL` behavior remain safety-sensitive exact
+channels. No benchmark truth, scenario code, duplicate-set identity, conflict
+label, or bridge label enters LSH build/query/rerank input.
+
+### Candidate-pool and parameter sweep
+
+The canonical 5k pool sweep used eight tables. Recall is directed exact
+character-neighbor recall after exact rerank; pair Jaccard compares undirected
+character pairs with the deterministic exact reference.
+
+| Pool | Multiple of top-k | Recall | Pair Jaccard | Exact reranks | Selector time |
+|---:|---:|---:|---:|---:|---:|
+| 5 | 1x | 31.848% | 18.286% | 25,000 | 0.525 s |
+| 10 | 2x | 34.512% | 20.205% | 50,000 | 0.641 s |
+| 20 | 4x | 39.004% | 24.035% | 100,000 | 0.974 s |
+| 40 | 8x | 45.652% | 29.718% | 200,000 | 1.371 s |
+| 80 | 16x | 56.404% | 40.133% | 400,000 | 2.033 s |
+| 160 | 32x | 71.496% | 56.368% | 800,000 | 3.964 s |
+| 320 | 64x | 87.144% | 77.593% | 1,600,000 | 7.537 s |
+
+Pool 80 missed seven 5k truth sets and 35 protected-conflict fixtures. Pool
+160 recovered all truth/cross-site/bridge sets but still missed 2/312 protected
+fixtures. Pool 320 was therefore the smallest measured pool satisfying every
+coverage gate. At 500/pool 80, four/eight/twelve tables produced directed recall
+of 93.88%/97.84%/98.04% and pair Jaccard of 88.88%/95.82%/96.09%; eight tables
+was retained as the smaller near-Pareto configuration. Pool 320 at 500 produced
+97.88% directed recall, 97.98% pair recall, 97.87% pair precision, 95.93%
+Jaccard, 449/500 fully recovered anchors, 0.106 mean missing neighbors, and
+0.60 worst-anchor recall.
+
+At 5k/pool 320, pair recall was 88.17%, precision 86.61%, Jaccard 77.59%,
+2,869/5,000 anchors recovered their complete exact top-k, mean missing exact
+neighbors was 0.6428, and worst-anchor recall was zero. Those raw retrieval
+losses are material and are not hidden; authorization follows only because all
+mandatory truth/safety gates and downstream hybrid comparisons passed.
+
+### Coverage and final hybrid results
+
+Character-pair discovery coverage was unchanged:
+
+| Records | Truth sets exact/LSH | Protected exact/LSH | Cross-site exact/LSH | Bridge exact/LSH | Generic-hub pairs exact/LSH |
+|---:|---:|---:|---:|---:|---:|
+| 500 | 60/60 / 60/60 | 31/31 / 31/31 | 20/20 / 20/20 | 21/21 / 21/21 | 300 / 300 |
+| 5,000 | 591/591 / 591/591 | 312/312 / 312/312 | 204/204 / 204/204 | 208/208 / 208/208 | 3,110 / 3,110 |
+
+After unchanged fusion and caps, the 500 exact/LSH runs both retained 388
+proposals, had 98.4655% pair Jaccard and six substitutions, and identically
+covered 54/60 truth sets, 20/20 cross-site sets, 21/21 bridge sets, and 0/31
+protected fixtures (protected contradictions are intentionally blocked before
+final hybrid selection). Both retained 25 generic-hub pairs. At 5k the final
+exact and LSH hybrid outputs were identical: 500 proposals, 100% overlap,
+231/591 truth coverage, 61/204 cross-site, 115/208 bridge, 0/312 protected, and
+zero generic-hub proposals. Provider calls were zero.
+
+Repeated runs, reversed input, and shuffles 7/19/1101 produced identical
+post-rerank semantic fingerprints at both 500 and 5k. Canonical insertion order,
+fixed seed, fixed parameters, and current-library versions are mandatory parts
+of the future contract; incidental parallel build order is not allowed.
+
+### Scale, memory, and crossover observations
+
+Selector-only timings exclude the shared O(n) vector construction and are
+comparable with the PRE2 exact-selector observation.
+
+| Records | Exact deterministic | Selected LSH + exact rerank | Candidate enumerations | Exact reranks | Vector bytes | Index-array bytes |
+|---:|---:|---:|---:|---:|---:|---:|
+| 500 | 0.152 s | 0.596 s | bounded | at most 160,000 | 768,000 | 159,456 |
+| 1,000 | 0.600 s | 1.189 s | bounded | at most 320,000 | 1,536,000 | 171,456 |
+| 2,000 | 2.584 s | 2.366 s | bounded | 640,000 | 3,072,000 | 195,456 |
+| 5,000 | 15.185 s | 7.433 s | 15,287,982 | 1,600,000 | 7,680,000 | 267,456 |
+| 20,000 | not rerun; quadratic reference | 31.987 s | 46,493,221 | 6,400,000 | 30,720,000 | 627,456 |
+| 100,000 | prior discovery still running at 300 s | 308.493 s | 320,810,636 | 32,000,000 | 153,600,000 | 2,547,456 |
+
+The 100k prototype completed and is plausibly executable, but exceeded the
+preferred 300-second evidence target by 8.493 seconds. This authorizes bounded
+production implementation and optimization, not GF-11B or 100k graduation.
+Measured peak RSS remains unavailable on this Windows runtime. Reported array
+bytes exclude Python bucket-object overhead; batched exact rerank may add about
+31.5 MB of transient float32 candidate-vector storage at pool 320.
+
+The measured crossover is approximately 2,000 eligible records. Proposed
+future policy: exact deterministic character retrieval for `N < 2,000`; the
+approved LSH candidate path for `N >= 2,000`. The threshold is a proposed
+production contract input, not activated by this decision commit and never
+selected from incidental machine load.
+
+### Option/Pareto matrix
+
+| Architecture | Deterministic/auditable | Dependency | Measured quality/safety | 20k/100k | Memory/implementation risk | Decision |
+|---|---|---|---|---|---|---|
+| Exact brute force | yes after PRE2 | current only | reference truth | structurally quadratic; 100k baseline timed out | dense full-neighbor work | reference below threshold only |
+| Fixed-seed LSH + exact rerank | yes with frozen canonical build/config | current NumPy/scikit-learn | pool 320 passes every measured coverage gate; 5k final hybrid identical | 31.987 s / 308.493 s | bounded arrays; moderate new adapter risk | selected |
+| HNSW + exact rerank | unproven locally; requires fixed seed, canonical single-thread build and self-check | absent; likely `hnswlib` approval/pin | not benchmarked | potentially strong | native dependency and graph-build reproducibility risk | reject for this decision |
+| FAISS-style + exact rerank | backend-specific; FAISS HNSW multi-thread add is not reproducible | absent; FAISS/BLAS approval/pin | not benchmarked | potentially strong | heaviest packaging/runtime surface, especially Windows | reject for this decision |
+| Sparse exact character n-grams | deterministic but semantic change | current only | prior synthetic coverage passed | measured 64.11% pair overlap makes 100k implausible | large posting traversal | reject |
+
+[`hnswlib`](https://github.com/nmslib/hnswlib) supports cosine, an explicit
+random seed and thread controls and is
+[Apache-2.0 licensed](https://github.com/nmslib/hnswlib/blob/master/LICENSE),
+but it is not installed or locally reproducibility-tested. [FAISS supports
+cosine through normalized dot product and is MIT
+licensed](https://github.com/facebookresearch/faiss/blob/main/README.md), but
+is also absent; [its reproducibility documentation identifies HNSW insertion
+as a multithreaded exception](https://github.com/facebookresearch/faiss/wiki/Threads-and-asynchronous-calls).
+No dependency is approved or added by this decision.
+
+### Failure semantics and decision
+
+A future LSH index-build failure, query failure, empty/undersized pool,
+unsupported/fingerprint-mismatched configuration, or determinism self-check
+failure must produce a typed discovery capability failure. Exact fallback is
+allowed only when the declared eligible-record count is below the approved
+exact threshold. A scan requiring LSH must never silently run brute force,
+silently return fewer candidates, or adapt parameters from machine load.
+Interrupted experiments/runs cannot report completion.
+
+A1-A16 passed: stable exact reference; repeated and shuffled LSH determinism;
+canonical exact rerank; pool/top-k validation; frozen 384-bin exact cosine;
+ANN-native score isolation; protected/cross-site/bridge gates; truth isolation;
+zero provider calls; no database/default database; truthful interruption;
+complete algorithm fingerprint; and explicit unavailable/unsupported backend
+failure. HNSW and FAISS quality benchmarks were N/A because no such dependency
+is locally installed and installation was prohibited.
+
+Decision: authorize **fixed-seed random-hyperplane LSH candidate generation plus
+exact current-cosine reranking**, with the measured pool-320 contract as the
+only production implementation target. GF-11B production hardening remains
+blocked and unverified until that separate production implementation,
+fingerprinting, typed failure handling, and scale regression pass.

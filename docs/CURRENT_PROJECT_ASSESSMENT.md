@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B-PRE, and the GF-11B-PRE2 deterministic character tie contract are verified; GF-11B remains blocked and unverified pending a separate approximate character-retrieval architecture decision.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B-PRE, and GF-11B-PRE2 are verified; the GF-11B-ANN architecture decision authorizes fixed-seed LSH candidate generation plus exact rerank; GF-11B production hardening remains blocked and unverified pending that production implementation and regression.
 
 ## GF-1 canonical scan-record catalog
 
@@ -563,7 +563,28 @@ GF-11A is verified as the measurement and observability unit of GF-11.
   `IDENTITYRESOLUTIONVALIDATIONERROR`; 20k times out with GF5 running; 100k
   times out in discovery. These results establish a baseline, not readiness.
 - Discovery retrieval/fanout is the single measured GF-11B recommendation.
-  GF-11B, GF-11C, GF-11D, and GF-12 have not started.
+  GF-11B-PRE/PRE2 and the GF-11B-ANN architecture decision are complete;
+  production GF-11B hardening, GF-11C, GF-11D, and GF-12 remain unverified.
+
+## GF-11B-ANN approximate character-retrieval architecture decision
+
+The decision-only benchmark authorizes one future production target: fixed-seed
+random-hyperplane LSH candidate generation over the current normalized 384-bin
+character vectors, followed by bounded exact cosine reranking and the verified
+canonical GF1 tie contract. The measured minimum safety-passing pool is 320 for
+current top-k 5. Exact, part-family, technical, standard-blocking, and lexical
+channels remain exact.
+
+Canonical 500 and 5k character coverage did not regress, 5k final hybrid output
+was identical, and repeat/reverse/shuffle semantic fingerprints were stable.
+The benchmark-only selector completed 20k in 31.987 seconds and 100k in 308.493
+seconds; the latter is plausible but 8.493 seconds above the preferred evidence
+target. The observed exact/LSH crossover is approximately 2,000 records.
+
+No production retrieval path, threshold, dependency, schema, migration, API,
+frontend, resolver, provider, or secret behavior changed. GF-11B remains
+blocked and unverified until the separately reviewed production adapter,
+fingerprinting, explicit failures, and full scale regression are implemented.
 
 ## Reusable current capabilities
 
@@ -600,6 +621,8 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS and GF-11A
-is verified. GF-11B is the next bounded unit and has not started. No 100k
-readiness or GF-12 production-graduation claim is included here.
+GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A,
+GF-11B-PRE, and GF-11B-PRE2 are verified, and the GF-11B-ANN architecture
+decision is complete. The next bounded unit is the authorized fixed-seed LSH
+plus exact-rerank production implementation inside GF-11B. GF-11B itself
+remains blocked/unverified; no 100k readiness or GF-12 graduation claim exists.
