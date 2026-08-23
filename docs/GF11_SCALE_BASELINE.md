@@ -500,3 +500,108 @@ GF-11B is insufficient against its acceptance contract because full 20k
 discovery did not materially improve and 100k discovery did not complete.
 The next evidence-driven work must isolate and bound the measured non-hybrid
 discovery/cache/persistence path before any GF-11C definition or readiness claim.
+
+## GF-11B Residual Discovery Attribution
+
+Status: **GF-11B-RESIDUAL VERIFIED; GF-11B remains INSUFFICIENT / NOT
+VERIFIED**. This measurement-only prerequisite used the exact production
+`ScanRunner` discovery path on disposable SQLite databases and stopped at the
+GF-4 boundary. It changed no production algorithm, configuration, persistence,
+schema, migration, dependency, identity rule, or provider behavior.
+
+### MEASURED
+
+All times are seconds. The 500 and 5k observations include cProfile. The 20k
+attribution observation disables cProfile to separate profiler overhead; a
+separate cProfile-enabled 20k run completed production DISCOVERY at 289.867
+seconds but hit the 300.102-second bound while finalizing the benchmark report.
+That bounded run therefore supplies completed bucket/query evidence, not a
+production discovery timeout claim.
+
+| Non-overlapping bucket | 500 | 5k | 20k |
+|---|---:|---:|---:|
+| Discovery fingerprinting | 0.011 | 0.022 | 0.039 |
+| Standard blocking/scoring | 34.725 | 41.239 | 14.157 |
+| Retrieval total | 2.687 | 69.464 | 121.674 |
+| Post-retrieval proposal materialization | 0.069 | 1.659 | 0.754 |
+| GF-2 proposal materialization | 3.188 | 3.692 | 1.355 |
+| GF-2 proposal persistence | 0.959 | 0.891 | 0.882 |
+| GF-2 commit | 0.007 | 0.009 | 0.009 |
+| GF-3 neighborhood construction | 1.670 | 3.386 | 2.841 |
+| GF-3 neighborhood persistence | 0.363 | 1.042 | 1.283 |
+| GF-3 commit | 0.018 | 0.024 | 0.026 |
+| Final validation/reconstruction | 0.907 | 2.309 | 2.527 |
+| Other unattributed | 0.375 | 1.149 | 1.265 |
+| **Discovery total** | **44.977** | **124.886** | **146.811** |
+| Total attributed | 99.167% | 99.080% | 99.138% |
+| Post-retrieval total | 7.200 | 13.036 | 9.696 |
+| Post-retrieval attributed | 99.610% | 99.743% | 99.702% |
+
+The 20k retrieval decomposition was cache load 0.072, cache save 15.133,
+character LSH 31.754, lexical vectorization 1.173, lexical nearest neighbors
+30.373, and other channels/fusion/materialization 43.169. The final retrieval
+cap remained 500.
+
+| Count | 500 | 5k | 20k |
+|---|---:|---:|---:|
+| Standard pair objects | 19,326 | 20,000 | 20,000 |
+| GF-2 proposal rows | 19,328 | 20,500 | 20,500 |
+| Embedding-cache rows requested | 352 | 3,509 | 14,041 |
+| GF-3 neighborhoods | 500 | 1,684 | 5,654 |
+| GF-3 members | 10,000 | 22,761 | 26,734 |
+| Maximum neighborhood members | 20 | 20 | 20 |
+| SELECT executions | 368 | 3,525 | 14,057 |
+| INSERT executions | 1,356 | 6,882 | 25,354 |
+| executemany observations | 502 | 1,325 | 5,063 |
+| UPDATE executions | 2 | 2 | 2 |
+| observed commits | 3 | 3 | 3 |
+
+Cache rows grew 9.97x from 500 to 5k and 4.00x from 5k to 20k. Cache
+persistence issued exactly one SELECT and one INSERT per requested row at every
+scale: 352/352, 3,509/3,509, and 14,041/14,041. Total SELECTs grew 9.58x then
+3.99x. Neighborhoods grew 3.37x then 3.36x; members grew 2.28x then 1.17x.
+Profiled wall time grew 2.78x from 500 to 5k. A wall-time growth ratio across
+5k and 20k is intentionally not treated as algorithm evidence because only the
+former includes cProfile.
+
+The canonical 5k cProfile hot paths by cumulative time were retrieval 69.447,
+candidate scoring/evaluation 31.534/31.028/30.981 across 20,500 calls, variant
+extraction 30.172 across 176,538 calls, eligibility/allowed-pair evaluation
+28.622/27.584 across 68,858 calls, character LSH 25.656, and standard candidate
+generation 11.665. Largest self-time entries included character LSH 14.477,
+regex compilation 3.735, variant extraction 3.220, and regex search 3.037.
+The 20k cProfile-enabled process completed all production discovery buckets;
+its raw function table was unavailable because report finalization crossed the
+bound. No raw profile dump, SQL parameter, absolute path, hostname, username,
+or inventory value was retained.
+
+Proposal and neighborhood fingerprints were identical with profiling enabled
+and disabled at the focused semantic gates. The completed 5k fingerprints were
+`369fec5ae1653622d9a754ffc0a2191e1188dfa9c2ddd2af22369d5148875e8d`
+and `756b2c967ccea72dfa8a06293bbe4d53515dc76185bdba8e7ee806e1a06d50e9`.
+The completed 20k observation produced 20,500 proposals and 5,654
+neighborhoods/26,734 members with proposal fingerprint
+`0d0565f2b4c77a0398ffe36dcb081498fcb4499de0958592d10be0ed76621272`
+and neighborhood fingerprint
+`60fd2f95b2e44f0e3b7953f306f97f69fac3d851935b3e3f176aa8c57473dc6e`.
+Provider requests were zero.
+
+### INFERRED
+
+The earlier claim that approximately 188--200+ seconds occur after hybrid
+retrieval is not reproduced by exact call-boundary measurement. Post-retrieval
+work was only 7.200, 13.036, and 9.696 seconds. GF-3 is inside DISCOVERY, but
+GF-2/GF-3 persistence and all three commits are not dominant. The largest 20k
+bucket is retrieval itself, and its largest measured sub-bucket is other
+channels/fusion/materialization. cProfile associates that path with repeated
+eligibility/allowed-pair checks, variant extraction, and candidate scoring.
+The cache-save path is independently query-amplified and approximately linear
+in missing vectors, but at 15.133 seconds it is not the largest 20k target.
+
+### NEXT-HYPOTHESIS
+
+The one bounded next GF-11B hardening target is **repeated eligibility and
+variant-extraction work in hybrid other-channel fusion/materialization**. Any
+optimization requires a separate prompt and must preserve every retrieval,
+proposal, neighborhood, identity, and safety fingerprint. GF-11C is not
+started.

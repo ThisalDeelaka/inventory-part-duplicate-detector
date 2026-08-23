@@ -609,6 +609,28 @@ The production adapter and its prerequisites are implemented, but GF-11B is
 GF-11A and the GF-11B-PRE/PRE2/ANN prerequisites remain verified. GF-11B is
 insufficient; GF-11C and GF-11D are not started; GF-11 remains IN PROGRESS.
 
+## GF-11B residual discovery profiling
+
+GF-11B-RESIDUAL is **VERIFIED** as a measurement-only prerequisite. The
+production LSH adapter remains committed, but GF-11B remains **INSUFFICIENT /
+NOT VERIFIED** and GF-11C is not started.
+
+Exact production-path measurements attribute 99.08% of 5k discovery and
+99.14% of completed 20k discovery; post-retrieval attribution is 99.74% and
+99.70%, respectively. The completed no-cProfile 20k observation measured
+146.811 seconds total, 121.674 seconds in retrieval, and only 9.696 seconds
+after retrieval. The earlier inferred 188--200+ second post-retrieval residual
+was not reproduced. GF-2/GF-3 persistence, reconstruction, and commits are not
+the dominant residual.
+
+The next bounded GF-11B hardening target is exactly **repeated eligibility and
+variant-extraction work in hybrid other-channel fusion/materialization**, the
+largest measured 20k retrieval sub-bucket at 43.169 seconds. The separately
+measured per-vector cache-save SELECT/INSERT pattern is query-amplified but is
+not the largest target. No production optimization is included in the
+profiling prerequisite; GF-11D, GF-12, provider work, and readiness graduation
+remain outside this change.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
