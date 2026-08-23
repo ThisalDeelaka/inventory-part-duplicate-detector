@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, its GF-11B prerequisites, and the bounded GF-11B production hardening units are verified. GF-11C, GF-11D, and GF-12 are not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A and GF-11B are verified, and GF-11C-PRE has verified the deterministic exact lexical reference correction. GF-11C indexed lexical implementation has not started/resumed; GF-11D and GF-12 are not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -657,6 +657,26 @@ exact lexical nearest-neighbor construction/query as the next measured target.
 GF-11C is not started; GF-11D, GF-12, provider work, and graduation remain out
 of scope.
 
+## GF-11C-PRE deterministic lexical reference correction
+
+The brute-force lexical selector now excludes self before top-k, orders by
+full-precision cosine descending, and resolves exact ties with immutable GF-1
+`record_ref_key` ascending. TF-IDF, cosine, top-k, two-decimal output, zero
+filtering, reciprocity, provenance, fusion, and caps remain unchanged.
+
+Canonical 500/5k measurements found 625/8,607 directed tie substitutions and
+zero unequal-score substitutions. Reverse and shuffles 7/19/1101 had zero
+semantic differences. Lexical-only truth/protected/cross-site/bridge coverage
+was unchanged. At 500 final hybrid coverage was unchanged. At 5k, 26 final
+pair memberships changed and synthetic truth/bridge coverage moved from
+231/113 to 226/108 while retaining 500 proposals. A bounded 64-record
+GF1-through-GF6 comparison remained identical and every safety/provider/
+deprecated-write count was zero.
+
+New discovery runs use the v4 lexical-canonical-tie contract; historical runs
+remain immutable. Brute-force quadratic lexical work remains. GF-11C indexed
+lexical retrieval is still not started and is the next bounded task.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -693,6 +713,7 @@ The approved target makes groups the business-domain center. Pair machinery will
 ## Next phase boundary
 
 GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A and
-GF-11B are verified bounded units. The next measured target is 100k exact
-lexical nearest-neighbor construction/query, but GF-11C is not started. No
+GF-11B are verified bounded units, and GF-11C-PRE is verified. The next
+measured target is 100k exact indexed lexical nearest-neighbor construction/
+query; GF-11C implementation has not started/resumed. No
 GF-11D, 100k-readiness, GF-12, or production-graduation claim exists.

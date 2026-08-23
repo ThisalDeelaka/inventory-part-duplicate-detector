@@ -701,3 +701,64 @@ in canonical records, and 20k discovery materially improves. The 100k attempt
 shows bounded feature/blocking progress but does not complete; the single
 measured GF-11C target is **100k exact lexical nearest-neighbor construction
 and query**. GF-11C, GF-11D, and GF-12 are not started.
+
+## GF-11C-PRE Deterministic Lexical Reference Correction
+
+Status: **VERIFIED prerequisite inside GF-11C**. GF-11C exact indexed lexical
+retrieval remains not started/resumed, GF-11D is not started, and GF-11 remains
+IN PROGRESS.
+
+Production lexical retrieval used L2-normalized `TfidfVectorizer` features
+with `char_wb` 3--5 grams, `min_df=1`, exact cosine, and a brute-force sklearn
+`top_k + 1` query. It excluded self only after sklearn selected boundary
+membership, supplied no GF-1 references, and therefore inherited input order
+for exact kth-score ties. Output reconstruction then rounded scores to two
+decimals, removed zero-score pairs, and reconstructed reciprocity.
+
+The corrected brute-force reference excludes self before final membership,
+ranks by full-precision cosine descending and immutable GF-1 `record_ref_key`
+ascending only on exact ties, selects the unchanged top-k, then performs the
+unchanged two-decimal rounding, positive filtering, reciprocity, provenance,
+fusion, tiers, and caps. Missing, blank, or duplicate references fail closed.
+
+New runs use `identity-discovery-v4-lexical-canonical-ties` and
+`identity-discovery-config-v4`; the fingerprint records representation,
+cosine, self-exclusion, ordering, and rounding. Historical GF-2 runs remain
+immutable and are not reinterpreted.
+
+| Records | Directed tie substitutions | Unequal-score substitutions | Kth-tie anchors / tied candidates | Lexical pair difference | Reverse/shuffle differences |
+|---:|---:|---:|---:|---:|---:|
+| 64 | 64 | 0 | 36 / 131 | 14 | 0 |
+| 500 | 625 | 0 | 188 / 4,381 | 537 | 0 |
+| 5,000 | 8,607 | 0 | 1,919 / 395,005 | 8,119 | 0 |
+
+Old/new lexical fingerprints were `c8f6d0d6...`/`8b7c872c...` at 500 and
+`9d44a938...`/`e812e9ff...` at 5k. Reverse and shuffles 7/19/1101 were
+identical. Every changed directed membership had the exact full-precision kth
+score. Lexical-only coverage remained 60/60 and 591/591 truth, 31/31 and
+312/312 protected, 20/20 and 204/204 cross-site, and 21/21 and 208/208 bridge.
+Lexical generic-hub pairs changed 357 to 300 and 3,729 to 3,110.
+
+At 500 both paths retained 388 final proposals: 353 common pairs, 70 pair-set
+differences, identical 54/60 truth, 20/20 cross-site, 21/21 bridge, 0/31
+protected coverage, and 25 generic-hub pairs. At 5k both retained 500: 487
+common pairs and 26 pair-set differences. Canonical ties changed synthetic
+truth coverage 231/591 to 226/591 and bridge 113/208 to 108/208; cross-site
+stayed 62/204, protected stayed 0/312, and generic-hub pairs changed 10 to 14.
+These changes arise only from authorized exact-score boundary substitutions.
+
+A 64-record GF1-through-GF6 comparison was identical: 285 proposals, 64
+neighborhoods/634 members, 285 edges, five groups/13 members, six conflicts/42
+members, three deferred units/32 members, 51 unassigned, and three targeted
+checks. Both had zero cannot-link violations, duplicate memberships,
+singletons, cross-scan contamination, providers, or pair/G1/G2-v1/shadow
+writes.
+
+LT1--LT16 and 135 focused tests passed. Full backend passed 1,025 tests,
+frontend passed 94, and the production build passed outside the sandbox after
+the known sandbox-only Vite `spawn EPERM`. Schema, migration, dependency,
+provider, resolver, LSH, indexed lexical, and secret changes are zero.
+
+This correction stabilizes the exact lexical reference only. Global
+brute-force cosine work remains, so 100k lexical construction/query is still
+the GF-11C scale target.

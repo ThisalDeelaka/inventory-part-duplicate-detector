@@ -11,6 +11,7 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 from sqlalchemy.orm import Session
@@ -484,6 +485,7 @@ def _conflict_signals(
 
 
 def _nearest_pairs(matrix, top_k: int) -> list[tuple[int, int, float, bool]]:
+    """Historical input-order-dependent lexical selector; reference use only."""
     count = matrix.shape[0]
     if count < 2:
         return []
@@ -512,6 +514,46 @@ def _nearest_pairs(matrix, top_k: int) -> list[tuple[int, int, float, bool]]:
         if row["score"] > 0
     ]
     return sorted(output, key=lambda item: (-item[2], item[0], item[1]))
+
+
+def _deterministic_lexical_directed_neighbors(
+    matrix, top_k: int, canonical_record_refs,
+) -> dict[int, tuple[tuple[int, float], ...]]:
+    """Exact brute-force cosine top-k with canonical full-precision tie ordering."""
+    count = matrix.shape[0]
+    refs = tuple(str(value or "").strip() for value in canonical_record_refs)
+    if len(refs) != count or any(not value for value in refs):
+        raise ValueError("lexical retrieval requires one canonical record reference per row")
+    if len(set(refs)) != count:
+        raise ValueError("lexical retrieval canonical record references must be unique")
+    if count < 2 or top_k <= 0:
+        return {}
+
+    ref_values = np.asarray(refs, dtype=object)
+    directed = {}
+    for start in range(0, count, 64):
+        similarities = cosine_similarity(
+            matrix[start:start + 64], matrix, dense_output=True
+        )
+        for offset, row_scores in enumerate(similarities):
+            source = start + offset
+            row_scores[source] = -np.inf
+            targets = np.flatnonzero(row_scores > 0)
+            order = np.lexsort((ref_values[targets], -row_scores[targets]))[:top_k]
+            directed[source] = tuple(
+                (int(targets[position]), float(row_scores[targets[position]]))
+                for position in order
+            )
+    return directed
+
+
+def _deterministic_lexical_nearest_pairs(
+    matrix, top_k: int, canonical_record_refs,
+) -> list[tuple[int, int, float, bool]]:
+    refs = tuple(str(value or "").strip() for value in canonical_record_refs)
+    return _directed_neighbors_to_pairs(
+        _deterministic_lexical_directed_neighbors(matrix, top_k, refs), refs
+    )
 
 
 def _deterministic_directed_neighbors(
@@ -729,11 +771,14 @@ class HybridCandidateRetriever:
                 lexical_matrix = TfidfVectorizer(
                     analyzer="char_wb", ngram_range=(3, 5), min_df=1
                 ).fit_transform(texts)
-                lexical_pairs = _nearest_pairs(
-                    lexical_matrix, self.configuration.hybrid_retrieval_lexical_top_k
-                )
             except ValueError:
-                lexical_pairs = []
+                lexical_matrix = None
+            if lexical_matrix is not None:
+                lexical_pairs = _deterministic_lexical_nearest_pairs(
+                    lexical_matrix,
+                    self.configuration.hybrid_retrieval_lexical_top_k,
+                    [record.get(CANONICAL_RECORD_REF_FIELD) for record in records],
+                )
         for rank, (left, right, score, reciprocal) in enumerate(lexical_pairs, 1):
             add_channel(left, right, "LEXICAL", rank, score, reciprocal)
 
