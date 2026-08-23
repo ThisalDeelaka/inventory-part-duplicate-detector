@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B-PRE, and GF-11B-PRE2 are verified; the GF-11B-ANN architecture decision authorizes fixed-seed LSH candidate generation plus exact rerank; GF-11B production hardening remains blocked and unverified pending that production implementation and regression.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, its GF-11B prerequisites, and the bounded GF-11B production hardening units are verified. GF-11C, GF-11D, and GF-12 are not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -631,6 +631,32 @@ not the largest target. No production optimization is included in the
 profiling prerequisite; GF-11D, GF-12, provider work, and readiness graduation
 remain outside this change.
 
+## GF-11B repeated eligibility and variant-extraction hardening
+
+GF-11B is **VERIFIED** as a bounded scale-hardening unit; GF-11 as a whole
+remains IN PROGRESS and no 100k or production-readiness graduation is claimed.
+
+The production discovery path now creates one immutable, scan-local
+`CandidateEvaluationFeatures` bundle per GF-1 `record_ref_key` and reuses it
+across eligibility, allowed-pair evaluation, standard/hybrid scoring, technical
+grouping, and fusion conflict checks. Pair-local decisions still execute for
+every pair. Raw helper APIs remain equivalent and no discovery fingerprint or
+version changed.
+
+At 5k, variant extraction fell from 176,538 to 5,000 calls while eligibility,
+allowed-pair, and scoring remained 68,858/68,858/20,500. Canonical proposal and
+neighborhood fingerprints remained exact. The authoritative 20k repeat reduced
+DISCOVERY from 146.811 to 111.927 seconds and retrieval from 121.674 to 86.370
+seconds; feature construction cost 1.902 seconds. Full 5k execution retained
+the same GF-5 `IDENTITYRESOLUTIONVALIDATIONERROR` and zero safety/provider/
+deprecated-write violations.
+
+The bounded 100k run completed 100,000 feature bundles and standard blocking
+but timed out during the pre-cache retrieval path. Checkpoint order identifies
+exact lexical nearest-neighbor construction/query as the next measured target.
+GF-11C is not started; GF-11D, GF-12, provider work, and graduation remain out
+of scope.
+
 ## Reusable current capabilities
 
 - deterministic normalization;
@@ -667,8 +693,6 @@ The approved target makes groups the business-domain center. Pair machinery will
 ## Next phase boundary
 
 GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A and
-GF-11B-PRE/PRE2/ANN are verified prerequisites. The production LSH adapter and
-quality gates are implemented, but GF-11B is insufficient because normal 20k
-and 100k discovery still time out under the frozen bound. The next bounded
-investigation is the measured non-hybrid discovery/cache/persistence residual;
-GF-11C is not started, and no 100k readiness or GF-12 graduation claim exists.
+GF-11B are verified bounded units. The next measured target is 100k exact
+lexical nearest-neighbor construction/query, but GF-11C is not started. No
+GF-11D, 100k-readiness, GF-12, or production-graduation claim exists.

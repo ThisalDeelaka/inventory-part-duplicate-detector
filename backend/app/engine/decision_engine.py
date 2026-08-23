@@ -1,11 +1,12 @@
 from app.core.constants import CONFIDENCE_ACTIONS
-from app.engine.application_context import extract_application_context, find_application_context_mismatch
+from app.engine.candidate_evaluation_features import (
+    CandidateEvaluationFeatures,
+    build_candidate_evaluation_features,
+)
 from app.engine.business_rules import evaluate_hard_business_rules
 from app.engine.column_semantics import clean_field_value, normalize_scan_mode
 from app.engine.explanation import build_explanation
-from app.engine.generic_description_guard import has_generic_description
 from app.engine.item_family_classifier import shared_family
-from app.engine.normalizer import extract_technical_tokens, normalize_description, normalize_part_no_with_dictionary
 from app.engine.similarity_model import (
     calculate_fuzzy_similarity,
     calculate_part_no_similarity,
@@ -13,7 +14,6 @@ from app.engine.similarity_model import (
     calculate_tfidf_similarity,
 )
 from app.engine.variant_extractor import (
-    extract_variant_attributes,
     find_critical_mismatches,
     find_identity_role_mismatches,
     find_one_sided_qualifier,
@@ -72,35 +72,42 @@ def _critical_mismatch_explanation(record_a, record_b, mismatch):
     return f"Both are {family}, but {mismatch['label']} differs: {left} vs {right}."
 
 
-def _base_payload(record_a, record_b, selected_fields, scan_mode):
+def _base_payload(record_a, record_b, selected_fields, features_a, features_b):
     matched, mismatched, _business = _field_matches(record_a, record_b, selected_fields)
-    attributes_a = extract_variant_attributes(record_a.get("DESCRIPTION"))
-    attributes_b = extract_variant_attributes(record_b.get("DESCRIPTION"))
+    attributes_a = features_a.variant_payload()
+    attributes_b = features_b.variant_payload()
     return matched, mismatched, attributes_a, attributes_b
 
 
-def _visibility_payload(record_a, record_b, generic_warning=False, context_warning=False):
+def _visibility_payload(
+    record_a, record_b, features_a, features_b,
+    generic_warning=False, context_warning=False,
+):
     return {
         "generic_description_warning": generic_warning,
-        "application_context_a": extract_application_context(record_a.get("PART_NO"), record_a.get("DESCRIPTION")),
-        "application_context_b": extract_application_context(record_b.get("PART_NO"), record_b.get("DESCRIPTION")),
+        "application_context_a": list(features_a.application_context),
+        "application_context_b": list(features_b.application_context),
         "application_context_warning": context_warning,
-        "normalized_description_a": normalize_description(record_a.get("DESCRIPTION")),
-        "normalized_description_b": normalize_description(record_b.get("DESCRIPTION")),
-        "normalized_part_no_a": normalize_part_no_with_dictionary(record_a.get("PART_NO")),
-        "normalized_part_no_b": normalize_part_no_with_dictionary(record_b.get("PART_NO")),
+        "normalized_description_a": features_a.normalized_description,
+        "normalized_description_b": features_b.normalized_description,
+        "normalized_part_no_a": features_a.normalized_part_no,
+        "normalized_part_no_b": features_b.normalized_part_no,
     }
 
 
-def _has_strong_part_number_identity_evidence(record_a, record_b, similarity: float) -> bool:
+def _has_strong_part_number_identity_evidence(features_a, features_b, similarity: float) -> bool:
     """Reuse the scorer's existing >=90 strong part-number relationship."""
-    left = normalize_part_no_with_dictionary(record_a.get("PART_NO")).replace(" ", "")
-    right = normalize_part_no_with_dictionary(record_b.get("PART_NO")).replace(" ", "")
+    left = features_a.normalized_part_no.replace(" ", "")
+    right = features_b.normalized_part_no.replace(" ", "")
     return bool(left and right and similarity >= 90)
 
 
-def _blocked_result(record_a, record_b, selected_fields, scan_mode, rule):
-    matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
+def _blocked_result(
+    record_a, record_b, selected_fields, scan_mode, rule, features_a, features_b
+):
+    matched, mismatched, attributes_a, attributes_b = _base_payload(
+        record_a, record_b, selected_fields, features_a, features_b
+    )
     score = rule["score_cap"]
     return {
         "final_score": score,
@@ -117,23 +124,34 @@ def _blocked_result(record_a, record_b, selected_fields, scan_mode, rule):
         "critical_mismatches": rule["critical_mismatches"],
         "variant_attributes_a": attributes_a,
         "variant_attributes_b": attributes_b,
-        **_visibility_payload(record_a, record_b),
+        **_visibility_payload(record_a, record_b, features_a, features_b),
     }
 
 
 def evaluate_candidate(
     record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE",
     *, allow_uom_mapping_review=False,
+    features_a: CandidateEvaluationFeatures | None = None,
+    features_b: CandidateEvaluationFeatures | None = None,
 ):
+    if (features_a is None) != (features_b is None):
+        raise ValueError("candidate evaluation requires both feature bundles or neither")
+    if features_a is None:
+        features_a = build_candidate_evaluation_features(record_a)
+        features_b = build_candidate_evaluation_features(record_b)
     scan_mode = normalize_scan_mode(scan_mode)
     rule = evaluate_hard_business_rules(
         record_a, record_b, scan_mode,
         allow_uom_mapping_review=allow_uom_mapping_review,
     )
     if rule["blocked"]:
-        return _blocked_result(record_a, record_b, selected_fields, scan_mode, rule)
+        return _blocked_result(
+            record_a, record_b, selected_fields, scan_mode, rule, features_a, features_b
+        )
 
-    matched, mismatched, attributes_a, attributes_b = _base_payload(record_a, record_b, selected_fields, scan_mode)
+    matched, mismatched, attributes_a, attributes_b = _base_payload(
+        record_a, record_b, selected_fields, features_a, features_b
+    )
     critical_mismatches = (
         find_critical_mismatches(attributes_a, attributes_b)
         + find_identity_role_mismatches(attributes_a, attributes_b)
@@ -157,7 +175,7 @@ def evaluate_candidate(
             "critical_mismatches": critical_mismatches,
             "variant_attributes_a": attributes_a,
             "variant_attributes_b": attributes_b,
-            **_visibility_payload(record_a, record_b),
+            **_visibility_payload(record_a, record_b, features_a, features_b),
         }
 
     one_sided_qualifier = find_one_sided_qualifier(attributes_a, attributes_b)
@@ -184,7 +202,9 @@ def evaluate_candidate(
             "critical_mismatches": [one_sided_qualifier],
             "variant_attributes_a": attributes_a,
             "variant_attributes_b": attributes_b,
-            **_visibility_payload(record_a, record_b, generic_warning=True),
+            **_visibility_payload(
+                record_a, record_b, features_a, features_b, generic_warning=True
+            ),
         }
 
     desc_a, desc_b = record_a.get("DESCRIPTION"), record_b.get("DESCRIPTION")
@@ -192,8 +212,8 @@ def evaluate_candidate(
     fuzzy = calculate_fuzzy_similarity(desc_a, desc_b)
     description = round(tfidf * 0.6 + fuzzy * 0.4, 2)
     part_no = calculate_part_no_similarity(record_a.get("PART_NO"), record_b.get("PART_NO"))
-    tokens_a = extract_technical_tokens(desc_a)
-    tokens_b = extract_technical_tokens(desc_b)
+    tokens_a = features_a.technical_mapping()
+    tokens_b = features_b.technical_mapping()
     token_score = calculate_technical_token_score(tokens_a, tokens_b)
     _matched, _mismatched, business = _field_matches(record_a, record_b, selected_fields)
 
@@ -210,9 +230,9 @@ def evaluate_candidate(
     context_warning = False
     reported_mismatches = []
 
-    if has_generic_description(desc_a, desc_b):
+    if features_a.generic_description or features_b.generic_description:
         generic_warning = True
-        if _has_strong_part_number_identity_evidence(record_a, record_b, part_no):
+        if _has_strong_part_number_identity_evidence(features_a, features_b, part_no):
             explanation = (
                 f"{explanation} Generic description evidence is supplemented by a strong "
                 "part-number relationship."
@@ -225,14 +245,23 @@ def evaluate_candidate(
             rule_decision = "DOWNGRADE"
             rejection_reason = "GENERIC_DESCRIPTION"
             if (
-                normalize_description(desc_a)
-                and normalize_description(desc_a) == normalize_description(desc_b)
+                features_a.normalized_description
+                and features_a.normalized_description == features_b.normalized_description
             ):
                 business_status = "POSSIBLE_DUPLICATE_REVIEW"
             else:
                 business_status = "INSUFFICIENT_DATA"
 
-    context_mismatch = find_application_context_mismatch(record_a, record_b)
+    context_mismatch = None
+    if (
+        features_a.application_context
+        and features_b.application_context
+        and set(features_a.application_context) != set(features_b.application_context)
+    ):
+        context_mismatch = {
+            "values_a": list(features_a.application_context),
+            "values_b": list(features_b.application_context),
+        }
     if context_mismatch:
         context_warning = True
         left = ", ".join(context_mismatch["values_a"])
@@ -278,5 +307,8 @@ def evaluate_candidate(
         "critical_mismatches": reported_mismatches,
         "variant_attributes_a": attributes_a,
         "variant_attributes_b": attributes_b,
-        **_visibility_payload(record_a, record_b, generic_warning, context_warning),
+        **_visibility_payload(
+            record_a, record_b, features_a, features_b,
+            generic_warning, context_warning,
+        ),
     }

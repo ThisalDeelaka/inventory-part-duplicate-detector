@@ -31,6 +31,7 @@ from app.db.models import (
     IdentityNeighborhoodSnapshot,
 )
 from app.orchestration.contracts import ScanStage
+from app.engine import candidate_evaluation_features
 from app.repositories.discovery_repository import DiscoveryRepository
 from app.services import hybrid_retrieval, identity_discovery_service
 from app.services import identity_neighborhood_service, scan_runner
@@ -41,6 +42,7 @@ from app.services.scan_runner import ScanRunner
 PROFILE_CONTRACT_VERSION = "gf11b-residual-discovery-profile-v1"
 TAXONOMY = (
     "DISCOVERY_FINGERPRINTING",
+    "FEATURE_PRECOMPUTATION",
     "STANDARD_BLOCKING",
     "RETRIEVAL_TOTAL",
     "POST_RETRIEVAL_PROPOSAL_MATERIALIZATION",
@@ -213,6 +215,11 @@ def _instrumented_production_path(collector: _Collector, session):
         "gf3_durable_commit_done": False,
     }
     def score(*args, **kwargs):
+        collector.counts["scoring_calls"] = collector.counts.get("scoring_calls", 0) + 1
+        if kwargs.get("features_a") is not None and kwargs.get("features_b") is not None:
+            collector.counts["feature_reuse_hits"] = (
+                collector.counts.get("feature_reuse_hits", 0) + 2
+            )
         bucket = (
             "POST_RETRIEVAL_PROPOSAL_MATERIALIZATION"
             if state["retrieval_completed"] else "STANDARD_BLOCKING"
@@ -220,6 +227,27 @@ def _instrumented_production_path(collector: _Collector, session):
         with collector.measure(bucket):
             return original_score(*args, **kwargs)
     patch(scan_runner, "score_candidate", score)
+
+    original_build_features = scan_runner.build_candidate_evaluation_features
+    def build_features(*args, **kwargs):
+        collector.counts["feature_bundles_built"] = (
+            collector.counts.get("feature_bundles_built", 0) + 1
+        )
+        with collector.measure("FEATURE_PRECOMPUTATION"):
+            result = original_build_features(*args, **kwargs)
+        if collector.counts["feature_bundles_built"] % 5000 == 0:
+            collector.active_sub_stage = "FEATURE_PRECOMPUTATION"
+            collector.checkpoint()
+        return result
+    patch(scan_runner, "build_candidate_evaluation_features", build_features)
+
+    original_variant_extraction = candidate_evaluation_features.extract_variant_attributes
+    def variant_extraction(*args, **kwargs):
+        collector.counts["variant_extraction_calls"] = (
+            collector.counts.get("variant_extraction_calls", 0) + 1
+        )
+        return original_variant_extraction(*args, **kwargs)
+    patch(candidate_evaluation_features, "extract_variant_attributes", variant_extraction)
 
     original_retrieve = hybrid_retrieval.HybridCandidateRetriever.retrieve
     def retrieve(instance, *args, **kwargs):
@@ -241,11 +269,31 @@ def _instrumented_production_path(collector: _Collector, session):
             "character_seconds": round(character.retrieval_time_ms / 1000, 6) if character else 0.0,
             "character_strategy": character.strategy.value if character else "DISABLED",
             "provider_request_count": metrics.provider_request_count,
+            "feature_bundles_built": metrics.feature_bundles_built,
+            "feature_reuse_hits": metrics.feature_reuse_hits,
+            "eligibility_calls": metrics.eligibility_calls,
+            "allowed_pair_calls": metrics.allowed_pair_calls,
         }
+        collector.counts["feature_reuse_hits"] = (
+            collector.counts.get("feature_reuse_hits", 0)
+            + metrics.feature_reuse_hits
+        )
         collector.counts["fused_final_proposals"] = len(result.candidates)
         collector.checkpoint()
         return result
     patch(hybrid_retrieval.HybridCandidateRetriever, "retrieve", retrieve)
+
+    original_lsh_retrieval = hybrid_retrieval.retrieve_lsh_directed_neighbors
+    def lsh_retrieval(*args, **kwargs):
+        with collector.measure("CHAR_VECTOR", checkpoint=True):
+            return original_lsh_retrieval(*args, **kwargs)
+    patch(hybrid_retrieval, "retrieve_lsh_directed_neighbors", lsh_retrieval)
+
+    original_exact_character = hybrid_retrieval._deterministic_directed_neighbors
+    def exact_character(*args, **kwargs):
+        with collector.measure("CHAR_VECTOR", checkpoint=True):
+            return original_exact_character(*args, **kwargs)
+    patch(hybrid_retrieval, "_deterministic_directed_neighbors", exact_character)
 
     original_cache_load = SqlAlchemyEmbeddingVectorCache.load
     def cache_load(instance, *args, **kwargs):
@@ -263,7 +311,7 @@ def _instrumented_production_path(collector: _Collector, session):
 
     original_nearest = hybrid_retrieval._nearest_pairs
     def nearest(*args, **kwargs):
-        with collector.measure("LEXICAL_NEAREST_NEIGHBORS"):
+        with collector.measure("LEXICAL_NEAREST_NEIGHBORS", checkpoint=True):
             return original_nearest(*args, **kwargs)
     patch(hybrid_retrieval, "_nearest_pairs", nearest)
 
@@ -400,6 +448,7 @@ def _decomposition(collector: _Collector):
     final_validation = elapsed["DISCOVERY_FINAL_VALIDATION_OR_RECONSTRUCTION"]
     values = {
         "DISCOVERY_FINGERPRINTING": elapsed["DISCOVERY_FINGERPRINTING"],
+        "FEATURE_PRECOMPUTATION": elapsed["FEATURE_PRECOMPUTATION"],
         "STANDARD_BLOCKING": elapsed["STANDARD_BLOCKING"],
         "RETRIEVAL_TOTAL": elapsed["RETRIEVAL_TOTAL"],
         "POST_RETRIEVAL_PROPOSAL_MATERIALIZATION": elapsed[

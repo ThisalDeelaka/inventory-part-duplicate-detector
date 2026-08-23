@@ -10,6 +10,9 @@ from app.core.config import settings
 from app.core.constants import SOURCE_ROW_INDEX_FIELD
 from app.db.models import CandidateDiscoveryMetadata, HybridRetrievalRun
 from app.engine.candidate_generator import generate_candidate_pairs
+from app.engine.candidate_evaluation_features import (
+    build_candidate_evaluation_features,
+)
 from app.engine.column_semantics import normalize_scan_mode
 from app.engine.scoring import score_candidate
 from app.engine.identity_evidence_evaluator import DeterministicIdentityContext
@@ -204,6 +207,37 @@ class ScanRunner:
             # Preserve RUNNING independently so a later failed proposal stage is
             # auditable while the already committed GF-1 catalog remains intact.
             self.db.commit()
+            canonical_refs_by_source = {
+                row.source_row_index: row.record_ref_key
+                for row in catalog_result.records
+            }
+            engine_records = [
+                row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()
+            ]
+            evaluation_features_by_source = {
+                int(record[SOURCE_ROW_INDEX_FIELD]): build_candidate_evaluation_features(
+                    record,
+                    record_ref_key=canonical_refs_by_source[
+                        int(record[SOURCE_ROW_INDEX_FIELD])
+                    ],
+                )
+                for record in engine_records
+            }
+            evaluation_features_by_ref = {
+                item.record_ref_key: item
+                for item in evaluation_features_by_source.values()
+            }
+
+            def evaluation_features(record):
+                try:
+                    return evaluation_features_by_source[
+                        int(record[SOURCE_ROW_INDEX_FIELD])
+                    ]
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "candidate record is missing canonical evaluation features"
+                    ) from exc
+
             pairs = generate_candidate_pairs(usable, selected_fields)
 
             existing_warnings = {(w["warning_type"], w["message"]) for w in validation["warnings"]}
@@ -216,10 +250,17 @@ class ScanRunner:
             standard_candidate_pairs = set()
             standard_write_plan = []
             for pair in pairs:
-                result = score_candidate(pair["record_a"], pair["record_b"], selected_fields, scan_mode)
+                feature_a = evaluation_features(pair["record_a"])
+                feature_b = evaluation_features(pair["record_b"])
+                result = score_candidate(
+                    pair["record_a"], pair["record_b"], selected_fields, scan_mode,
+                    features_a=feature_a, features_b=feature_b,
+                )
                 if result["final_score"] >= threshold:
                     standard_write_plan.append(("candidate", pair, result))
-                    standard_candidate_pairs.add(canonical_record_pair(pair["record_a"], pair["record_b"]))
+                    standard_candidate_pairs.add(canonical_record_pair(
+                        pair["record_a"], pair["record_b"], feature_a, feature_b
+                    ))
                     candidates_found += 1
                 elif result["rule_decision"] != "ALLOW":
                     standard_write_plan.append(("rejection", pair, result))
@@ -228,15 +269,8 @@ class ScanRunner:
             retrieval = None
             hybrid_write_plan = []
             hybrid_run_values = None
-            engine_records = [
-                row.to_dict() for _, row in usable.reset_index(drop=True).iterrows()
-            ]
             if self.configuration.hybrid_retrieval_enabled:
                 retrieval_input = usable.copy()
-                canonical_refs_by_source = {
-                    row.source_row_index: row.record_ref_key
-                    for row in catalog_result.records
-                }
                 retrieval_input[CANONICAL_RECORD_REF_FIELD] = [
                     canonical_refs_by_source[int(source_row_index)]
                     for source_row_index in retrieval_input[SOURCE_ROW_INDEX_FIELD]
@@ -244,7 +278,12 @@ class ScanRunner:
                 retrieval = HybridCandidateRetriever(
                     self.configuration,
                     cache=SqlAlchemyEmbeddingVectorCache(self.db),
-                ).retrieve(retrieval_input, scan_mode, standard_candidate_pairs)
+                ).retrieve(
+                    retrieval_input,
+                    scan_mode,
+                    standard_candidate_pairs,
+                    evaluation_features=evaluation_features_by_ref,
+                )
                 added = 0
                 added_with_uom_difference = 0
                 added_with_uom_unknown = 0
@@ -256,6 +295,8 @@ class ScanRunner:
                     result = score_candidate(
                         left, right, selected_fields, scan_mode,
                         allow_uom_mapping_review=True,
+                        features_a=evaluation_features(left),
+                        features_b=evaluation_features(right),
                     )
                     if result["rule_decision"] in {"REJECT", "DATA_CONFLICT", "CROSS_SITE"} or result["critical_mismatches"]:
                         post_scoring_excluded += 1

@@ -543,11 +543,14 @@ Dropping tables, deleting rows, or migrating historical pair feedback into inven
 
 ## GF-11 — 100k scale hardening
 
-Implementation status: IN PROGRESS. GF-11A and GF-11B-PRE/PRE2/ANN are
-verified. The GF-11B production adapter and quality gates are implemented, but
-GF-11B is insufficient because bounded 20k and 100k normal discovery do not
-complete; GF-11C and GF-11D have not started. These remain bounded delivery
-units within GF-11 and do not alter the GF-0 through GF-12 order.
+Implementation status: IN PROGRESS. GF-11A and GF-11B, including the
+PRE/PRE2/ANN, production LSH, residual-profiling, and repeated-feature
+hardening units, are verified. The authoritative 20k discovery observation
+improved from 146.811 to 111.927 seconds with unchanged semantic fingerprints.
+The bounded 100k attempt reached exact lexical retrieval after completing
+record-local feature construction and standard blocking, but did not complete
+inside 300 seconds. GF-11C and GF-11D have not started. These remain bounded
+delivery units within GF-11 and do not alter the GF-0 through GF-12 order.
 
 ### Goal
 

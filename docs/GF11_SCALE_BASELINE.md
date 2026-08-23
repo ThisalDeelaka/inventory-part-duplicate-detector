@@ -605,3 +605,99 @@ variant-extraction work in hybrid other-channel fusion/materialization**. Any
 optimization requires a separate prompt and must preserve every retrieval,
 proposal, neighborhood, identity, and safety fingerprint. GF-11C is not
 started.
+
+## GF-11B Repeated Eligibility/Variant Extraction Hardening
+
+Status: **GF-11B VERIFIED** for its bounded discovery-hardening acceptance
+unit. This does not graduate GF-11, GF-11D, the 100k target, or production
+readiness. GF-11C is not started.
+
+### Root cause and contract
+
+The repeated-work call graph was:
+
+```text
+channel proposal -> eligible -> allowed pair
+  -> repeated normalized identity + two variant extractions
+standard/hybrid proposal -> score/evaluate
+  -> two more variant extractions + repeated technical/context/generic features
+```
+
+Variant attributes, normalized description/part number, technical tokens,
+application context, genericity, site context, and model tokens depend on one
+record only and are deterministic. Hard business rules, selected-field
+comparison, similarities, mismatch decisions, pair ordering, provenance,
+fusion, and caps remain pair-local.
+
+`CandidateEvaluationFeatures` is a frozen, typed, scan-local bundle keyed by
+GF-1 `record_ref_key`. It contains only immutable tuples/scalars and is built
+once per canonical record after the discovery run starts. There is no global,
+cross-scan, singleton, provider, database, or persistent feature cache. Raw
+record scoring/eligibility APIs remain backward compatible and construct the
+same deterministic features when a caller does not supply a bundle.
+
+No implementation/fingerprint version changed because the optimization is
+semantically transparent. Historical and new semantic proposal fingerprints
+therefore remain comparable and identical.
+
+### Calls and semantic results
+
+| Records | Variant calls before | Variant calls after | Bundles | Feature reuses | Eligibility | Allowed pair | Scoring |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 500 | 49,368 | 500 | 500 | 51,040 | 9,008 | 5,354 | 19,459 |
+| 5,000 | 176,538 | 5,000 | 5,000 | 213,292 | 68,858 | 68,858 | 20,500 |
+| 20,000 | at most 452,814 from the measured pair-call envelope; exact old count was not retained | 20,000 | 20,000 | 589,078 | 205,907 | 205,907 | 20,500 |
+| 100,000 bounded | not retained | 100,000 | 100,000 | 40,000 completed standard-score reuses before retrieval | retrieval incomplete | retrieval incomplete | 20,000 |
+
+The 5k exact call reduction is 97.17%. Eligibility, allowed-pair, and scoring
+still execute per pair; no whole-pair decision memoization was introduced.
+The 20k before value is explicitly an upper bound, not a fabricated measured
+count: two extractions could occur for every measured allowed-pair/scoring call,
+but earlier pair guards can return before extraction.
+
+| Records/run | Discovery | Retrieval | Fusion/materialization | Feature build | Proposal fingerprint | Neighborhood fingerprint |
+|---|---:|---:|---:|---:|---|---|
+| 500 canonical | 24.802 s | 1.053 s | 0.292 s | included in unattributed pre-instrument observation | `dca6efc461c68c28801bfbe3541cb5cbd9bd60ff7944eaa860adcfc18f946f4a` | `aebb418e3db66f5d427c5ea9cf485198fe88b4084a835a7c710b9b4699de5716` |
+| 5k no-cProfile | 56.268 s | 26.261 s | 5.062 s | included in unattributed pre-instrument observation | `369fec5ae1653622d9a754ffc0a2191e1188dfa9c2ddd2af22369d5148875e8d` | `756b2c967ccea72dfa8a06293bbe4d53515dc76185bdba8e7ee806e1a06d50e9` |
+| 5k cProfile | 86.679 s, from 124.886 s | 37.629 s, from 69.464 s | materially reduced | 1.880 s | same | same |
+| 20k authoritative repeat | 111.927 s, from 146.811 s | 86.370 s, from 121.674 s | 10.634 s, from 43.169 s | 1.902 s | `0d0565f2b4c77a0398ffe36dcb081498fcb4499de0958592d10be0ed76621272` | `60fd2f95b2e44f0e3b7953f306f97f69fac3d851935b3e3f176aa8c57473dc6e` |
+
+The authoritative 20k repeat improved total discovery by 34.884 seconds
+(23.76%), retrieval by 35.304 seconds (29.01%), and the targeted fusion/
+materialization bucket by 32.535 seconds (75.37%). Proposal rows remained
+20,500; neighborhoods/members remained 5,654/26,734. An earlier same-change
+20k observation completed in 141.084 seconds under heavier character/lexical
+timing; both retained the exact semantic fingerprints.
+
+The full canonical 5k pipeline completed DISCOVERY in 38.864 seconds versus
+the prior production-LSH 57.731-second observation, persisted the same 20,500
+proposals/evidence edges and 1,684 neighborhoods/22,761 members, and reached
+the same truthful GF-5 `IDENTITYRESOLUTIONVALIDATIONERROR`. Pair, G1, G2-v1,
+shadow, provider, cannot-link-violation, duplicate-membership, and singleton
+accepted-group counts were all zero.
+
+### 100k bounded attempt and remaining bottleneck
+
+The 100k discovery-only attempt retained the 300-second bound and timed out
+truthfully in retrieval. Before the active retrieval work it completed 100,000
+feature bundles/variant extractions in 9.974 seconds, 20,000 standard scoring
+calls in the 15.233-second blocking bucket, and zero provider calls. No cache
+load/save SQL checkpoint and no character-retrieval checkpoint occurred.
+Given the frozen production execution order, the active work was therefore
+the pre-cache exact lexical construction/query path. Catalog behavior was not
+changed; its last canonical full-pipeline observation remains 61.289 seconds.
+Proposal persistence and GF-3 were not reached, so no partial completion claim
+is made.
+
+F1-F18 passed through exact raw/precomputed equality, order/asymmetry,
+generic/technical/sparse cases, multi-channel provenance, caps, fingerprints,
+deprecated-write safety, and zero-provider coverage. Focused regression passed
+151 tests; full backend passed 1,005 tests, frontend passed 94 tests, and the
+production build passed. Schema, migration, and dependency changes are zero.
+
+GF-11B passes its bounded hardening gate: LSH quality/determinism remains green,
+proposal/neighborhood semantics are unchanged, repeated feature work is O(N)
+in canonical records, and 20k discovery materially improves. The 100k attempt
+shows bounded feature/blocking progress but does not complete; the single
+measured GF-11C target is **100k exact lexical nearest-neighbor construction
+and query**. GF-11C, GF-11D, and GF-12 are not started.

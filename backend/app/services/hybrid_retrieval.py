@@ -25,13 +25,17 @@ from app.services.character_retrieval import (
     select_character_retrieval_strategy,
 )
 from app.engine.business_rules import evaluate_hard_business_rules
+from app.engine.candidate_evaluation_features import (
+    CandidateEvaluationFeatures,
+    build_candidate_evaluation_features,
+)
 from app.engine.normalizer import (
     extract_technical_tokens,
     normalize_description,
     normalize_part_no_with_dictionary,
 )
 from app.engine.uom_relationship import UomRelationship, classify_uom_relationship
-from app.engine.variant_extractor import extract_variant_attributes, find_critical_mismatches
+from app.engine.variant_extractor import find_critical_mismatches
 
 
 RRF_K = 60
@@ -122,6 +126,10 @@ class RetrievalMetrics:
     candidate_family_concentration: float
     retrieval_runtime_ms: float
     provider_request_count: int = 0
+    feature_bundles_built: int = 0
+    feature_reuse_hits: int = 0
+    eligibility_calls: int = 0
+    allowed_pair_calls: int = 0
 
 
 @dataclass(frozen=True)
@@ -167,9 +175,15 @@ _OPPOSITE_VARIANTS = (
 )
 
 
-def semantic_retrieval_text(record: dict) -> str:
+def semantic_retrieval_text(
+    record: dict, features: CandidateEvaluationFeatures | None = None
+) -> str:
     """Historical name retained for cache compatibility; output feeds char features."""
-    normalized = normalize_description(record.get("DESCRIPTION", ""))
+    normalized = (
+        features.normalized_description
+        if features is not None
+        else normalize_description(record.get("DESCRIPTION", ""))
+    )
     expanded = []
     for token in normalized.split():
         expanded.extend(_RETRIEVAL_ALIASES.get(token, token).split())
@@ -258,7 +272,15 @@ def record_fingerprint(text: str) -> str:
     return hashlib.sha256(("hybrid-record-v1\0" + text).encode("utf-8")).hexdigest()
 
 
-def record_identity_key(record: dict) -> tuple[str, str, str]:
+def record_identity_key(
+    record: dict, features: CandidateEvaluationFeatures | None = None
+) -> tuple[str, str, str]:
+    if features is not None:
+        return (
+            features.site_context,
+            features.normalized_part_no,
+            features.normalized_description,
+        )
     return (
         str(record.get("CONTRACT") or "").strip().casefold(),
         normalize_part_no_with_dictionary(record.get("PART_NO", "")),
@@ -266,19 +288,35 @@ def record_identity_key(record: dict) -> tuple[str, str, str]:
     )
 
 
-def canonical_record_pair(left: dict, right: dict):
-    return tuple(sorted((record_identity_key(left), record_identity_key(right))))
+def canonical_record_pair(
+    left: dict, right: dict,
+    left_features: CandidateEvaluationFeatures | None = None,
+    right_features: CandidateEvaluationFeatures | None = None,
+):
+    return tuple(sorted((
+        record_identity_key(left, left_features),
+        record_identity_key(right, right_features),
+    )))
 
 
-def _allowed_pair(left: dict, right: dict, scan_mode: str) -> bool:
-    if record_identity_key(left) == record_identity_key(right):
+def _allowed_pair(
+    left: dict, right: dict, scan_mode: str,
+    left_features: CandidateEvaluationFeatures | None = None,
+    right_features: CandidateEvaluationFeatures | None = None,
+) -> bool:
+    if (left_features is None) != (right_features is None):
+        raise ValueError("allowed-pair evaluation requires both feature bundles or neither")
+    if left_features is None:
+        left_features = build_candidate_evaluation_features(left)
+        right_features = build_candidate_evaluation_features(right)
+    if record_identity_key(left, left_features) == record_identity_key(right, right_features):
         return False
-    left_part = normalize_part_no_with_dictionary(left.get("PART_NO", ""))
-    right_part = normalize_part_no_with_dictionary(right.get("PART_NO", ""))
+    left_part = left_features.normalized_part_no
+    right_part = right_features.normalized_part_no
     if left_part and left_part == right_part:
         return False
-    left_site = str(left.get("CONTRACT") or "").strip().casefold()
-    right_site = str(right.get("CONTRACT") or "").strip().casefold()
+    left_site = left_features.site_context
+    right_site = right_features.site_context
     if scan_mode == "SAME_SITE_DUPLICATE" and left_site and right_site and left_site != right_site:
         return False
     if scan_mode == "CROSS_SITE_STANDARDIZATION" and left_site and right_site and left_site == right_site:
@@ -288,8 +326,8 @@ def _allowed_pair(left: dict, right: dict, scan_mode: str) -> bool:
     )["blocked"]:
         return False
     if find_critical_mismatches(
-        extract_variant_attributes(left.get("DESCRIPTION")),
-        extract_variant_attributes(right.get("DESCRIPTION")),
+        left_features.variant_mapping(),
+        right_features.variant_mapping(),
     ):
         return False
     return True
@@ -402,8 +440,13 @@ def part_number_family_keys(value) -> tuple[str, ...]:
     return tuple(sorted(keys))
 
 
-def _technical_keys(description) -> tuple[str, ...]:
-    extracted = extract_technical_tokens(description)
+def _technical_keys(
+    description, features: CandidateEvaluationFeatures | None = None
+) -> tuple[str, ...]:
+    extracted = (
+        features.technical_mapping()
+        if features is not None else extract_technical_tokens(description)
+    )
     keys = set()
     for name in ("measurements", "dimensions"):
         keys.update(f"{name}:{value}" for value in extracted.get(name, [])[:6])
@@ -411,16 +454,18 @@ def _technical_keys(description) -> tuple[str, ...]:
     return tuple(sorted(keys))
 
 
-def _model_tokens(description) -> set[str]:
-    return {
-        token.casefold()
-        for token in re.findall(r"\b(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9-]{2,}\b", str(description or ""))
-    }
-
-
-def _conflict_signals(left: dict, right: dict) -> tuple[str, ...]:
-    left_text = normalize_description(left.get("DESCRIPTION", ""))
-    right_text = normalize_description(right.get("DESCRIPTION", ""))
+def _conflict_signals(
+    left: dict, right: dict,
+    left_features: CandidateEvaluationFeatures | None = None,
+    right_features: CandidateEvaluationFeatures | None = None,
+) -> tuple[str, ...]:
+    if (left_features is None) != (right_features is None):
+        raise ValueError("conflict evaluation requires both feature bundles or neither")
+    if left_features is None:
+        left_features = build_candidate_evaluation_features(left)
+        right_features = build_candidate_evaluation_features(right)
+    left_text = left_features.normalized_description
+    right_text = right_features.normalized_description
     signals = set()
     for plain, opposite in _OPPOSITE_VARIANTS:
         left_plain = re.search(rf"\b{re.escape(plain)}\b", left_text) is not None
@@ -431,8 +476,8 @@ def _conflict_signals(left: dict, right: dict) -> tuple[str, ...]:
             right_opposite and left_plain and not left_opposite
         ):
             signals.add("OPPOSITE_VARIANT_TERM")
-    left_models = _model_tokens(left.get("DESCRIPTION"))
-    right_models = _model_tokens(right.get("DESCRIPTION"))
+    left_models = set(left_features.model_tokens)
+    right_models = set(right_features.model_tokens)
     if left_models and right_models and left_models.isdisjoint(right_models):
         signals.add("TECHNICAL_CONFLICT")
     return tuple(sorted(signals))
@@ -559,23 +604,56 @@ class HybridCandidateRetriever:
         df: pd.DataFrame,
         scan_mode: str,
         excluded_pairs: set | None = None,
+        evaluation_features: dict[str, CandidateEvaluationFeatures] | None = None,
     ) -> HybridRetrievalResult:
         started = time.perf_counter()
         records = [row.to_dict() for _, row in df.reset_index(drop=True).iterrows()]
         excluded_pairs = excluded_pairs or set()
-        texts = [semantic_retrieval_text(record) for record in records]
+        features = []
+        for index, record in enumerate(records):
+            record_ref = str(record.get(CANONICAL_RECORD_REF_FIELD) or "").strip()
+            if evaluation_features is None:
+                item = build_candidate_evaluation_features(
+                    record, record_ref_key=record_ref
+                )
+            else:
+                try:
+                    item = evaluation_features[record_ref]
+                except KeyError as exc:
+                    raise ValueError(
+                        "retrieval record is missing its canonical evaluation features"
+                    ) from exc
+                if item.record_ref_key != record_ref:
+                    raise ValueError("retrieval evaluation feature identity mismatch")
+            features.append(item)
+        texts = [
+            semantic_retrieval_text(record, features[index])
+            for index, record in enumerate(records)
+        ]
         specificity = description_specificity_statistics(
             [record.get("DESCRIPTION", "") for record in records]
         )
         evidence = {}
+        eligibility_calls = 0
+        allowed_pair_calls = 0
+        feature_reuse_hits = 0
 
         def eligible(left: int, right: int) -> tuple[int, int] | None:
+            nonlocal eligibility_calls, allowed_pair_calls, feature_reuse_hits
+            eligibility_calls += 1
             if left == right:
                 return None
             first, second = sorted((left, right))
-            if canonical_record_pair(records[first], records[second]) in excluded_pairs:
+            if canonical_record_pair(
+                records[first], records[second], features[first], features[second]
+            ) in excluded_pairs:
                 return None
-            if not _allowed_pair(records[first], records[second], scan_mode):
+            allowed_pair_calls += 1
+            feature_reuse_hits += 2
+            if not _allowed_pair(
+                records[first], records[second], scan_mode,
+                features[first], features[second],
+            ):
                 return None
             return first, second
 
@@ -606,7 +684,7 @@ class HybridCandidateRetriever:
             if reciprocal:
                 row["reciprocal"].add(f"{channel}_RECIPROCAL")
 
-        normalized_descriptions = [normalize_description(record.get("DESCRIPTION", "")) for record in records]
+        normalized_descriptions = [item.normalized_description for item in features]
 
         exact_groups = defaultdict(list)
         for index, value in enumerate(normalized_descriptions):
@@ -712,7 +790,8 @@ class HybridCandidateRetriever:
 
         technical_groups = defaultdict(list)
         for index, record in enumerate(records):
-            for key in _technical_keys(record.get("DESCRIPTION", "")):
+            feature_reuse_hits += 1
+            for key in _technical_keys(record.get("DESCRIPTION", ""), features[index]):
                 technical_groups[key].append(index)
         technical_proposals = Counter()
         for key, indexes in sorted(technical_groups.items()):
@@ -743,7 +822,10 @@ class HybridCandidateRetriever:
                 (specificity[left].generic_penalty + specificity[right].generic_penalty) / 2, 2
             )
             reasons = set(specificity[left].reasons) | set(specificity[right].reasons)
-            conflicts = set(_conflict_signals(records[left], records[right]))
+            feature_reuse_hits += 2
+            conflicts = set(_conflict_signals(
+                records[left], records[right], features[left], features[right]
+            ))
             if len(sources) == 1:
                 reasons.add("WEAK_SINGLE_CHANNEL")
                 priority *= 0.75
@@ -893,6 +975,10 @@ class HybridCandidateRetriever:
                 round(largest_family / len(selected), 4) if selected else 0.0
             ),
             retrieval_runtime_ms=round((time.perf_counter() - started) * 1000, 2),
+            feature_bundles_built=len(features),
+            feature_reuse_hits=feature_reuse_hits,
+            eligibility_calls=eligibility_calls,
+            allowed_pair_calls=allowed_pair_calls,
         )
         return HybridRetrievalResult(
             tuple(candidates), metrics, self.embedder.model_version, character_metrics
