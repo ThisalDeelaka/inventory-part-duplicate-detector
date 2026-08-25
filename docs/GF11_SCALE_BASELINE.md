@@ -813,3 +813,79 @@ graduation. GF-11D owns the 100k graduation benchmark.
 The remaining measured 50k bottlenecks are CHAR_VECTOR (142.054 seconds in the
 integration run), cache save (65.242 seconds), and other fusion/materialization
 (30.813 seconds). They are intentionally unchanged by GF-11C.
+
+## GF-11D 100k production graduation benchmark
+
+Status: **INSUFFICIENT / NOT GRADUATED**. GF-11 remains IN PROGRESS and GF-12
+is not started.
+
+The canonical `group-first-scale-corpus-v1` run used 100,000 records, seed
+1101, policy-v2 `group_first_primary`, provider `none`, and a unique disposable
+SQLite database. The 20k/50k selector controls retained v5 algorithm/config
+identity and fingerprint `cf0613b2de3ef2bea9c28e79937fc8226bcad4951f0fb28136a256807e2a14b1`:
+20k selected `EXACT_INDEXED_V4`; 50k and 100k selected
+`BOUNDED_RARITY_AWARE_V1_WITH_FIXED_SECOND_PASS`.
+
+The official 300-second subprocess timed out at 300.008 seconds during
+`RETRIEVAL_CACHE_SAVE`. CATALOG completed in 30.683 seconds. At the last
+checkpoint DISCOVERY had run for 263.923 seconds after 100,000 feature bundles,
+15.796 seconds of standard blocking, 8.297 seconds of TF-IDF vectorization,
+93.153 seconds of lexical retrieval, and 0.290 seconds of cache load. Cache
+save had requested 70,235 rows. CHAR_VECTOR and GF2 through GF6 were
+`NOT_REACHED`. The partial database was 46,690,304 bytes.
+
+Because CHAR_VECTOR had not started by 300 seconds and the established 100k
+character-only measurement was 308.493 seconds, 600 seconds was demonstrably
+insufficient. The single permitted 900-second diagnostic also timed out, now
+during GF5 resolution. It completed CATALOG in 40.505 seconds, DISCOVERY in
+721.191 seconds, and GF4 in 36.575 seconds. GF6 was `NOT_REACHED`.
+
+The completed diagnostic DISCOVERY decomposition was:
+
+| Work | Seconds | Reached result |
+|---|---:|---|
+| discovery fingerprinting | 0.246 | completed |
+| feature bundles | 12.804 | 100,000 |
+| standard blocking | 19.251 | 20,000 pairs |
+| TF-IDF/vectorization | 4.770 | completed |
+| lexical retrieval | 93.349 | bounded v5 path completed |
+| CHAR_VECTOR | 336.432 | fixed-seed LSH completed |
+| cache load | 0.287 | completed |
+| cache save | 142.257 | 70,235 rows requested |
+| other retrieval/fusion/materialization | 67.170 | 500 final hybrid candidates |
+| post-retrieval materialization | 0.894 | completed |
+| GF2 total / persistence | 2.550 / 0.806 | 20,500 proposals |
+| GF3 total / planning / persistence | 32.028 / 0.667 / 8.653 | 20,687 neighborhoods, 41,706 members |
+| final validation/reconstruction | 19.639 | completed |
+
+The production lexical selector therefore remained bounded with no global
+exact fallback. The previously verified canonical 100k lexical-only control
+records 12,500 primary-insufficient anchors, 12,500 fixed-second-pass
+recoveries, zero remaining insufficiency, an 80-item maximum pool, and zero
+provider calls. The first GF-11D checkpoint format did not durably retain those
+detailed retrieval counters (or character work counters) on forced timeout;
+they are not fabricated here. The benchmark-only checkpoint is corrected for
+future runs. Historical fixed-contract 100k character evidence remains
+320,810,636 bucket enumerations, 32,000,000 exact reranks, 153,600,000 vector
+bytes, and 2,547,456 index-array bytes; the GF-11D production time was 336.432
+seconds.
+
+GF2 persisted 20,500 proposals. GF3 persisted 20,687 neighborhoods and 41,706
+members, with maximum neighborhood size 20 and one truncated neighborhood.
+GF4 persisted 20,500 evidence edges. GF5 was reached with a maximum connected
+work unit of 20,113 records but did not complete before 900 seconds; group,
+conflict, deferred, unassigned, and GF6 results are `NOT_REACHED`, not zero.
+The diagnostic database reached 329,732,096 bytes. Reliable peak RSS and Python
+heap were unavailable on this Windows harness.
+
+Provider calls, pair rows, G1 rows, G2-v1 rows, shadow rows, and cross-scan
+contamination were zero in the persisted reached stages. Accepted-group
+cannot-link, duplicate-membership, and singleton invariants are `NOT_REACHED`
+because GF5 did not complete. No source mutation occurred.
+
+GF-11D fails the frozen graduation rule: the official full pipeline did not
+complete within 300 seconds, DISCOVERY alone measured 721.191 seconds in the
+diagnostic, GF5 did not complete within 900 seconds, and GF6 was not reached.
+The single next hardening target is **CHAR_VECTOR retrieval**, the largest
+measured production stage at 336.432 seconds. No production optimization was
+performed in GF-11D.

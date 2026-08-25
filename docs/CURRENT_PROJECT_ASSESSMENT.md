@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. Production lexical selection now uses exact indexed v4 below 25,000 eligible records and bounded rarity-aware retrieval with one fixed second pass at and above 25,000. GF-11D and GF-12 are not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D is measured but insufficient/not graduated: the canonical 100k run timed out at the 300-second gate, and its single 900-second diagnostic timed out in GF5 after 721.191 seconds of DISCOVERY. CHAR_VECTOR is the next measured hardening target. GF-12 is not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -739,3 +739,23 @@ selected the bounded strategy, recovered all 12,500 insufficient anchors, and
 left zero remaining. This is not 100k production graduation. CHAR_VECTOR,
 cache-save, and fusion/materialization remain the measured full-pipeline
 bottlenecks for subsequent GF-11 work.
+
+## GF-11D 100k production graduation result
+
+GF-11D is **INSUFFICIENT / NOT GRADUATED**. The pinned 100k/seed-1101,
+provider-none, policy-v2 run timed out at 300.008 seconds during cache save,
+before CHAR_VECTOR or GF2-GF6. One evidence-justified 900-second diagnostic
+completed CATALOG (40.505 seconds), DISCOVERY (721.191 seconds), and GF4
+(36.575 seconds), then timed out in GF5; GF6 was not reached.
+
+Within completed DISCOVERY, CHAR_VECTOR was the largest production stage at
+336.432 seconds, followed by cache save at 142.257 seconds and lexical retrieval
+at 93.349 seconds. The run persisted 20,500 proposals, 20,687 neighborhoods,
+41,706 neighborhood members, and 20,500 evidence edges. The maximum resolution
+work unit was 20,113 records. Provider and deprecated pair/G1/G2-v1/shadow
+writes were zero for reached stages. Accepted-group safety outcomes are
+`NOT_REACHED` because GF5 did not complete.
+
+GF-11 remains IN PROGRESS. The only next recommendation is bounded hardening of
+the measured CHAR_VECTOR retrieval stage before GF-11D is rerun. GF-12 remains
+not started.

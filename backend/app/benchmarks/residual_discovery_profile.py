@@ -87,6 +87,10 @@ class _Collector:
         self.stack = []
         self.profiler = cProfile.Profile()
         self.python_profile_enabled = python_profile_enabled
+        self.pipeline_started = None
+        self.pipeline_seconds = None
+        self.pipeline_terminal_status = None
+        self.completed_stages = {}
 
     @property
     def active_bucket(self):
@@ -120,6 +124,21 @@ class _Collector:
             self.discovery_terminal_status = "FAILED"
             self.checkpoint()
 
+    def start_pipeline(self):
+        self.pipeline_started = time.perf_counter()
+        self.pipeline_terminal_status = "RUNNING"
+        self.checkpoint()
+
+    def finish_pipeline(self, status="COMPLETED"):
+        if self.pipeline_started is not None and self.pipeline_seconds is None:
+            self.pipeline_seconds = time.perf_counter() - self.pipeline_started
+        self.pipeline_terminal_status = status
+        self.active_sub_stage = status
+        self.checkpoint()
+
+    def fail_pipeline(self):
+        self.finish_pipeline("FAILED")
+
     @contextmanager
     def measure(self, bucket, *, checkpoint=False):
         previous = self.active_sub_stage
@@ -143,8 +162,22 @@ class _Collector:
             return
         payload = {
             "contract_version": PROFILE_CONTRACT_VERSION,
-            "status": self.discovery_terminal_status or "RUNNING",
+            "status": (
+                self.pipeline_terminal_status
+                if self.pipeline_started is not None
+                else self.discovery_terminal_status or "RUNNING"
+            ),
             "active_sub_stage": self.active_sub_stage,
+            "pipeline_elapsed_seconds": round(
+                self.pipeline_seconds
+                if self.pipeline_seconds is not None
+                else (
+                    time.perf_counter() - self.pipeline_started
+                    if self.pipeline_started is not None else 0.0
+                ),
+                6,
+            ),
+            "completed_stages": dict(sorted(self.completed_stages.items())),
             "discovery_elapsed_seconds": round(
                 self.discovery_seconds
                 if self.discovery_seconds is not None
@@ -161,10 +194,13 @@ class _Collector:
                 key: dict(sorted(value.items())) for key, value in sorted(self.sql.items())
             },
             "counts_partial": self.counts,
+            "retrieval_partial": self.retrieval,
         }
-        self.checkpoint_path.write_text(
+        temporary = self.checkpoint_path.with_suffix(self.checkpoint_path.suffix + ".tmp")
+        temporary.write_text(
             json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8"
         )
+        temporary.replace(self.checkpoint_path)
 
 
 def _operation(statement: str) -> str:
@@ -245,7 +281,9 @@ def _profile_rows(profiler: cProfile.Profile, limit=20):
 
 
 @contextmanager
-def _instrumented_production_path(collector: _Collector, session):
+def _instrumented_production_path(
+    collector: _Collector, session, *, stop_after_discovery: bool = True
+):
     originals = {}
 
     def patch(owner, name, replacement):
@@ -258,6 +296,12 @@ def _instrumented_production_path(collector: _Collector, session):
         with collector.measure("DISCOVERY_FINGERPRINTING", checkpoint=True):
             return original_start(*args, **kwargs)
     patch(scan_runner, "start_discovery_run", start_discovery)
+
+    original_catalog = scan_runner.create_or_get_scan_record_catalog
+    def catalog(*args, **kwargs):
+        with collector.measure("CANONICAL_CATALOG", checkpoint=True):
+            return original_catalog(*args, **kwargs)
+    patch(scan_runner, "create_or_get_scan_record_catalog", catalog)
 
     original_generate = scan_runner.generate_candidate_pairs
     def generate(*args, **kwargs):
@@ -328,6 +372,12 @@ def _instrumented_production_path(collector: _Collector, session):
             "retrieval_reported_seconds": round(metrics.retrieval_runtime_ms / 1000, 6),
             "character_seconds": round(character.retrieval_time_ms / 1000, 6) if character else 0.0,
             "character_strategy": character.strategy.value if character else "DISABLED",
+            "character_contract_fingerprint": character.contract_fingerprint if character else None,
+            "character_index_build_seconds": round(character.index_build_time_ms / 1000, 6) if character else 0.0,
+            "character_bucket_enumerations": character.bucket_enumeration_count if character else 0,
+            "character_candidate_pool_evaluations": character.candidate_pool_evaluations if character else 0,
+            "character_exact_rerank_evaluations": character.exact_rerank_evaluations if character else 0,
+            "character_max_candidate_pool": character.max_candidate_pool if character else 0,
             "lexical_strategy": lexical.strategy if lexical else "DISABLED",
             "lexical_contract_fingerprint": lexical.contract_fingerprint if lexical else None,
             "lexical_feature_count": lexical.feature_count if lexical else 0,
@@ -490,6 +540,9 @@ def _instrumented_production_path(collector: _Collector, session):
         )
         with collector.measure(bucket):
             result = original_record_stage(*args, **kwargs)
+        if stage is not None:
+            collector.completed_stages[stage.value] = status.value
+            collector.checkpoint()
         if stage == ScanStage.DISCOVERY:
             if status == ScanStageExecutionStatus.SUCCEEDED:
                 collector.finish_discovery()
@@ -499,12 +552,39 @@ def _instrumented_production_path(collector: _Collector, session):
     patch(scan_runner, "record_scan_stage_result", record_stage)
 
     original_evidence_start = scan_runner.start_identity_evidence_run
-    def stop_after_discovery(*_args, **_kwargs):
-        raise _StopAfterDiscovery("benchmark stopped after completed discovery")
-    patch(scan_runner, "start_identity_evidence_run", stop_after_discovery)
+    if stop_after_discovery:
+        def stop_discovery(*_args, **_kwargs):
+            raise _StopAfterDiscovery("benchmark stopped after completed discovery")
+        patch(scan_runner, "start_identity_evidence_run", stop_discovery)
+    else:
+        def start_evidence(*args, **kwargs):
+            with collector.measure("GF4_EVIDENCE_ACQUISITION", checkpoint=True):
+                return original_evidence_start(*args, **kwargs)
+        patch(scan_runner, "start_identity_evidence_run", start_evidence)
+
+        original_acquire_evidence = scan_runner.acquire_identity_evidence
+        def acquire_evidence(*args, **kwargs):
+            with collector.measure("GF4_EVIDENCE_ACQUISITION", checkpoint=True):
+                return original_acquire_evidence(*args, **kwargs)
+        patch(scan_runner, "acquire_identity_evidence", acquire_evidence)
+
+        original_resolve = scan_runner.resolve_and_persist_identity_groups
+        def resolve(*args, **kwargs):
+            with collector.measure("GF5_GROUP_RESOLUTION", checkpoint=True):
+                return original_resolve(*args, **kwargs)
+        patch(scan_runner, "resolve_and_persist_identity_groups", resolve)
+
+        original_project = scan_runner.build_and_persist_g2_v2_projection
+        def project(*args, **kwargs):
+            with collector.measure("GF6_G2_V2_PROJECTION", checkpoint=True):
+                return original_project(*args, **kwargs)
+        patch(scan_runner, "build_and_persist_g2_v2_projection", project)
 
     original_commit = session.commit
     def commit():
+        if not stop_after_discovery and collector.pipeline_started is not None:
+            collector.commit_count[collector.active_bucket] += 1
+            return original_commit()
         if collector.discovery_started is None or collector.discovery_seconds is not None:
             return original_commit()
         if state["gf3_completed"]:
