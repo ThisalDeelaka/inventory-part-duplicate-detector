@@ -25,10 +25,14 @@ from app.discovery.contracts import (
 from app.engine.candidate_generator import MAX_CANDIDATE_PAIRS
 from app.repositories.discovery_repository import DiscoveryRepository
 from app.services.character_retrieval import character_retrieval_contract_payload
+from app.services.lexical_retrieval import (
+    lexical_strategy_contract_payload,
+    select_lexical_strategy,
+)
 
 
-DISCOVERY_ALGORITHM_VERSION = "identity-discovery-v4-lexical-canonical-ties"
-DISCOVERY_CONFIGURATION_VERSION = "identity-discovery-config-v4"
+DISCOVERY_ALGORITHM_VERSION = "identity-discovery-v5-bounded-lexical-strategy"
+DISCOVERY_CONFIGURATION_VERSION = "identity-discovery-config-v5"
 NEIGHBOR_PROPOSAL_VERSION = "neighbor-proposal-v1"
 _MAX_WARNING_CODES = 20
 _MAX_CONTEXT_ITEMS = 20
@@ -76,13 +80,11 @@ def _configuration_payload(
 
     payload.update({
         "hybrid_lexical_top_k": int(value("hybrid_retrieval_lexical_top_k", 5)),
-        "lexical_retrieval": {
-            "representation": "tfidf-char-wb-3-5-v1",
-            "similarity": "exact-cosine",
-            "self_exclusion": "before-top-k",
-            "ordering": "full-precision-score-desc-record-ref-key-asc",
-            "output_score": "two-decimal",
-        },
+        "lexical_retrieval": lexical_strategy_contract_payload(
+            int(value("hybrid_retrieval_lexical_top_k", 5))
+        ),
+        "selected_lexical_strategy": select_lexical_strategy(record_count),
+        "eligible_record_count": record_count,
         "hybrid_vector_top_k": int(value("hybrid_retrieval_vector_top_k", 5)),
         "hybrid_final_top_k": int(value("hybrid_retrieval_final_top_k", 10)),
         "hybrid_global_cap": int(value("hybrid_retrieval_max_pairs_per_scan", 500)),

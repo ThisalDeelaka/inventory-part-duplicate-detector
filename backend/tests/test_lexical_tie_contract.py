@@ -17,6 +17,7 @@ from app.services.identity_discovery_service import (
     DISCOVERY_ALGORITHM_VERSION,
     DISCOVERY_CONFIGURATION_VERSION,
 )
+from app.services.lexical_retrieval import LexicalRetrievalError
 
 
 def _matrix(rows):
@@ -167,8 +168,8 @@ def test_lt14_production_preserves_lexical_provenance_caps_and_configuration():
     assert result.candidates
     assert all("LEXICAL" in item.evidence.retrieval_sources for item in result.candidates)
     assert result.metrics.max_candidates_for_any_record <= 1
-    assert DISCOVERY_ALGORITHM_VERSION == "identity-discovery-v4-lexical-canonical-ties"
-    assert DISCOVERY_CONFIGURATION_VERSION == "identity-discovery-config-v4"
+    assert DISCOVERY_ALGORITHM_VERSION == "identity-discovery-v5-bounded-lexical-strategy"
+    assert DISCOVERY_CONFIGURATION_VERSION == "identity-discovery-config-v5"
 
 
 @pytest.mark.parametrize("refs", [("", "b"), ("a", "a")])
@@ -183,8 +184,9 @@ def test_production_does_not_swallow_missing_canonical_reference_failure():
         {"PART_NO": "B", "DESCRIPTION": "alpha motor", "CONTRACT": "S1", "UNIT_MEAS": "EA", CANONICAL_RECORD_REF_FIELD: "r-b"},
     ])
     settings = Settings(llm_provider="none", llm_demo_enabled=False, local_embedding_enabled=False)
-    with pytest.raises(ValueError, match="lexical retrieval"):
+    with pytest.raises(LexicalRetrievalError, match="lexical retrieval") as error:
         HybridCandidateRetriever(settings).retrieve(data, "DISCOVERY")
+    assert getattr(error.value, "safe_category", None) == "LEXICAL_INDEX_CONFIGURATION_INVALID"
 
 
 def test_vectorizer_contract_remains_char_wb_3_to_5_l2_tfidf():

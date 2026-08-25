@@ -1,17 +1,20 @@
 import csv
 import io
 import json
+import sqlite3
 
 import numpy as np
 import pandas as pd
 import pytest
 from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import Settings
 from app.db.models import CandidateDiscoveryMetadata, DuplicateCandidate, HybridRetrievalRun, LocalEmbeddingCache
 from app.services.hybrid_retrieval import (
     CANONICAL_RECORD_REF_FIELD, CHANNEL_WEIGHTS, RRF_K, HybridCandidateRetriever,
     MemoryEmbeddingVectorCache, RetrievalSource, RetrievalTier,
+    SqlAlchemyEmbeddingVectorCache,
     SklearnHashingEmbedder, canonical_record_pair,
     description_specificity_statistics, part_number_family_keys,
 )
@@ -203,6 +206,67 @@ def test_sqlite_vector_cache_records_model_and_reuses_vectors(db):
     rows = db.query(LocalEmbeddingCache).all()
     assert len(rows) == 1
     assert all(row.embedding_model_version == "sklearn-hashing-domain-v1" and row.state == "AVAILABLE" for row in rows)
+
+
+def test_sqlite_vector_cache_load_chunks_deterministically_below_variable_limit(
+    db, monkeypatch,
+):
+    from app.services import hybrid_retrieval
+
+    model = "test-model"
+    available = [f"cached-{index}" for index in range(5)]
+    vector_json = json.dumps([0.0] * 384)
+    db.add_all([
+        LocalEmbeddingCache(
+            record_fingerprint=fingerprint,
+            embedding_model_version=model,
+            state="AVAILABLE",
+            vector_json=vector_json,
+        )
+        for fingerprint in available
+    ])
+    db.commit()
+    fingerprints = available + [f"missing-{index}" for index in range(176)]
+    unchunked_reference = {
+        row.record_fingerprint
+        for row in db.query(LocalEmbeddingCache).filter(
+            LocalEmbeddingCache.record_fingerprint.in_(fingerprints),
+            LocalEmbeddingCache.embedding_model_version == model,
+            LocalEmbeddingCache.state == "AVAILABLE",
+        ).all()
+    }
+    raw = db.connection().connection.driver_connection
+    previous_limit = raw.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 100)
+    try:
+        with pytest.raises(OperationalError, match="too many SQL variables"):
+            db.query(LocalEmbeddingCache).filter(
+                LocalEmbeddingCache.record_fingerprint.in_(fingerprints + ["limit-trigger"]),
+                LocalEmbeddingCache.embedding_model_version == model,
+                LocalEmbeddingCache.state == "AVAILABLE",
+            ).all()
+        db.rollback()
+        monkeypatch.setattr(hybrid_retrieval, "_EMBEDDING_CACHE_LOAD_CHUNK_SIZE", 90)
+        statement_parameter_counts = []
+
+        def capture(_conn, _cursor, statement, parameters, _context, _executemany):
+            if "local_embedding_cache" in statement.lower() and statement.lstrip().upper().startswith("SELECT"):
+                statement_parameter_counts.append(len(parameters))
+
+        event.listen(db.bind, "before_cursor_execute", capture)
+        try:
+            loaded = SqlAlchemyEmbeddingVectorCache(db).load(fingerprints, model)
+        finally:
+            event.remove(db.bind, "before_cursor_execute", capture)
+        assert set(loaded) == unchunked_reference == set(available)
+        assert statement_parameter_counts == [92, 92, 3]
+    finally:
+        raw.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, previous_limit)
+
+
+def test_sqlite_vector_cache_chunk_bound_is_fixed_and_safe():
+    from app.services import hybrid_retrieval
+
+    assert hybrid_retrieval._EMBEDDING_CACHE_LOAD_CHUNK_SIZE == 900
 
 
 def test_provenance_and_enhanced_export_are_safe(db):

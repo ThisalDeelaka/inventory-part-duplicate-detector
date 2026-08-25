@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A and GF-11B are verified, and GF-11C-PRE has verified the deterministic exact lexical reference correction. GF-11C indexed lexical implementation has not started/resumed; GF-11D and GF-12 are not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. Production lexical selection now uses exact indexed v4 below 25,000 eligible records and bounded rarity-aware retrieval with one fixed second pass at and above 25,000. GF-11D and GF-12 are not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -712,8 +712,30 @@ The approved target makes groups the business-domain center. Pair machinery will
 
 ## Next phase boundary
 
-GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A and
-GF-11B are verified bounded units, and GF-11C-PRE is verified. The next
-measured target is 100k exact indexed lexical nearest-neighbor construction/
-query; GF-11C implementation has not started/resumed. No
-GF-11D, 100k-readiness, GF-12, or production-graduation claim exists.
+GF-0 through GF-10 are verified and complete. GF-11 is IN PROGRESS; GF-11A,
+GF-11B, GF-11C-PRE, and GF-11C are verified bounded units. GF-11D is the next
+unit and owns the 100k graduation benchmark. No 100k full-pipeline readiness,
+GF-12, or production-graduation claim exists.
+
+## GF-11C production lexical strategy
+
+Policy-v2 discovery now records the v5 bounded-lexical strategy contract. The
+eligible-record count entering lexical discovery selects unchanged exact
+indexed v4 below 25,000 and bounded rarity-aware retrieval at 25,000 and above.
+The bounded primary pass is P1/R2 with 32 features, 4,096 visits, an 80-item
+pool, and batches of 64. Exactly one fixed 16,384-visit second pass runs only
+for primary-insufficient anchors; remaining insufficiency fails closed.
+
+At 50k, production bounded discovery completed in 322.704 seconds, recovered
+all 6,250 insufficient anchors, left zero remaining, and matched the v5 exact
+reference for 500 final hybrid candidates, 20,500 persisted proposals, 13,194
+neighborhoods, proposal/neighborhood fingerprints, and product coverage.
+Provider calls and policy-v2 pair/G1/G2-v1/shadow writes remained zero.
+
+The cache-load SQL-variable defect is corrected with deterministic 900-key
+chunks (maximum 902 SQL parameters) without added commits or changed hit/miss
+semantics. A production lexical-only 100k check completed in 98.300 seconds,
+selected the bounded strategy, recovered all 12,500 insufficient anchors, and
+left zero remaining. This is not 100k production graduation. CHAR_VECTOR,
+cache-save, and fusion/materialization remain the measured full-pipeline
+bottlenecks for subsequent GF-11 work.

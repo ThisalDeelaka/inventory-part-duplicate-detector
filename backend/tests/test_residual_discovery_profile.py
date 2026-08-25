@@ -140,3 +140,26 @@ def test_r14_timeout_records_active_stage_and_cannot_complete():
     )
     assert finalized["status"] == "TIMED_OUT"
     assert finalized["active_sub_stage"] == "REPORT_FINALIZATION_AFTER_DISCOVERY"
+
+
+def test_op_diagnostic_sanitizer_removes_record_like_values():
+    message = profile._sanitized_database_message(ValueError(
+        "failure for 'RAW-PART-123' abcdef0123456789abcdef0123456789"
+    ))
+    assert "RAW-PART-123" not in message
+    assert "abcdef0123456789abcdef0123456789" not in message
+    assert message == "failure for <redacted> <redacted>"
+
+
+def test_op_parameter_shape_retains_counts_only():
+    assert profile._parameter_shape(tuple(range(12)), False) == (12, 1)
+    assert profile._parameter_shape([(1, 2), (3, 4)], True) == (2, 2)
+
+
+def test_op_failed_discovery_cannot_report_completed():
+    collector = profile._Collector(python_profile_enabled=False)
+    collector.start_discovery()
+    collector.fail_discovery()
+    assert collector.discovery_terminal_status == "FAILED"
+    assert collector.active_sub_stage == "FAILED"
+    assert collector.discovery_seconds is not None

@@ -25,6 +25,10 @@ from app.services.character_retrieval import (
     retrieve_lsh_directed_neighbors,
     select_character_retrieval_strategy,
 )
+from app.services.lexical_retrieval import (
+    LexicalRetrievalWorkMetrics,
+    retrieve_production_lexical_neighbors,
+)
 from app.engine.business_rules import evaluate_hard_business_rules
 from app.engine.candidate_evaluation_features import (
     CandidateEvaluationFeatures,
@@ -49,6 +53,7 @@ CHANNEL_WEIGHTS = {
     "CHAR_VECTOR": 0.9,
 }
 _MAX_RRF = sum(weight / (RRF_K + 1) for weight in CHANNEL_WEIGHTS.values())
+_EMBEDDING_CACHE_LOAD_CHUNK_SIZE = 900
 
 
 class RetrievalSource(str, Enum):
@@ -139,6 +144,7 @@ class HybridRetrievalResult:
     metrics: RetrievalMetrics
     embedding_model_version: str
     character_retrieval: CharacterRetrievalWorkMetrics | None = None
+    lexical_retrieval: LexicalRetrievalWorkMetrics | None = None
 
 
 @dataclass(frozen=True)
@@ -218,19 +224,21 @@ class SqlAlchemyEmbeddingVectorCache:
         self.db = db
 
     def load(self, fingerprints: list[str], model_version: str) -> dict[str, np.ndarray]:
-        rows = self.db.query(LocalEmbeddingCache).filter(
-            LocalEmbeddingCache.record_fingerprint.in_(fingerprints),
-            LocalEmbeddingCache.embedding_model_version == model_version,
-            LocalEmbeddingCache.state == "AVAILABLE",
-        ).all() if fingerprints else []
         result = {}
-        for row in rows:
-            try:
-                vector = np.asarray(json.loads(row.vector_json), dtype=np.float32)
-                if vector.shape == (384,):
-                    result[row.record_fingerprint] = vector
-            except (TypeError, ValueError, json.JSONDecodeError):
-                continue
+        for offset in range(0, len(fingerprints), _EMBEDDING_CACHE_LOAD_CHUNK_SIZE):
+            chunk = fingerprints[offset:offset + _EMBEDDING_CACHE_LOAD_CHUNK_SIZE]
+            rows = self.db.query(LocalEmbeddingCache).filter(
+                LocalEmbeddingCache.record_fingerprint.in_(chunk),
+                LocalEmbeddingCache.embedding_model_version == model_version,
+                LocalEmbeddingCache.state == "AVAILABLE",
+            ).all()
+            for row in rows:
+                try:
+                    vector = np.asarray(json.loads(row.vector_json), dtype=np.float32)
+                    if vector.shape == (384,):
+                        result[row.record_fingerprint] = vector
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    continue
         return result
 
     def save(self, vectors: dict[str, np.ndarray], model_version: str) -> None:
@@ -766,6 +774,7 @@ class HybridCandidateRetriever:
             add_channel(*pair, "PART_NUMBER_FAMILY", rank, quality)
 
         lexical_pairs = []
+        lexical_metrics = None
         if len(records) > 1 and any(texts):
             try:
                 lexical_matrix = TfidfVectorizer(
@@ -774,11 +783,16 @@ class HybridCandidateRetriever:
             except ValueError:
                 lexical_matrix = None
             if lexical_matrix is not None:
-                lexical_pairs = _deterministic_lexical_nearest_pairs(
+                lexical_result = retrieve_production_lexical_neighbors(
                     lexical_matrix,
+                    [record.get(CANONICAL_RECORD_REF_FIELD) for record in records],
                     self.configuration.hybrid_retrieval_lexical_top_k,
+                )
+                lexical_pairs = _directed_neighbors_to_pairs(
+                    lexical_result.directed_neighbors,
                     [record.get(CANONICAL_RECORD_REF_FIELD) for record in records],
                 )
+                lexical_metrics = lexical_result.metrics
         for rank, (left, right, score, reciprocal) in enumerate(lexical_pairs, 1):
             add_channel(left, right, "LEXICAL", rank, score, reciprocal)
 
@@ -1026,5 +1040,6 @@ class HybridCandidateRetriever:
             allowed_pair_calls=allowed_pair_calls,
         )
         return HybridRetrievalResult(
-            tuple(candidates), metrics, self.embedder.model_version, character_metrics
+            tuple(candidates), metrics, self.embedder.model_version,
+            character_metrics, lexical_metrics,
         )

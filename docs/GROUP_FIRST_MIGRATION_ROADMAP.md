@@ -543,14 +543,20 @@ Dropping tables, deleting rows, or migrating historical pair feedback into inven
 
 ## GF-11 — 100k scale hardening
 
-Implementation status: IN PROGRESS. GF-11A and GF-11B, including the
-PRE/PRE2/ANN, production LSH, residual-profiling, and repeated-feature
-hardening units, are verified. The authoritative 20k discovery observation
-improved from 146.811 to 111.927 seconds with unchanged semantic fingerprints.
-The bounded 100k attempt reached exact lexical retrieval after completing
-record-local feature construction and standard blocking, but did not complete
-inside 300 seconds. GF-11C and GF-11D have not started. These remain bounded
-delivery units within GF-11 and do not alter the GF-0 through GF-12 order.
+Implementation status: IN PROGRESS. GF-11A, GF-11B, GF-11C-PRE, and GF-11C
+are verified bounded units. Production policy-v2 discovery uses exact indexed
+v4 lexical retrieval below 25,000 eligible records and bounded rarity-aware
+retrieval with one fixed fail-closed second pass at 25,000 and above. The 50k
+production run recovered all 6,250 primary-insufficient anchors, left zero
+remaining, and matched the exact reference for final proposals, neighborhoods,
+and coverage. Deterministic 900-key cache-load chunks resolve the SQLite
+variable-limit failure without changing transactions or hit/miss behavior.
+
+The 100k production lexical-only check completed bounded retrieval in 98.300
+seconds and recovered all 12,500 primary-insufficient anchors, but it is not a
+full-pipeline graduation. CHAR_VECTOR, cache save, and fusion/materialization
+remain measured bottlenecks. GF-11D is not started and owns the 100k graduation
+benchmark. These units do not alter the GF-0 through GF-12 order.
 
 ### Goal
 

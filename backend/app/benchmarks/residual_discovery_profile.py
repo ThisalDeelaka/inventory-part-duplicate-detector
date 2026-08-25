@@ -12,8 +12,10 @@ import hashlib
 import json
 import multiprocessing
 import pstats
+import re
 import tempfile
 import time
+import traceback
 from collections import Counter, defaultdict
 from contextlib import contextmanager
 from pathlib import Path
@@ -30,7 +32,7 @@ from app.db.models import (
     IdentityNeighborhoodMember,
     IdentityNeighborhoodSnapshot,
 )
-from app.orchestration.contracts import ScanStage
+from app.orchestration.contracts import ScanStage, ScanStageExecutionStatus
 from app.engine import candidate_evaluation_features
 from app.repositories.discovery_repository import DiscoveryRepository
 from app.services import hybrid_retrieval, identity_discovery_service
@@ -67,6 +69,7 @@ class _Collector:
         self.checkpoint_path = checkpoint_path
         self.discovery_started = None
         self.discovery_seconds = None
+        self.discovery_terminal_status = None
         self.retrieval_finished_at = None
         self.post_retrieval_seconds = None
         self.active_sub_stage = "NOT_STARTED"
@@ -78,6 +81,9 @@ class _Collector:
         self.commit_count = Counter()
         self.counts = {}
         self.retrieval = {}
+        self.last_sql_attempt = None
+        self.last_completed_sql = None
+        self.failing_sql = None
         self.stack = []
         self.profiler = cProfile.Profile()
         self.python_profile_enabled = python_profile_enabled
@@ -102,6 +108,16 @@ class _Collector:
             if self.python_profile_enabled:
                 self.profiler.disable()
             self.active_sub_stage = "COMPLETED"
+            self.discovery_terminal_status = "COMPLETED"
+            self.checkpoint()
+
+    def fail_discovery(self):
+        if self.discovery_started is not None and self.discovery_seconds is None:
+            self.discovery_seconds = time.perf_counter() - self.discovery_started
+            if self.python_profile_enabled:
+                self.profiler.disable()
+            self.active_sub_stage = "FAILED"
+            self.discovery_terminal_status = "FAILED"
             self.checkpoint()
 
     @contextmanager
@@ -127,7 +143,7 @@ class _Collector:
             return
         payload = {
             "contract_version": PROFILE_CONTRACT_VERSION,
-            "status": "COMPLETED" if self.discovery_seconds is not None else "RUNNING",
+            "status": self.discovery_terminal_status or "RUNNING",
             "active_sub_stage": self.active_sub_stage,
             "discovery_elapsed_seconds": round(
                 self.discovery_seconds
@@ -154,6 +170,49 @@ class _Collector:
 def _operation(statement: str) -> str:
     value = statement.lstrip().split(None, 1)[0].upper() if statement.strip() else "OTHER"
     return value if value in {"SELECT", "INSERT", "UPDATE", "DELETE"} else "OTHER"
+
+
+def _parameter_shape(parameters, executemany: bool) -> tuple[int, int]:
+    """Return count-per-statement and batch size without retaining values."""
+    if executemany:
+        batch_size = len(parameters) if parameters is not None else 0
+        first = parameters[0] if batch_size else ()
+        return len(first) if hasattr(first, "__len__") else 1, batch_size
+    return len(parameters) if hasattr(parameters, "__len__") else int(parameters is not None), 1
+
+
+def _sanitized_database_message(exc: Exception) -> str:
+    """Expose the backend diagnosis while removing quoted/data-like content."""
+    original = getattr(exc, "orig", exc)
+    message = str(original).replace("\r", " ").replace("\n", " ")
+    message = re.sub(r"(['\"]).*?\1", "<redacted>", message)
+    message = re.sub(r"\b[0-9a-fA-F]{24,}\b", "<redacted>", message)
+    return re.sub(r"\s+", " ", message).strip()[:240]
+
+
+def _safe_exception_diagnostics(exc: Exception, collector: _Collector) -> dict:
+    original = getattr(exc, "orig", None)
+    frames = traceback.extract_tb(exc.__traceback__)
+    return {
+        "exception_type": type(exc).__name__,
+        "backend_error_type": type(original).__name__ if original is not None else None,
+        "backend_error_code": getattr(original, "sqlite_errorcode", None),
+        "backend_error_name": getattr(original, "sqlite_errorname", None),
+        "sanitized_message": _sanitized_database_message(exc),
+        "call_stack": [
+            {
+                "module": frame.filename.replace("\\", "/").rsplit("/", 1)[-1],
+                "function": frame.name,
+                "line": frame.lineno,
+            }
+            for frame in frames
+        ],
+        "active_sub_stage": collector.active_sub_stage,
+        "failing_sql": collector.failing_sql,
+        "last_sql_attempt": collector.last_sql_attempt,
+        "last_completed_sql": collector.last_completed_sql,
+        "transaction_active": bool(getattr(collector, "transaction_active", False)),
+    }
 
 
 def _semantic_fingerprint(values) -> str:
@@ -257,6 +316,7 @@ def _instrumented_production_path(collector: _Collector, session):
         collector.retrieval_finished_at = time.perf_counter()
         metrics = result.metrics
         character = result.character_retrieval
+        lexical = result.lexical_retrieval
         collector.retrieval = {
             "records_indexed": metrics.records_indexed,
             "final_candidates": len(result.candidates),
@@ -268,6 +328,28 @@ def _instrumented_production_path(collector: _Collector, session):
             "retrieval_reported_seconds": round(metrics.retrieval_runtime_ms / 1000, 6),
             "character_seconds": round(character.retrieval_time_ms / 1000, 6) if character else 0.0,
             "character_strategy": character.strategy.value if character else "DISABLED",
+            "lexical_strategy": lexical.strategy if lexical else "DISABLED",
+            "lexical_contract_fingerprint": lexical.contract_fingerprint if lexical else None,
+            "lexical_feature_count": lexical.feature_count if lexical else 0,
+            "lexical_posting_entries": lexical.posting_entry_count if lexical else 0,
+            "lexical_posting_p50": lexical.posting_size_p50 if lexical else 0,
+            "lexical_posting_p95": lexical.posting_size_p95 if lexical else 0,
+            "lexical_posting_p99": lexical.posting_size_p99 if lexical else 0,
+            "lexical_max_posting": lexical.max_posting_size if lexical else 0,
+            "lexical_candidate_enumerations": lexical.candidate_union_enumerations if lexical else 0,
+            "lexical_exact_score_evaluations": lexical.exact_score_evaluations if lexical else 0,
+            "lexical_brute_comparisons": lexical.theoretical_brute_directed_comparisons if lexical else 0,
+            "lexical_zero_overlap_avoided": lexical.zero_overlap_comparisons_avoided if lexical else 0,
+            "lexical_max_anchor_candidates": lexical.max_anchor_candidate_union if lexical else 0,
+            "lexical_index_build_seconds": round(lexical.index_build_time_ms / 1000, 6) if lexical else 0.0,
+            "lexical_query_scoring_seconds": round(lexical.query_scoring_time_ms / 1000, 6) if lexical else 0.0,
+            "lexical_primary_insufficient_anchors": lexical.primary_insufficient_anchors if lexical else 0,
+            "lexical_second_pass_anchors": lexical.second_pass_anchors if lexical else 0,
+            "lexical_second_pass_recovered_anchors": lexical.second_pass_recovered_anchors if lexical else 0,
+            "lexical_remaining_insufficient_anchors": lexical.remaining_insufficient_anchors if lexical else 0,
+            "lexical_second_pass_posting_visits": lexical.second_pass_posting_visits if lexical else 0,
+            "lexical_second_pass_exact_reranks": lexical.second_pass_exact_reranks if lexical else 0,
+            "lexical_second_pass_seconds": round(lexical.second_pass_time_ms / 1000, 6) if lexical else 0.0,
             "provider_request_count": metrics.provider_request_count,
             "feature_bundles_built": metrics.feature_bundles_built,
             "feature_reuse_hits": metrics.feature_reuse_hits,
@@ -314,6 +396,12 @@ def _instrumented_production_path(collector: _Collector, session):
         with collector.measure("LEXICAL_NEAREST_NEIGHBORS", checkpoint=True):
             return original_nearest(*args, **kwargs)
     patch(hybrid_retrieval, "_nearest_pairs", nearest)
+
+    original_indexed_lexical = hybrid_retrieval.retrieve_production_lexical_neighbors
+    def indexed_lexical(*args, **kwargs):
+        with collector.measure("LEXICAL_NEAREST_NEIGHBORS", checkpoint=True):
+            return original_indexed_lexical(*args, **kwargs)
+    patch(hybrid_retrieval, "retrieve_production_lexical_neighbors", indexed_lexical)
 
     original_tfidf = hybrid_retrieval.TfidfVectorizer.fit_transform
     def tfidf(instance, *args, **kwargs):
@@ -395,6 +483,7 @@ def _instrumented_production_path(collector: _Collector, session):
     original_record_stage = scan_runner.record_scan_stage_result
     def record_stage(*args, **kwargs):
         stage = kwargs.get("stage")
+        status = kwargs.get("status")
         bucket = (
             "DISCOVERY_FINAL_VALIDATION_OR_RECONSTRUCTION"
             if stage == ScanStage.DISCOVERY else collector.active_bucket
@@ -402,7 +491,10 @@ def _instrumented_production_path(collector: _Collector, session):
         with collector.measure(bucket):
             result = original_record_stage(*args, **kwargs)
         if stage == ScanStage.DISCOVERY:
-            collector.finish_discovery()
+            if status == ScanStageExecutionStatus.SUCCEEDED:
+                collector.finish_discovery()
+            else:
+                collector.fail_discovery()
         return result
     patch(scan_runner, "record_scan_stage_result", record_stage)
 
@@ -492,11 +584,21 @@ def run_residual_profile(
     )
 
     @event.listens_for(engine, "before_cursor_execute")
-    def count_sql(_connection, _cursor, statement, _parameters, _context, executemany):
+    def count_sql(_connection, _cursor, statement, parameters, _context, executemany):
         if collector.discovery_started is None or collector.discovery_seconds is not None:
             return
         operation = _operation(statement)
         bucket = collector.active_bucket
+        parameter_count, batch_size = _parameter_shape(parameters, executemany)
+        collector.last_sql_attempt = {
+            "operation": operation,
+            "parameter_count": parameter_count,
+            "batch_size": batch_size,
+            "executemany": bool(executemany),
+            "statement_ordinal": collector.sql_event_count + 1,
+            "stage": collector.active_sub_stage,
+        }
+        collector.transaction_active = bool(_connection.in_transaction())
         collector.sql[bucket][operation] += 1
         collector.sql_total[operation] += 1
         collector.sql_event_count += 1
@@ -506,7 +608,28 @@ def run_residual_profile(
         if collector.sql_event_count % 1000 == 0:
             collector.checkpoint()
 
+    @event.listens_for(engine, "after_cursor_execute")
+    def complete_sql(_connection, _cursor, _statement, _parameters, _context, _executemany):
+        if collector.last_sql_attempt is not None:
+            collector.last_completed_sql = dict(collector.last_sql_attempt)
+
+    @event.listens_for(engine, "handle_error")
+    def capture_sql_failure(context):
+        execution = context.execution_context
+        parameters = context.parameters
+        executemany = bool(getattr(execution, "executemany", False))
+        parameter_count, batch_size = _parameter_shape(parameters, executemany)
+        collector.failing_sql = {
+            "operation": _operation(context.statement or ""),
+            "parameter_count": parameter_count,
+            "batch_size": batch_size,
+            "executemany": executemany,
+            "statement_ordinal": collector.sql_event_count,
+            "stage": collector.active_sub_stage,
+        }
+
     forced_error = None
+    failure_diagnostics = None
     try:
         with _instrumented_production_path(collector, session):
             try:
@@ -520,8 +643,9 @@ def run_residual_profile(
                 )
             except _StopAfterDiscovery:
                 pass
-            except Exception as exc:  # safe type only; never serialize raw text
+            except Exception as exc:  # sanitized diagnostic fields only
                 forced_error = type(exc).__name__
+                failure_diagnostics = _safe_exception_diagnostics(exc, collector)
     finally:
         if collector.python_profile_enabled:
             collector.profiler.disable()
@@ -550,8 +674,9 @@ def run_residual_profile(
     )
     result = {
         "contract_version": PROFILE_CONTRACT_VERSION,
-        "status": "COMPLETED" if collector.discovery_seconds is not None else "FAILED",
+        "status": collector.discovery_terminal_status or "FAILED",
         "safe_failure_category": forced_error,
+        "failure_diagnostics": failure_diagnostics,
         "records": records,
         "seed": seed,
         "active_sub_stage": collector.active_sub_stage,

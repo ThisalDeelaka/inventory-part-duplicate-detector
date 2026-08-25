@@ -762,3 +762,54 @@ provider, resolver, LSH, indexed lexical, and secret changes are zero.
 This correction stabilizes the exact lexical reference only. Global
 brute-force cosine work remains, so 100k lexical construction/query is still
 the GF-11C scale target.
+
+## GF-11C production lexical-strategy integration
+
+Status: **GF-11C VERIFIED**. GF-11A, GF-11B, GF-11C-PRE, and GF-11C are
+verified bounded units. GF-11D is not started and GF-11 remains IN PROGRESS.
+
+New policy-v2 discovery runs use `identity-discovery-v5-bounded-lexical-strategy`
+and `identity-discovery-config-v5`. The deterministic eligible-record count
+that enters lexical discovery selects the frozen strategy:
+
+- fewer than 25,000 records: the unchanged exact indexed v4 path;
+- 25,000 records or more: `BOUNDED_RARITY_AWARE_V1_WITH_FIXED_SECOND_PASS`.
+
+The bounded primary pass uses P1 rarest-first ranking, R2 visit budgeting,
+32 features, a 4,096-visit budget, an 80-candidate pool, and batches of 64.
+Only primary-insufficient anchors receive one fixed second pass with the same
+feature/pool/batch bounds and a 16,384-visit budget. Exact full-v4 cosine,
+self exclusion before top-k, score-descending/reference-key tie ordering, and
+post-selection rounding remain authoritative. Remaining insufficiency fails
+closed as `LEXICAL_CANDIDATE_POOL_INSUFFICIENT`; there is no global exact or
+third-pass fallback.
+
+Canonical production verification selected exact v4 at 500, 5k, and 20k and
+bounded retrieval at 25k and 50k. At 25k the bounded path had zero insufficient
+anchors and retained 500 final hybrid candidates. At 50k it completed full
+DISCOVERY in 322.704 seconds: 6,250 primary-insufficient anchors entered the
+second pass, all 6,250 were recovered, none remained, 500 final hybrid
+candidates and 13,194 neighborhoods were persisted, and provider calls were
+zero. Under the same v5 metadata, bounded and exact references had identical
+proposal fingerprint `8db92b75442dc705f89c705714a56394d6d3dc750de3d5eb663a7b2f8a963ead`
+and neighborhood fingerprint `b42e15a32751ef384e1e27ead0273b6a946e669e935daeb70f9fb15e9908aa25`.
+Their truth, bridge, cross-site, protected-conflict, and generic-hub outcomes
+remain equal.
+
+The 50k SQLite failure was an oversized cache-load `IN` query: 50,000
+fingerprints plus two predicates exceeded the 32,766-variable backend limit.
+Production now uses deterministic non-overlapping chunks of 900 fingerprints,
+at most 902 SQL parameters per statement, in the same transaction with no
+added commits or hit/miss change. Operation-only checks passed at 50k, 75k,
+and 100k.
+
+The production lexical-only 100k check completed in 98.300 seconds on the
+bounded strategy. It recovered all 12,500 primary-insufficient anchors with
+the fixed second pass, left zero insufficient anchors, used at most 80 exact
+rerank candidates per anchor, opened no database, and made no provider calls.
+This is bounded lexical evidence only, not 100k full-pipeline or production
+graduation. GF-11D owns the 100k graduation benchmark.
+
+The remaining measured 50k bottlenecks are CHAR_VECTOR (142.054 seconds in the
+integration run), cache save (65.242 seconds), and other fusion/materialization
+(30.813 seconds). They are intentionally unchanged by GF-11C.
