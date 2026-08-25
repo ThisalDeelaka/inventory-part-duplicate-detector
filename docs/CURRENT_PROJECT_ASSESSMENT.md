@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D is measured but insufficient/not graduated: the canonical 100k run timed out at the 300-second gate, and its single 900-second diagnostic timed out in GF5 after 721.191 seconds of DISCOVERY. CHAR_VECTOR is the next measured hardening target. GF-12 is not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D is measured but insufficient/not graduated. GF-11D-CHAR-PRE profiling is verified: at 100k, candidate-pool selection consumed 194.797 of 277.062 instrumented CHAR_VECTOR seconds and is the single next hardening target. GF-12 is not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -759,3 +759,23 @@ writes were zero for reached stages. Accepted-group safety outcomes are
 GF-11 remains IN PROGRESS. The only next recommendation is bounded hardening of
 the measured CHAR_VECTOR retrieval stage before GF-11D is rerun. GF-12 remains
 not started.
+
+## GF-11D-CHAR-PRE character bottleneck attribution
+
+GF-11D-CHAR-PRE is verified as a benchmark-only measurement prerequisite. The
+frozen production character contract was mirrored without changing production
+code or parameters. Canonical isolated runs completed at 20k, 50k, and 100k.
+The 100k run finished within the 450-second diagnostic bound at 277.062
+instrumented seconds and reproduced 320,810,636 bucket visits, 32,000,000
+exact reranks, 500,000 directed neighbors, and zero provider calls.
+
+`CANDIDATE_POOL_SELECTION` dominated at 194.797 seconds (70.31%), versus
+23.141 seconds for exact rerank, 17.515 seconds for candidate dedupulation, and
+16.040 seconds for directed top-k finalization. Every anchor hit the 1,280
+gather bound and retained a 320-item pool. The 20k instrumented/uninstrumented
+fingerprints were identical, although instrumentation overhead was 57.75% and
+is not treated as a production timing claim.
+
+GF-11D remains insufficient and GF-11 remains IN PROGRESS. The single next
+hardening target is candidate-pool selection under the unchanged frozen
+character contract. GF-12 remains not started.

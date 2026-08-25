@@ -889,3 +889,82 @@ diagnostic, GF5 did not complete within 900 seconds, and GF6 was not reached.
 The single next hardening target is **CHAR_VECTOR retrieval**, the largest
 measured production stage at 336.432 seconds. No production optimization was
 performed in GF-11D.
+
+## GF-11D-CHAR-PRE 100k character-retrieval profiling
+
+Status: **profiling verified; no optimization performed**. GF-11D remains
+insufficient, GF-11 remains IN PROGRESS, and GF-12 is not started.
+
+The benchmark-only profiler mirrors the frozen production LSH build, query,
+exact-rerank, top-k, remapping, and reciprocal reconstruction loop. It uses the
+canonical scale corpus, production semantic text, current hashing embedder,
+normalized 384-bin vectors, and canonical GF1 references. Atomic sanitized
+checkpoints are written every 256 anchors. No database or provider is opened.
+
+The frozen contract remained eight 12-bit tables, PCG64 seed 1101, radius two,
+bucket cap 640, gather cap 1,280, pool 320, top-k five, exact current cosine,
+and score-descending/reference-key-ascending ties. The contract fingerprint was
+`4b76491de0baafcf5b147ccb2a6f69c7c44395b73f83c62cb36c8f845e092557`.
+
+At 20k, the uninstrumented control completed in 32.205 seconds and the
+instrumented run in 50.803 seconds, a 57.75% overhead. This exceeds the
+preferred 10% and is disclosed: instrumented total wall time is attribution
+evidence, not a replacement production-performance baseline. Exact directed
+and reciprocal-pair fingerprints were identical, as were 100,000 directed
+neighbors and 6,400,000 exact reranks.
+
+| Timing stage (seconds) | 20k | 50k | 100k |
+|---|---:|---:|---:|
+| CHAR_TOTAL | 50.802814 | 101.715170 | 277.061931 |
+| VECTOR_PREPARATION | 1.788170 | 2.525894 | 6.650812 |
+| LSH_SETUP | 0.061050 | 0.086067 | 0.242418 |
+| SIGNATURE_COMPUTATION | 0.048618 | 0.120425 | 0.253757 |
+| INDEX_BUILD | 0.072021 | 0.100717 | 0.279225 |
+| PROBE_CODE_GENERATION | 1.076827 | 0.932740 | 1.156065 |
+| BUCKET_LOOKUP | 0.832134 | 0.827521 | 1.027184 |
+| BUCKET_MEMBER_ENUMERATION | 0.890864 | 1.288623 | 3.336852 |
+| CANDIDATE_DEDUP_OR_ACCUMULATION | 4.329816 | 7.415522 | 17.514640 |
+| CANDIDATE_POOL_SELECTION | 27.933208 | 64.396147 | 194.797099 |
+| EXACT_RERANK | 6.555978 | 11.202241 | 23.141140 |
+| DIRECTED_TOPK_FINALIZATION | 4.120566 | 7.086452 | 16.039840 |
+| RECIPROCAL_PAIR_RECONSTRUCTION | 0.909672 | 2.741881 | 5.735826 |
+| OTHER_UNATTRIBUTED | 2.183889 | 2.990939 | 6.887073 |
+
+The 100k run completed inside its one permitted 450-second diagnostic bound.
+`CANDIDATE_POOL_SELECTION` consumed 194.797 seconds, 70.31% of instrumented
+CHAR_TOTAL. Exact rerank was 23.141 seconds (8.35%), dedup/accumulation 17.515
+seconds (6.32%), and directed top-k finalization 16.040 seconds (5.79%). The
+largest stage is therefore selected from wall time, not call counts.
+
+| Counter | 20k | 50k | 100k |
+|---|---:|---:|---:|
+| bucket lookups | 1,278,128 | 1,704,328 | 1,423,056 |
+| bucket hits | 604,443 | 855,710 | 1,032,388 |
+| empty lookups | 673,685 | 848,618 | 390,668 |
+| bucket members/raw visits | 46,493,221 | 131,528,733 | 320,810,636 |
+| buckets hitting cap | 26,693 | 107,715 | 329,396 |
+| anchors hitting gather cap | 20,000 | 50,000 | 100,000 |
+| unique candidates before pool | 28,831,883 | 91,253,051 | 237,926,872 |
+| dedup eliminations | 17,661,338 | 40,275,682 | 82,883,764 |
+| exact reranks | 6,400,000 | 16,000,000 | 32,000,000 |
+| directed neighbors | 100,000 | 250,000 | 500,000 |
+| reciprocal pairs | 21,949 | 51,843 | 97,976 |
+
+Every anchor retained a 320-item pool and none fell below top-k. At 100k,
+bucket members visited per anchor were p50 2,971, p95/p99/max 5,768. Unique
+candidates were p50 2,451, p95 3,370, p99 3,669, and max 4,383. Candidate-pool
+selection grew 2.31x from 20k to 50k and 3.03x from 50k to 100k, faster than
+the corresponding total growth of 2.00x and 2.72x. Exact reranks remained
+strictly linear at 320 per record.
+
+CP1-CP14 and the retained production LSH tests passed. Timings reconcile to
+CHAR_TOTAL with nonnegative OTHER_UNATTRIBUTED; bucket, dedup, and rerank
+counters reconcile; timeout/checkpoint/privacy contracts pass; semantic
+fingerprints are unchanged; providers remain zero; and no schema, migration,
+dependency, production retrieval, resolver, orchestration, or secret behavior
+changed.
+
+The single measured next hardening target is
+**CANDIDATE_POOL_SELECTION**, specifically the bounded bit-agreement scoring,
+canonical-reference tie ordering, and 320-item selection work. This profiling
+result does not authorize a semantic or parameter change.
