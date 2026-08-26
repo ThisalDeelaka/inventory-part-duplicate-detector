@@ -77,6 +77,37 @@ class CharacterLshConfiguration:
 PRODUCTION_LSH_CONFIGURATION = CharacterLshConfiguration()
 
 
+def _select_candidate_pool_exact(
+    candidate_array: np.ndarray,
+    approximate_matches: np.ndarray,
+    *,
+    gather_limit: int,
+    candidate_pool_k: int,
+) -> np.ndarray:
+    """Return the exact legacy pool order without sorting ineligible priorities.
+
+    Candidate ids are positions in the record-ref-key-sorted LSH index, so
+    ascending integer id is exactly the frozen canonical reference tie rule.
+    Bit agreement is an integer in the finite [0, tables * bits] domain.
+    """
+    limit = min(len(candidate_array), gather_limit, candidate_pool_k)
+    if limit <= 0:
+        return np.empty(0, dtype=np.int64)
+    priorities = np.asarray(approximate_matches)
+    counts = np.bincount(priorities.astype(np.int64, copy=False))
+    selected = []
+    remaining = limit
+    for priority in np.flatnonzero(counts)[::-1]:
+        positions = np.flatnonzero(priorities == priority)
+        canonical = np.sort(candidate_array[positions])
+        take = min(remaining, len(canonical))
+        selected.append(canonical[:take])
+        remaining -= take
+        if remaining == 0:
+            break
+    return np.concatenate(selected).astype(np.int64, copy=False)
+
+
 @dataclass(frozen=True)
 class CharacterRetrievalWorkMetrics:
     strategy: CharacterRetrievalStrategy
@@ -347,17 +378,12 @@ def retrieve_lsh_directed_neighbors(
                     configuration.table_count * configuration.bits_per_table
                     - popcount[xor].sum(axis=1)
                 )
-                approximate_order = np.lexsort(
-                    (
-                        np.asarray(
-                            [index.refs[item] for item in candidate_array],
-                            dtype=object,
-                        ),
-                        -approximate_matches.astype(np.int32),
-                    )
+                retained = _select_candidate_pool_exact(
+                    candidate_array,
+                    approximate_matches,
+                    gather_limit=gather_limit,
+                    candidate_pool_k=configuration.candidate_pool_k,
                 )
-                gathered = candidate_array[approximate_order[:gather_limit]]
-                retained = gathered[: configuration.candidate_pool_k]
                 pool_evaluations += len(retained)
                 max_pool = max(max_pool, len(retained))
                 pools.append(retained)

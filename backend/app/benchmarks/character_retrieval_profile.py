@@ -26,6 +26,7 @@ from app.services.character_retrieval import (
     CharacterRetrievalError,
     CharacterRetrievalFailureCategory,
     _probe_masks,
+    _select_candidate_pool_exact,
     _validated_values,
     character_retrieval_contract_fingerprint,
     generate_lsh_hyperplanes,
@@ -311,12 +312,12 @@ def run_profile(
                 configuration.table_count * configuration.bits_per_table
                 - popcount[xor].sum(axis=1)
             )
-            approximate_order = np.lexsort((
-                np.asarray([stable_refs[item] for item in candidate_array], dtype=object),
-                -approximate_matches.astype(np.int32),
-            ))
-            gathered = candidate_array[approximate_order[:gather_limit]]
-            retained = gathered[:configuration.candidate_pool_k]
+            retained = _select_candidate_pool_exact(
+                candidate_array,
+                approximate_matches,
+                gather_limit=gather_limit,
+                candidate_pool_k=configuration.candidate_pool_k,
+            )
             telemetry.elapsed["CANDIDATE_POOL_SELECTION"] += time.perf_counter() - started
             pool_sizes.append(len(retained))
             telemetry.counters["candidate_pool_evaluations"] += len(retained)

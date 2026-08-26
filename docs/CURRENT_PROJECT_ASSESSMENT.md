@@ -33,7 +33,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D is measured but insufficient/not graduated. GF-11D-CHAR-PRE profiling is verified: at 100k, candidate-pool selection consumed 194.797 of 277.062 instrumented CHAR_VECTOR seconds and is the single next hardening target. GF-12 is not started.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D is measured but insufficient/not graduated. GF-11D-CHAR-PRE profiling and GF-11D-CHAR1 exact selector hardening are verified; the 100k isolated character run improved from 264.302 to 145.483 seconds with unchanged output fingerprints. GF-12 is not started.
 
 ## GF-1 canonical scan-record catalog
 
@@ -779,3 +779,23 @@ is not treated as a production timing claim.
 GF-11D remains insufficient and GF-11 remains IN PROGRESS. The single next
 hardening target is candidate-pool selection under the unchanged frozen
 character contract. GF-12 remains not started.
+
+## GF-11D-CHAR1 exact candidate-pool selection hardening
+
+GF-11D-CHAR1 is **VERIFIED** as a bounded, semantics-preserving optimization.
+The selector now traverses finite bit-agreement priorities and only orders the
+canonical-reference ties needed to fill the unchanged 320-item pool. E1-E10,
+500 randomized differential cases, old/new production comparisons at 500 and
+5,000 records, and isolated 20k/50k/100k fingerprints establish exact ranking
+and output equivalence.
+
+Uninstrumented isolated character time changed from 30.823 to 18.673 seconds at
+20k, 205.231 to 53.507 seconds at 50k, and 264.302 to 145.483 seconds at 100k.
+The instrumented candidate-pool stage improved 77.36% at 100k. A single 50k
+full DISCOVERY regression completed in 187.530 seconds and reproduced exactly
+20,500 proposals, 13,194 neighborhoods, and both frozen semantic fingerprints,
+with zero provider requests and unchanged group-first write-deprecation policy.
+
+GF-11D remains INSUFFICIENT / NOT GRADUATED and GF-11 remains IN PROGRESS. The
+next bounded action is the frozen GF-11D 100k graduation rerun. GF-12 remains
+not started.

@@ -968,3 +968,51 @@ The single measured next hardening target is
 **CANDIDATE_POOL_SELECTION**, specifically the bounded bit-agreement scoring,
 canonical-reference tie ordering, and 320-item selection work. This profiling
 result does not authorize a semantic or parameter change.
+
+## GF-11D-CHAR1 exact candidate-pool selection hardening
+
+Status: **VERIFIED bounded hardening unit**. GF-11D remains INSUFFICIENT / NOT
+GRADUATED, GF-11 remains IN PROGRESS, and GF-12 is not started.
+
+The production selector now exploits the finite integer bit-agreement domain:
+nonempty agreement levels are visited from highest to lowest, candidates within
+each level retain ascending canonical reference order, and selection stops at
+the unchanged 320-item pool. This is exactly the prior ranking key of agreement
+descending then reference key ascending. The eight-table, 12-bit, seed-1101,
+radius-two, bucket-640, gather-1,280, pool-320, top-five, and exact-dot-rerank
+contract and its fingerprint are unchanged.
+
+E1-E10, 500 randomized differential cases, and complete old/new production LSH
+comparisons at 500 and 5,000 records produced zero ordered-pool, directed
+neighbor, reciprocal-pair, score, or fingerprint differences. Canonical 20k,
+50k, and 100k isolated outputs also retained their exact pre-change directed
+and reciprocal-pair fingerprints and rerank counts.
+
+| Records | Pre-change uninstrumented | Post-change uninstrumented | Improvement | Speedup |
+|---:|---:|---:|---:|---:|
+| 20,000 | 30.823420 s | 18.673436 s | 39.42% | 1.65x |
+| 50,000 | 205.231462 s | 53.506610 s | 73.93% | 3.84x |
+| 100,000 | 264.302494 s | 145.482882 s | 44.96% | 1.82x |
+
+The instrumented `CANDIDATE_POOL_SELECTION` stage fell from 27.933208 to
+5.488929 seconds at 20k (80.35%), from 64.396147 to 19.387295 seconds at 50k
+(69.89%), and from 194.797099 to 44.106238 seconds at 100k (77.36%). The
+post-change 100k isolated run therefore met both the 40% selector-improvement
+gate and the 25% total-improvement gate, and completed inside the preferred
+180-second target.
+
+One canonical 50k full DISCOVERY regression completed in 187.529979 seconds,
+including 48.094370 seconds for character retrieval. It reproduced exactly
+20,500 proposals and 13,194 neighborhoods with proposal fingerprint
+`8db92b75442dc705f89c705714a56394d6d3dc750de3d5eb663a7b2f8a963ead` and
+neighborhood fingerprint
+`b42e15a32751ef384e1e27ead0273b6a946e669e935daeb70f9fb15e9908aa25`.
+Consequently the frozen truth, bridge, cross-site, protected-conflict, and
+generic-family coverage is unchanged. Provider requests were zero; the
+group-first deprecation-policy regression confirms pair, G1, G2-v1, and shadow
+writes remain disabled.
+
+No schema, migration, dependency, provider, resolver, orchestration, threshold,
+retrieval parameter, or identity semantic changed. The next bounded action is
+to rerun the GF-11D 100k graduation benchmark under its frozen acceptance
+contract; CHAR1 itself does not make a graduation claim.
