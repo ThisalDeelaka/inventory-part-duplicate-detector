@@ -544,7 +544,8 @@ Dropping tables, deleting rows, or migrating historical pair feedback into inven
 ## GF-11 — 100k scale hardening
 
 Implementation status: IN PROGRESS. GF-11A, GF-11B, GF-11C-PRE, and GF-11C
-are verified bounded units. GF-11D is measured but insufficient/not graduated.
+are verified bounded units. GF-11D remains insufficient/not graduated after
+the post-CHAR1 canonical 100k rerun.
 Production policy-v2 discovery uses exact indexed
 v4 lexical retrieval below 25,000 eligible records and bounded rarity-aware
 retrieval with one fixed fail-closed second pass at 25,000 and above. The 50k
@@ -559,9 +560,14 @@ full-pipeline graduation. CHAR_VECTOR, cache save, and fusion/materialization
 remain measured bottlenecks. The canonical GF-11D 100k run timed out at the
 300-second gate. Its sole 900-second diagnostic completed 721.191-second
 DISCOVERY and GF4, then timed out in GF5 before GF6. CHAR_VECTOR was the
-largest measured production stage at 336.432 seconds and is the single next
-hardening target. GF-12 remains not started. These units do not alter the
-GF-0 through GF-12 order.
+largest measured production stage at 336.432 seconds. CHAR1 subsequently
+reduced full-pipeline CHAR_VECTOR to 144.876 seconds without changing its
+contract, but the official rerun still timed out during cache save at 300.011
+seconds. The single extended diagnostic completed 571.720-second DISCOVERY and
+GF4, then failed GF5 with `IDENTITYRESOLUTIONVALIDATIONERROR` after 201.772
+seconds; GF6 was skipped. That typed GF5 validation failure is the single next
+blocker. GF-12 remains not started. These units do not alter the GF-0 through
+GF-12 order.
 
 ### Goal
 

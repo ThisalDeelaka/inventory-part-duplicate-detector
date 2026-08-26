@@ -1016,3 +1016,77 @@ No schema, migration, dependency, provider, resolver, orchestration, threshold,
 retrieval parameter, or identity semantic changed. The next bounded action is
 to rerun the GF-11D 100k graduation benchmark under its frozen acceptance
 contract; CHAR1 itself does not make a graduation claim.
+
+## GF-11D-RERUN 100k graduation benchmark after CHAR1
+
+Status: **INSUFFICIENT / NOT GRADUATED**. GF-11 remains IN PROGRESS and GF-12
+is not started.
+
+The official canonical run retained 100,000 records, seed 1101,
+`group-first-scale-corpus-v1`, policy-v2 `group_first_primary`, provider
+`none`, and a unique disposable SQLite database. It timed out truthfully at
+300.011255 seconds during `RETRIEVAL_CACHE_SAVE`. CATALOG completed in
+32.554040 seconds. At the final checkpoint, DISCOVERY had run for 262.191563
+seconds after 100,000 feature bundles, 14.897337 seconds of standard blocking,
+6.208527 seconds of lexical vectorization, 113.972839 seconds of lexical
+nearest-neighbor work, 0.323258 seconds of cache load, and 29,936 of 70,235
+cache rows persisted. CHAR_VECTOR and GF2 through GF6 were `NOT_REACHED`.
+
+The one permitted 900-second diagnostic terminated normally with a typed
+`IDENTITYRESOLUTIONVALIDATIONERROR` after 834.137171 seconds rather than timing
+out. It completed CATALOG in 35.160909 seconds, DISCOVERY in 571.720467
+seconds, and GF4 in 24.707984 seconds. GF5 then failed after 201.766739 seconds;
+GF6 was skipped and no completed resolution or projection was published.
+
+| Comparable work | Pre-CHAR1 | Post-CHAR1 diagnostic |
+|---|---:|---:|
+| DISCOVERY total | 721.190642 s | 571.720467 s |
+| feature bundles | 12.804359 s | 17.596624 s |
+| standard blocking | 19.250558 s | 31.318069 s |
+| lexical vectorization | 4.770 s | 5.301115 s |
+| lexical nearest neighbors | 93.348593 s | 118.204893 s |
+| CHAR_VECTOR | 336.431681 s | 144.876351 s |
+| cache load | 0.287032 s | 0.390685 s |
+| cache save | 142.257157 s | 149.271365 s |
+| fusion/materialization | 67.170544 s | 69.636859 s |
+| GF2 materialization/persistence | 2.549767 s | 2.346263 s |
+| GF3 construction/persistence | included in 32.027559 s | 5.308086 s |
+| final validation/reconstruction | 19.639104 s | 13.627528 s |
+| GF4 | 36.574673 s | 24.707984 s |
+
+The full-pipeline character result retained fixed-seed LSH, pool 320, top-k
+five, 32,000,000 exact reranks, 320,810,636 bucket enumerations, a maximum
+320-item pool, and fingerprint
+`4b76491de0baafcf5b147ccb2a6f69c7c44395b73f83c62cb36c8f845e092557`.
+CHAR_VECTOR improved by 191.555330 seconds (56.94%). Candidate-pool timing is
+not separately instrumented in this full-pipeline harness and is not
+fabricated.
+
+Bounded lexical retrieval selected
+`BOUNDED_RARITY_AWARE_V1_WITH_FIXED_SECOND_PASS`: 12,500 primary-insufficient
+anchors entered the only second pass, all 12,500 were recovered, zero remained,
+the maximum exact pool was 80, and no global exact fallback ran. Cache load
+used 112 SELECTs with at most 902 parameters. Cache save requested 70,235 rows
+and issued 70,235 SELECTs plus 70,235 INSERTs without a cache-local commit.
+
+Fusion/materialization retained 500 final candidates after 29,260 exact-
+description, 71 part-family, 41,989 technical-identity, 214,100 lexical, and
+133,531 character candidates. It recorded 2,452,702 feature reuses,
+931,753 eligibility calls, 931,753 allowed-pair calls, and 20,500 scoring
+calls. GF2 persisted 20,500 proposals. GF3 persisted 20,687 neighborhoods and
+41,706 members, maximum size 20, with one truncated neighborhood. GF4 persisted
+20,500 evidence edges.
+
+GF5 received 20,687 neighborhoods with a maximum connected work unit of 20,113
+records. Its terminal typed validation failure persisted no accepted groups,
+conflicts, deferred work, targeted checks, or unassigned result and published
+no partial G2-v2 projection. Provider, legacy pair, G1, G2-v1, and shadow rows
+were zero. Cross-scan contamination and source mutation were zero. Accepted
+cannot-link, duplicate-membership, and singleton counts were zero because no
+accepted result was published, not evidence of a completed resolver outcome.
+
+The frozen graduation rule still fails because the official DISCOVERY gate did
+not complete within 300 seconds and the diagnostic did not complete GF5/GF6.
+The single next blocker is the typed GF5
+`IDENTITYRESOLUTIONVALIDATIONERROR`; no production optimization was performed
+in this verification task.
