@@ -11,9 +11,10 @@ from app.resolution.validation import validate_resolution_result
 
 def test_v1_v4_exact_throw_site_and_rule_are_explicit():
     source = inspect.getsource(validate_resolution_result)
-    assert "targeted evidence request budget exceeded" in source
+    assert "targeted evidence request budget exceeded for a work unit" in source
     assert "len(result.targeted_evidence_requests)" in source
     assert "max_targeted_checks_per_work_unit" in source
+    assert "request_counts_by_work_unit" in source
 
 
 def test_v2_v11_minimal_selection_is_deterministic_and_exceeds_global_limit():

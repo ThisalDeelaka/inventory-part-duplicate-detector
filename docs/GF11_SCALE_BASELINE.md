@@ -1144,3 +1144,45 @@ work-unit count, maximum 20,113, and unavailable pattern count.
 The single next action is to authorize a bounded GF5 correctness fix for the
 proven global-versus-per-work-unit budget-scope defect while preserving every
 frozen resolver safety invariant.
+
+## GF-11D-GF5-FIX per-work-unit targeted-evidence validation
+
+Status: **VERIFIED CORRECTION; GF-11D REMAINS INSUFFICIENT / NOT GRADUATED**.
+GF-11 remains IN PROGRESS and GF-12 is not started.
+
+The PRE diagnosis was correct. The resolver already limited scheduled
+targeted requests independently for each deterministic GF5 work unit, and no
+authority defines an additional scan-wide limit of 40. Result validation now
+reconstructs the immutable input work units, resolves each existing
+`requesting_work_unit_reference` to exactly one work unit, verifies that both
+request endpoints belong to that owner, reconciles the owner counts with the
+aggregate request collection, and applies the configured limit to every owner
+count. Unknown, mismatched, or ambiguous ownership fails closed. No result or
+persistence contract changed, no global budget was invented, and the GF5
+semantic/configuration versions and discovery-v5 fingerprint remain unchanged.
+
+Focused controls validate 41 requests across two individually safe work units,
+40 requests in each of two units, and 200 requests across five units. A true
+41-request single-unit violation still raises the typed
+`IdentityResolutionValidationError`, and invalid ownership fails closed.
+
+The canonical 5k/seed-1101 disposable run completed through GF5 persistence,
+reconstruction, and GF6. GF5 retained 172 work units and 110 targeted requests,
+with the unchanged scheduler maximum of 40 per unit. It persisted 169 groups,
+one conflict, three deferred units, 4,595 unassigned records, and 405 group
+members. GF6 projected the same 169 groups, one conflict, three deferred units,
+and 4,595 unassigned records. Provider, legacy-pair, G1, G2-v1, shadow,
+accepted-cannot-link, duplicate-membership, singleton, and cross-scan counters
+were all zero.
+
+The required canonical 20k regression also completed through GF5 and GF6.
+GF5 retained 304 work units and 111 targeted requests, all within the per-unit
+limit, and persisted 299 groups, one conflict, five deferred units, 19,340
+unassigned records, and 660 group members. GF6 projected the same 299 groups,
+one conflict, five deferred units, and 19,340 unassigned records. All provider,
+deprecated-write, and safety counters remained zero. Existing 50k evidence did
+not retain a GF5 result, and the prior 100k diagnostic stopped at the now-fixed
+validator; neither full scale was rerun in this bounded correctness task.
+
+GF-11D-GF5-FIX is verified. The next frozen step is to rerun the GF-11D 100k
+graduation benchmark; this correction alone does not graduate GF-11D or GF-11.

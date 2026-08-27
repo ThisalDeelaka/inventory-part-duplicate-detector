@@ -81,6 +81,62 @@ def _canonical_pairs(values: tuple[tuple[int, int], ...], label: str) -> None:
     _require(len(set(values)) == len(values), f"{label} pairs must be unique")
 
 
+def _targeted_request_work_unit_owners(
+    value: IdentityResolutionInput,
+) -> dict[str, frozenset[int]]:
+    """Reconstruct deterministic GF5 work-unit ownership from immutable input."""
+    parent = {record.record_id: record.record_id for record in value.canonical_records}
+    active: set[int] = set()
+
+    def find(record_id: int) -> int:
+        while parent[record_id] != record_id:
+            parent[record_id] = parent[parent[record_id]]
+            record_id = parent[record_id]
+        return record_id
+
+    def union(left: int, right: int) -> None:
+        first, second = find(left), find(right)
+        if first != second:
+            low, high = sorted((first, second))
+            parent[high] = low
+
+    for neighborhood in value.identity_neighborhoods:
+        members = neighborhood.member_record_ids
+        active.update(members)
+        for member in members[1:]:
+            union(members[0], member)
+    for edge in value.machine_evidence_edges:
+        active.update((edge.record_id_1, edge.record_id_2))
+        union(edge.record_id_1, edge.record_id_2)
+    for constraint in value.human_constraints:
+        if constraint.constraint_type == IdentityResolutionConstraintType.MUST_LINK:
+            active.update((constraint.record_id_1, constraint.record_id_2))
+            union(constraint.record_id_1, constraint.record_id_2)
+
+    components: dict[int, list[int]] = {}
+    for member in sorted(active):
+        components.setdefault(find(member), []).append(member)
+
+    owners: dict[str, frozenset[int]] = {}
+    for members in components.values():
+        member_set = frozenset(members)
+        neighborhood_references = tuple(sorted(
+            neighborhood.neighborhood_reference
+            for neighborhood in value.identity_neighborhoods
+            if member_set.intersection(neighborhood.member_record_ids)
+        ))
+        reference = (
+            "|".join(neighborhood_references)
+            or f"records:{','.join(map(str, sorted(member_set)))}"
+        )
+        _require(
+            reference not in owners,
+            "targeted request work-unit ownership is ambiguous",
+        )
+        owners[reference] = member_set
+    return owners
+
+
 def validate_resolver_configuration(configuration: ResolverConfiguration) -> None:
     _require(configuration.max_resolution_members >= 2,
              "max_resolution_members must be at least 2")
@@ -532,6 +588,8 @@ def validate_resolution_result(
         (edge.record_id_1, edge.record_id_2)
         for edge in resolution_input.machine_evidence_edges
     }
+    request_owners = _targeted_request_work_unit_owners(resolution_input)
+    request_counts_by_work_unit: dict[str, int] = {}
     for request in result.targeted_evidence_requests:
         validate_targeted_evidence_request(request)
         _require(request.scan_id == result.scan_id, "targeted request crosses scans")
@@ -546,15 +604,35 @@ def validate_resolution_result(
         )
         _require((request.record_id_1, request.record_id_2) not in machine_pairs,
                  "targeted request duplicates existing machine evidence")
+        owner_members = request_owners.get(request.requesting_work_unit_reference)
+        _require(
+            owner_members is not None,
+            "targeted request has unknown work-unit ownership",
+        )
+        _require(
+            {request.record_id_1, request.record_id_2} <= owner_members,
+            "targeted request endpoints do not belong to the declared work unit",
+        )
+        request_counts_by_work_unit[request.requesting_work_unit_reference] = (
+            request_counts_by_work_unit.get(request.requesting_work_unit_reference, 0) + 1
+        )
         request_keys.append((request.record_id_1, request.record_id_2, request.reason.value))
     _require(tuple(sorted(request_keys)) == tuple(request_keys),
              "targeted evidence requests must use deterministic order")
     _require(len(set(request_keys)) == len(request_keys),
              "targeted evidence requests must be unique")
     _require(
-        len(result.targeted_evidence_requests)
-        <= resolution_input.resolver_configuration.max_targeted_checks_per_work_unit,
-        "targeted evidence request budget exceeded",
+        sum(request_counts_by_work_unit.values())
+        == len(result.targeted_evidence_requests),
+        "targeted evidence request ownership counts do not reconcile",
+    )
+    _require(
+        all(
+            count
+            <= resolution_input.resolver_configuration.max_targeted_checks_per_work_unit
+            for count in request_counts_by_work_unit.values()
+        ),
+        "targeted evidence request budget exceeded for a work unit",
     )
     requests_by_fingerprint = {
         request.request_fingerprint: request for request in result.targeted_evidence_requests
