@@ -54,6 +54,8 @@ CHANNEL_WEIGHTS = {
 }
 _MAX_RRF = sum(weight / (RRF_K + 1) for weight in CHANNEL_WEIGHTS.values())
 _EMBEDDING_CACHE_LOAD_CHUNK_SIZE = 900
+_EMBEDDING_CACHE_SAVE_LOOKUP_CHUNK_SIZE = 900
+_EMBEDDING_CACHE_SAVE_INSERT_BATCH_SIZE = 1_000
 
 
 class RetrievalSource(str, Enum):
@@ -242,22 +244,47 @@ class SqlAlchemyEmbeddingVectorCache:
         return result
 
     def save(self, vectors: dict[str, np.ndarray], model_version: str) -> None:
-        for fingerprint, vector in vectors.items():
-            row = self.db.query(LocalEmbeddingCache).filter_by(
-                record_fingerprint=fingerprint,
-                embedding_model_version=model_version,
-            ).first()
-            if row is None:
-                row = LocalEmbeddingCache(
-                    record_fingerprint=fingerprint,
-                    embedding_model_version=model_version,
-                )
-                self.db.add(row)
-            row.vector_json = json.dumps(
-                [round(float(value), 7) for value in vector], separators=(",", ":")
+        requested = tuple(sorted(vectors.items()))
+        existing = {}
+        for offset in range(0, len(requested), _EMBEDDING_CACHE_SAVE_LOOKUP_CHUNK_SIZE):
+            fingerprints = tuple(
+                fingerprint
+                for fingerprint, _vector in requested[
+                    offset:offset + _EMBEDDING_CACHE_SAVE_LOOKUP_CHUNK_SIZE
+                ]
             )
-            row.state = "AVAILABLE"
-            row.generated_at = utcnow()
+            rows = self.db.query(LocalEmbeddingCache).filter(
+                LocalEmbeddingCache.record_fingerprint.in_(fingerprints),
+                LocalEmbeddingCache.embedding_model_version == model_version,
+            ).all()
+            existing.update((row.record_fingerprint, row) for row in rows)
+
+        missing = []
+        for fingerprint, vector in requested:
+            vector_json = json.dumps(
+                np.round(np.asarray(vector, dtype=np.float64), 7).tolist(),
+                separators=(",", ":"),
+            )
+            generated_at = utcnow()
+            row = existing.get(fingerprint)
+            if row is not None:
+                row.vector_json = vector_json
+                row.state = "AVAILABLE"
+                row.generated_at = generated_at
+            else:
+                missing.append({
+                    "record_fingerprint": fingerprint,
+                    "embedding_model_version": model_version,
+                    "vector_json": vector_json,
+                    "state": "AVAILABLE",
+                    "generated_at": generated_at,
+                })
+
+        for offset in range(0, len(missing), _EMBEDDING_CACHE_SAVE_INSERT_BATCH_SIZE):
+            self.db.execute(
+                LocalEmbeddingCache.__table__.insert(),
+                missing[offset:offset + _EMBEDDING_CACHE_SAVE_INSERT_BATCH_SIZE],
+            )
         self.db.flush()
 
 

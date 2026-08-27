@@ -1250,3 +1250,54 @@ migration, dependency, production, resolver, or threshold change occurred.
 Because terminal correctness now passes but DISCOVERY remains 79.361402
 seconds over its frozen target, the single next hardening target is the largest
 measured DISCOVERY stage: `CHAR_VECTOR`.
+
+## GF-11D-CACHE1 deterministic embedding-cache save hardening
+
+Status: **VERIFIED**. GF-11D remains INSUFFICIENT / NOT GRADUATED, GF-11
+remains IN PROGRESS, and GF-12 is not started.
+
+The frozen cache identity remains `(record_fingerprint,
+embedding_model_version)`. Save remains an overwrite-style upsert: requested
+existing rows retain identity but receive the requested serialized vector,
+`AVAILABLE` state, and refreshed generation time; missing rows are inserted.
+Dictionary duplicate behavior remains last-value-wins, model scopes remain
+independent, serialization is byte-for-byte equivalent, load reconstructs the
+same float32/384-vector shape, and cache save still flushes without committing.
+Outer transaction rollback remains authoritative.
+
+Before production edits, isolated production-faithful measurements confirmed
+one existence SELECT plus one row INSERT/UPDATE per requested entry. At 70,235
+rows, fresh save used 70,235 SELECTs and 70,235 INSERTs in 74.372662 seconds;
+warm used 70,235 SELECTs and 70,235 UPDATEs in 76.756571 seconds; mixed used
+70,235 SELECTs, 35,117 INSERTs, and 35,118 UPDATEs in 102.948714 seconds.
+
+The verified implementation deterministically sorts requested identities,
+prefetches existing keys in fixed 900-key chunks (at most 901 SQL parameters),
+serializes with an exact-equivalent vectorized rounding path, inserts missing
+rows in fixed 1,000-row executemany batches, and lets the ORM flush all existing
+row updates in one executemany operation. It adds no cache-local commit,
+conflict fallback, schema, dependency, or semantic version. The batching sizes
+are operational and do not enter discovery-v5 semantic fingerprints.
+
+In the identical post-change matrix, the 70,235-row fresh save used 79 SELECTs
+and 71 executemany INSERTs in 13.124132 seconds, an 82.35% improvement and
+inside the preferred 15-second target. Warm used 79 SELECTs plus one
+executemany UPDATE in 18.108984 seconds; mixed used 79 SELECTs, 36 executemany
+INSERTs, and one executemany UPDATE in 15.829133 seconds. At 14,041 rows,
+fresh/warm/mixed changed from 12.153831/12.396295/11.815555 seconds to
+2.762215/3.584314/3.318608 seconds. At 35,118 rows, final post-change times
+were 6.327021/8.989930/7.554330 seconds.
+
+The canonical 50k full-DISCOVERY regression completed in 147.655353 seconds,
+including 6.368595 seconds for cache save. Cache save requested 35,123 rows and
+used 40 bounded lookup SELECTs plus 36 executemany INSERTs. The run reproduced
+exactly 20,500 proposals, 13,194 neighborhoods/34,231 members, proposal
+fingerprint `8db92b75442dc705f89c705714a56394d6d3dc750de3d5eb663a7b2f8a963ead`,
+and neighborhood fingerprint
+`b42e15a32751ef384e1e27ead0273b6a946e669e935daeb70f9fb15e9908aa25`.
+Therefore frozen truth, bridge, cross-site, protected-conflict, and generic
+coverage remain identical. Provider calls were zero and deprecated-write,
+source, GF5, and GF6 semantics were unchanged.
+
+GF-11D-CACHE1 is verified. The next frozen step is the GF-11D 100k graduation
+rerun; this cache hardening alone does not graduate GF-11D or GF-11.
