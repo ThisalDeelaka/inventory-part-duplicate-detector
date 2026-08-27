@@ -566,8 +566,16 @@ contract, but the official rerun still timed out during cache save at 300.011
 seconds. The single extended diagnostic completed 571.720-second DISCOVERY and
 GF4, then failed GF5 with `IDENTITYRESOLUTIONVALIDATIONERROR` after 201.772
 seconds; GF6 was skipped. That typed GF5 validation failure is the single next
-blocker. GF-12 remains not started. These units do not alter the GF-0 through
-GF-12 order.
+blocker in the preserved historical run. GF-11D-GF5-PRE diagnosed the false
+scan-wide targeted-request budget check, and GF-11D-GF5-FIX corrected it to
+the frozen per-work-unit contract. The post-fix RERUN2 official 100k run timed
+out during CHAR_VECTOR at 300.002 seconds. Its one extended diagnostic
+completed 379.361-second DISCOVERY, GF4, corrected/persisted GF5, and GF6 with
+zero provider, deprecated-write, or safety violations. GF-11D remains
+insufficient because DISCOVERY exceeds 300 seconds; CHAR_VECTOR is the largest
+measured remaining DISCOVERY stage at 99.892 seconds and is the single next
+hardening target. GF-12 remains not started. These units do not alter the GF-0
+through GF-12 order.
 
 ### Goal
 

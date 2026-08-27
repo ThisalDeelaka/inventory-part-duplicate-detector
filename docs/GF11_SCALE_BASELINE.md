@@ -1186,3 +1186,67 @@ validator; neither full scale was rerun in this bounded correctness task.
 
 GF-11D-GF5-FIX is verified. The next frozen step is to rerun the GF-11D 100k
 graduation benchmark; this correction alone does not graduate GF-11D or GF-11.
+
+## GF-11D-RERUN2 100k graduation after GF5 correction
+
+Status: **INSUFFICIENT / NOT GRADUATED**. GF-11 remains IN PROGRESS and GF-12
+is not started.
+
+The official 100,000-record, seed-1101, provider-none, policy-v2 run used a
+unique disposable SQLite database and timed out truthfully at 300.001836
+seconds during `CHAR_VECTOR`. Its last checkpoint recorded 221.939174 seconds
+of partial DISCOVERY work: catalog 20.447484, feature precomputation 8.361473,
+standard blocking 12.191429, lexical vectorization 4.114003, lexical nearest
+neighbors 76.311652, cache load 0.212565, and cache save 93.052660 seconds.
+Cache save had requested and inserted all 70,235 rows before CHAR_VECTOR was
+reached. GF2 through GF6 were `NOT_REACHED`. The frozen DISCOVERY <=300-second
+gate therefore failed.
+
+The one authorized 900-second diagnostic completed the full production
+pipeline in 692.610606 seconds. DISCOVERY completed in 379.361402 seconds,
+followed by GF4 in 21.549063, corrected GF5 in 236.885768, and GF6 in
+33.460485 seconds. The previous post-CHAR1 diagnostic measured DISCOVERY at
+571.720467 seconds, but only GF5 validation changed between commits; timing
+variation is evidence, not an effect attributed to that correctness fix.
+
+Bounded rarity-aware lexical retrieval retained the unchanged
+`cf0613b2...` contract fingerprint. It processed 100,000 eligible records,
+sent 12,500 primary-insufficient anchors through the single fixed second pass,
+recovered all 12,500, left zero insufficient, performed 8,000,000 primary and
+1,000,000 second-pass exact evaluations, and used no global exact fallback.
+Lexical vectorization took 4.528644 seconds and nearest-neighbor work took
+88.683104 seconds, including a 6.578627-second second pass.
+
+`CHAR_VECTOR` retained fixed-seed LSH, pool 320, 32,000,000 exact reranks,
+320,810,636 bucket enumerations, and fingerprint
+`4b76491de0baafcf5b147ccb2a6f69c7c44395b73f83c62cb36c8f845e092557`.
+It took 99.892264 seconds and was the largest measured DISCOVERY hotspot.
+Cache load used 112 SELECTs with at most 902 parameters and took 0.211670
+seconds. Cache save requested 70,235 rows, issued 70,235 SELECTs and 70,235
+INSERTs, made zero cache-local commits, and took 89.274060 seconds.
+
+Fusion/materialization took 50.518777 seconds and retained 500 final
+candidates from 29,260 exact-description, 71 part-family, 41,989 technical-
+identity, 214,100 lexical, and 133,531 character candidates. It recorded
+2,452,702 feature reuses, 931,753 eligibility calls, 931,753 allowed-pair
+calls, and 20,500 scoring calls. GF2 materialization/persistence took
+1.746652 seconds and persisted 20,500 proposals. GF3 construction/persistence
+took 4.392081 seconds and persisted 20,687 neighborhoods/41,706 members,
+maximum size 20, with one truncated neighborhood. Final discovery validation/
+reconstruction took 11.531337 seconds.
+
+GF4 persisted 20,500 signed evidence edges. Corrected GF5 completed pure
+validation, persistence, reload, and reconstructed validation for 278 work
+units, maximum size 20,113. It persisted 52 targeted requests, 247 groups/494
+members, 13 conflicts, five deferred units, and 99,506 unassigned records.
+The run proves every request-owning work unit was within the cap of 40; the
+current benchmark output does not retain the exact maximum or contributing-
+unit count, so neither is fabricated. GF6 projected the same 247 groups, 13
+conflicts, five deferred units, and 99,506 unassigned records.
+
+Provider, legacy-pair, G1, G2-v1, shadow, accepted-cannot-link, duplicate-
+membership, singleton, and cross-scan counters were zero. No schema,
+migration, dependency, production, resolver, or threshold change occurred.
+Because terminal correctness now passes but DISCOVERY remains 79.361402
+seconds over its frozen target, the single next hardening target is the largest
+measured DISCOVERY stage: `CHAR_VECTOR`.
