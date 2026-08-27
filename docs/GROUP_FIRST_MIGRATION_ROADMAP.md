@@ -545,7 +545,7 @@ Dropping tables, deleting rows, or migrating historical pair feedback into inven
 
 Implementation status: IN PROGRESS. GF-11A, GF-11B, GF-11C-PRE, and GF-11C
 are verified bounded units. GF-11D remains insufficient/not graduated after
-the post-CHAR1 canonical 100k rerun.
+the post-CACHE1 canonical 100k rerun.
 Production policy-v2 discovery uses exact indexed
 v4 lexical retrieval below 25,000 eligible records and bounded rarity-aware
 retrieval with one fixed fail-closed second pass at 25,000 and above. The 50k
@@ -571,10 +571,15 @@ scan-wide targeted-request budget check, and GF-11D-GF5-FIX corrected it to
 the frozen per-work-unit contract. The post-fix RERUN2 official 100k run timed
 out during CHAR_VECTOR at 300.002 seconds. Its one extended diagnostic
 completed 379.361-second DISCOVERY, GF4, corrected/persisted GF5, and GF6 with
-zero provider, deprecated-write, or safety violations. GF-11D remains
-insufficient because DISCOVERY exceeds 300 seconds; CHAR_VECTOR is the largest
-measured remaining DISCOVERY stage at 99.892 seconds and is the single next
-hardening target. GF-12 remains not started. These units do not alter the GF-0
+zero provider, deprecated-write, or safety violations. CACHE1 then replaced
+per-row cache-save round trips with deterministic bounded prefetch and batched
+persistence without changing cache semantics. The post-CACHE1 RERUN3 official
+run still timed out at 300.009 seconds during retrieval fusion/materialization.
+Its single extended diagnostic completed the full pipeline safely with
+324.468-second DISCOVERY, GF4, corrected/persisted GF5, and GF6. Cache save
+was 7.137 seconds; CHAR_VECTOR was the largest measured DISCOVERY stage at
+128.777 seconds and is the single next hardening target. GF-11D remains
+insufficient, GF-12 remains not started, and these units do not alter the GF-0
 through GF-12 order.
 
 ### Goal

@@ -1301,3 +1301,79 @@ source, GF5, and GF6 semantics were unchanged.
 
 GF-11D-CACHE1 is verified. The next frozen step is the GF-11D 100k graduation
 rerun; this cache hardening alone does not graduate GF-11D or GF-11.
+
+## GF-11D-RERUN3 100k graduation after CACHE1
+
+Status: **INSUFFICIENT / NOT GRADUATED**. GF-11 remains IN PROGRESS and
+GF-12 is not started.
+
+The official canonical 100,000-record, seed-1101, provider-none, policy-v2
+run used a unique disposable SQLite database and timed out truthfully at
+300.009092 seconds during `RETRIEVAL_TOTAL`. Its last durable checkpoint
+recorded 259.290522 seconds of partial DISCOVERY and 274.955584 seconds of
+pipeline time. CATALOG had completed; feature construction took 6.821555
+seconds, standard blocking 9.947484, lexical vectorization 5.503661, lexical
+nearest-neighbor work 79.777080, cache load 0.285322, cache save 7.201519,
+and CHAR_VECTOR 123.248772 seconds. GF2 through GF6 were `NOT_REACHED`.
+
+The one authorized 900-second diagnostic completed the full production
+pipeline. Product wall time was 692.155236 seconds (the telemetry pipeline
+span was 697.706329). DISCOVERY completed in 324.468367 seconds, 24.468367
+seconds above the frozen target, followed by GF4 in 23.105536 seconds,
+corrected GF5 in 292.625450, and GF6 in 32.337654 seconds.
+
+Compared with the pre-CACHE1 RERUN2 diagnostic, DISCOVERY improved from
+379.361402 to 324.468367 seconds (54.893035 seconds, 14.47%). Cache save
+improved from 89.274060 to 7.136564 seconds (82.137496 seconds, 92.01%).
+Other stage variation is measured run-to-run evidence and is not attributed
+to CACHE1.
+
+The fresh-cache diagnostic requested 70,235 rows. It issued 79 deterministic
+bounded lookup SELECTs (900 keys plus model scope, at most 901 parameters),
+71 executemany INSERT executions, zero UPDATE executions, and zero cache-local
+commits. The run-wide SELECT maximum was 902 because cache load retains its
+separate two-predicate bound.
+
+Bounded lexical retrieval selected
+`BOUNDED_RARITY_AWARE_V1_WITH_FIXED_SECOND_PASS` with contract fingerprint
+`cf0613b2de3ef2bea9c28e79937fc8226bcad4951f0fb28136a256807e2a14b1`.
+It processed 100,000 eligible records, sent 12,500 primary-insufficient
+anchors through the only second pass, recovered all 12,500, left zero
+insufficient, used an 80-item maximum pool, and performed no global exact
+fallback. Lexical vectorization took 4.141552 seconds and nearest-neighbor
+work 77.277171 seconds, including 6.592748 seconds for the second pass.
+
+CHAR_VECTOR retained fixed-seed LSH, pool 320, 32,000,000 exact reranks,
+320,810,636 bucket enumerations, and fingerprint
+`4b76491de0baafcf5b147ccb2a6f69c7c44395b73f83c62cb36c8f845e092557`.
+It took 128.777333 seconds. Fusion/materialization took 59.571096 seconds and
+retained 500 final candidates from 29,260 exact-description, 71 part-family,
+41,989 technical-identity, 214,100 lexical, and 133,531 character candidates.
+It recorded 2,452,702 feature reuses, 931,753 eligibility calls, 931,753
+allowed-pair calls, and 20,500 scoring calls.
+
+GF2 materialization/persistence took 1.957563 seconds and persisted 20,500
+proposals. GF3 construction/persistence took 5.430768 seconds and persisted
+20,687 neighborhoods/41,706 members, maximum size 20, with one truncated
+neighborhood. Final discovery validation/reconstruction took 12.309607
+seconds. GF4 persisted 20,500 signed evidence edges.
+
+Corrected GF5 completed pure validation, persistence, reload, and reconstructed
+validation for 278 work units, maximum size 20,113. It persisted 52 targeted
+requests, 247 groups/494 members, 13 conflicts, five deferred units, and
+99,506 unassigned records. Every request-owning work unit passed the frozen
+per-work-unit cap of 40; the benchmark does not retain the exact observed
+maximum, so it is not fabricated. GF6 projected the same 247 groups, 13
+conflicts, five deferred units, and 99,506 unassigned records.
+
+Provider, legacy-pair, G1, G2-v1, shadow, accepted-cannot-link,
+duplicate-membership, singleton, and cross-scan counters were zero. The
+disposable run did not mutate source input. No schema, migration, dependency,
+production, resolver, retrieval parameter, threshold, provider, or secret
+behavior changed.
+
+GF-11D fails the frozen graduation rule because official DISCOVERY did not
+complete within 300 seconds and the completed diagnostic measured DISCOVERY
+at 324.468367 seconds. The single next hardening target selected from the new
+DISCOVERY decomposition is `CHAR_VECTOR`, the largest measured stage at
+128.777333 seconds.
