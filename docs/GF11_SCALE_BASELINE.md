@@ -1090,3 +1090,57 @@ not complete within 300 seconds and the diagnostic did not complete GF5/GF6.
 The single next blocker is the typed GF5
 `IDENTITYRESOLUTIONVALIDATIONERROR`; no production optimization was performed
 in this verification task.
+
+## GF-11D-GF5-PRE resolution-validation diagnosis
+
+Status: **VERIFIED DIAGNOSIS; GF-11D REMAINS INSUFFICIENT / NOT GRADUATED**.
+GF-11 remains IN PROGRESS and GF-12 is not started.
+
+The smallest current canonical reproducer is 5,000 records, seed 1101,
+`group-first-scale-corpus-v1`, policy-v2 `group_first_primary`, provider
+`none`, and a disposable SQLite database. GF5 built 172 connected work units
+(maximum size 1,250). Sixty-nine work units contributed 110 targeted evidence
+requests. No work unit exceeded its configured per-work-unit cap of 40; the
+maximum from one unit was exactly 40. Pure-output validation nevertheless
+compared the scan-wide total of 110 with that single-work-unit cap and raised
+`IdentityResolutionValidationError("targeted evidence request budget exceeded")`.
+Persistence and reconstruction were not reached.
+
+This is `OTHER_GLOBAL_VS_PER_WORK_UNIT_BUDGET_SCOPE`: the resolver applies the
+cap independently while scheduling each work unit, but result validation
+applies the same cap once to the aggregate scan result. An in-memory reducer
+selected two actual work units containing 14 records, 14 neighborhoods/46
+member occurrences, and 16 review-support edges. Their 41 requests reproduce
+the exact same rule without mutating persisted data. The classification is
+`IMPLEMENTATION_DEFECT`; this diagnosis does not authorize a correction.
+
+The aggregate output before validation contained 169 review groups, zero
+likely groups, one conflict, three deferred work units, 4,595 unassigned
+records, 405 covered members, and zero duplicate-assigned members, missing
+members, cannot-link cohabitations, or singleton accepted groups. Input edge
+counts were 10,000 cannot-link, 10,000 neutral, 500 review-support, and zero
+strong-support. No raw identity fields were captured.
+
+Non-overlapping diagnostic timings at 5k were: WORK_UNIT_BUILD 0.129929 s,
+SUPPORT_GRAPH_BUILD 0.004369 s, CANNOT_LINK_GRAPH_BUILD 1.631731 s,
+BASE_CELL_BUILD 2.953954 s, BRIDGE_ANALYSIS 0.014202 s,
+ATTRIBUTE_CONFLICT_INDEX 0 s, TARGETED_CROSS_BRANCH_EVALUATION 0.202918 s,
+PARTITION_SEARCH 11.144785 s, SAFE_SUBGROUP_SALVAGE 0.006241 s,
+OUTPUT_ASSEMBLY 0.014796 s, VALIDATION 0.100950 s, PERSISTENCE 0 s,
+RECONSTRUCTION_VALIDATION 0 s, and OTHER_UNATTRIBUTED 6.302344 s. The
+instrumented categories reconcile to 22.506219 s.
+
+Historical 5k evidence records the same exception type on the same canonical
+scale, and the failing validation text has existed unchanged since the GF5A
+contract commit. The historical artifact did not retain the underlying message
+or aggregate request counts, so throw-site, rule, and structural equivalence
+cannot be independently proven from that artifact. Available scale structure
+is therefore reported without invention: current 5k is 172 work units,
+maximum 1,250, with 69 request-contributing units; historical 20k has an
+unavailable work-unit count, maximum 5,006, and unavailable pattern count; 50k
+did not reach a retained GF5 structure; post-CHAR1 100k has an unavailable
+work-unit count, maximum 20,113, and unavailable pattern count.
+
+The single next action is to authorize a bounded GF5 correctness fix for the
+proven global-versus-per-work-unit budget-scope defect while preserving every
+frozen resolver safety invariant.
