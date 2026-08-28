@@ -635,8 +635,14 @@ One-million-record distributed execution and external provider optimization.
 
 ## GF-12 — Production validation and graduation
 
-Start status: NOT STARTED; START AUTHORIZED under the bounded GF-11 COLD_FULL
-performance waiver. Authorized independent work includes quality and false-
+Implementation status: STARTED. GF-12A1 is VERIFIED: the group-first validation
+contract and corrected canonical offline quality baseline are established with
+corpus v1, truth v2, deterministic evaluation, and zero safety/provider
+violations. Human-reviewed production-quality validation and final graduation
+remain pending.
+
+Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
+Authorized independent work includes quality and false-
 positive/false-negative evaluation, group correctness, safety, privacy and
 security, recovery, observability, runbooks, UAT, deployment readiness,
 reference-hardware definition, warm/resume benchmark design, and workflow/SLO

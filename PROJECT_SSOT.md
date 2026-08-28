@@ -122,9 +122,15 @@ Global all-pairs computation and a full dense N-by-N matrix are prohibited as pr
 
 The canonical 100,000-record `COLD_FULL` DISCOVERY target remains `<=300.000000 s` and remains unmet. The current three-run fresh/disposable-state sample is 304.764270 seconds minimum, 323.791250 seconds median, 324.468367 seconds maximum, 317.674629 seconds mean, and 2.8750% coefficient of variation.
 
-By explicit supervising architect / product-owner decision, the bounded `GF11-PERF-100K-COLD-FULL` performance waiver is ACTIVE solely to permit independent GF-12 production-validation work to begin. GF-11 remains IN PROGRESS, the performance debt remains OPEN, and this waiver is not GF-11 performance graduation, a claim that the 300-second target was met, or final production graduation. GF-12 remains NOT STARTED; START AUTHORIZED under this bounded waiver.
+By explicit supervising architect / product-owner decision, the bounded `GF11-PERF-100K-COLD-FULL` performance waiver is ACTIVE solely to permit independent GF-12 production-validation work to begin. GF-11 remains IN PROGRESS, the performance debt remains OPEN, and this waiver is not GF-11 performance graduation, a claim that the 300-second target was met, or final production graduation. GF-12 start was authorized under this bounded waiver and GF-12A1 has now begun that independent validation work.
 
 The waiver does not relax correctness, determinism, cannot-link enforcement, membership uniqueness, provider isolation, GF-4 through GF-6 integrity, source immutability, deprecated-write prohibitions, security, or privacy. The detailed scope, expiry conditions, authorized GF-12 categories, blocked claims, and regression guard are authoritative in `docs/GF11_100K_COLD_FULL_PERFORMANCE_WAIVER.md`.
+
+## GF-12 production-validation status
+
+GF-12 is STARTED. GF-12A1 is VERIFIED: the group-first production-validation contract and corrected canonical offline quality baseline are established using `group-first-scale-corpus-v1`, `group-first-scale-truth-v2`, and evaluation contract `gf12-group-quality-v1`.
+
+This is validation-infrastructure evidence, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
 
 ## Non-negotiable safety invariants
 
