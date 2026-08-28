@@ -644,6 +644,13 @@ repository. Its blinded pilot is NOT EXECUTED and the state is
 `HUMAN_REVIEW_DATASET_REQUIRED`. Human-reviewed production-quality validation
 and final graduation remain pending.
 
+GF-12B1 privacy/security/data-boundary baseline is VERIFIED. PS1-PS24 confirm
+provider-none and offline-evaluator isolation, synthetic-secret non-disclosure,
+blinded/private artifact minimization, export/review allowlists, controlled
+input failure, and record-independent artifact paths with zero provider calls.
+Retention/deletion gaps remain documented as `UNSPECIFIED`; this result does not
+authorize a dataset or complete GF-12.
+
 Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
 Authorized independent work includes quality and false-
 positive/false-negative evaluation, group correctness, safety, privacy and

@@ -909,3 +909,25 @@ GF-12 remains STARTED, not complete. No quality/agreement threshold or final
 signoff is claimed. GF-11 remains IN PROGRESS, its waiver remains ACTIVE,
 `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target
 remains unmet.
+
+## GF-12B1 privacy, security, and data-boundary baseline
+
+GF-12B1 is **VERIFIED** as a bounded validation unit. PS1-PS24 passed against
+the current B1-B6 boundaries with provider calls zero. The default group
+provider remains `none`; offline benchmark and human-review modules cannot
+dispatch providers and have no production reverse-import path. A synthetic
+secret sentinel was absent from API/result serialization, business-export
+allowlists, human-review artifacts, evaluation JSON, captured logs, and fixed
+typed errors. Blinded/private field separation, business export exclusions,
+controlled CSV failure, safe artifact identifiers, traversal rejection, and
+source immutability were revalidated without production semantic, schema,
+migration, dependency, provider, or frontend changes.
+
+No blocking security finding was evidenced. Retention/deletion policy, a
+repository-wide operator benchmark-output root, and deployment tenancy/
+authorization policy remain documented observations or `UNSPECIFIED` policy
+areas; no policy was invented. No `.env`, real secret, live provider, or
+non-synthetic customer inventory was accessed. GF-12 remains STARTED, not
+complete; GF-12A2 still requires an authorized human-review dataset. GF-11
+remains IN PROGRESS, the waiver remains ACTIVE, debt
+`GF11-PERF-100K-COLD-FULL` remains OPEN, and the 300-second target remains unmet.

@@ -132,6 +132,8 @@ GF-12 is STARTED. GF-12A1 is VERIFIED: the group-first production-validation con
 
 GF-12A2 human-review protocol/tooling is VERIFIED. No explicitly authorized representative non-synthetic validation dataset exists in the repository, so the blinded pilot is NOT EXECUTED, human labels and metrics are absent, and the state is `HUMAN_REVIEW_DATASET_REQUIRED`.
 
+GF-12B1 is VERIFIED as a bounded privacy/security/data-boundary baseline. Provider-none isolation, synthetic-secret non-disclosure, offline truth/human-label separation, export/review allowlists, controlled input failure, and record-independent artifact paths pass PS1-PS24 with zero provider calls. Current retention/deletion policy gaps remain explicitly `UNSPECIFIED`.
+
 These are validation-infrastructure results, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality or reviewer-agreement threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
 
 ## Non-negotiable safety invariants
