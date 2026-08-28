@@ -15,9 +15,18 @@ from app.benchmarks.contracts import stable_fingerprint
 
 
 GENERATOR_VERSION = "group-first-scale-corpus-v1"
+TRUTH_VERSION_V1 = "group-first-scale-truth-v1"
+TRUTH_VERSION_V2 = "group-first-scale-truth-v2"
+SUPPORTED_TRUTH_VERSIONS = (TRUTH_VERSION_V1, TRUTH_VERSION_V2)
+TRUTH_V2_CORRECTION_CLASSIFICATION = "A. PARTIAL_GROUP_AFTER_CORPUS_BOUNDARY"
+TRUTH_V2_ADDITIONAL_CORRECTION_CLASSIFICATION = "E. TRUTH_ASSEMBLY_DEFECT"
+TRUTH_V2_BOUNDARY_RULE = (
+    "retain requested production records and scenario labels; emit positive "
+    "truth only when the complete generated scenario has at least two members"
+)
 CANONICAL_SCENARIO = "canonical-mixed"
 SCENARIO_CODES = ("S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8")
-SUPPORTED_RECORD_COUNTS = (500, 5_000, 20_000, 100_000)
+SUPPORTED_RECORD_COUNTS = (500, 5_000, 20_000, 50_000, 100_000)
 
 
 @dataclass(frozen=True)
@@ -32,10 +41,20 @@ class BenchmarkTruth:
 class GeneratedScaleCorpus:
     scenario_name: str
     version: str
+    truth_version: str
     seed: int
     generator_fingerprint: str
+    truth_fingerprint: str
     records: pd.DataFrame
     truth: BenchmarkTruth
+
+
+class BenchmarkTruthIntegrityError(ValueError):
+    """Typed fail-closed error for malformed offline benchmark truth."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
 
 
 def _row(part_no, description, contract, uom="EA", **values):
@@ -56,7 +75,9 @@ def _row(part_no, description, contract, uom="EA", **values):
     }
 
 
-def _scenario_rows(code: str, count: int, rng: random.Random):
+def _scenario_rows(
+    code: str, count: int, rng: random.Random, *, truth_version: str
+):
     rows: list[dict] = []
     duplicate_sets: list[tuple[str, tuple[int, ...]]] = []
     conflicts: list[tuple[int, ...]] = []
@@ -81,7 +102,8 @@ def _scenario_rows(code: str, count: int, rng: random.Random):
                     "SITE-0" if member < 2 else f"SITE-{member % 3}",
                     "EA" if member < 2 or member % 2 == 0 else "PCS",
                 ))
-            duplicate_sets.append((f"dup-{family}", tuple(range(start, start + size))))
+            if truth_version == TRUTH_VERSION_V1 or size >= 2:
+                duplicate_sets.append((f"dup-{family}", tuple(range(start, start + size))))
         elif code == "S3":
             rows.append(_row(
                 f"G-{family:07d}", "INDUSTRIAL COMPONENT",
@@ -105,7 +127,11 @@ def _scenario_rows(code: str, count: int, rng: random.Random):
                     f"TRANSFER ASSEMBLY MODEL {family:06d}",
                     f"SITE-{member + 1}",
                 ))
-            duplicate_sets.append((f"cross-site-{family}", tuple(range(start, start + size))))
+            # V1 historically annotated a final boundary record as a singleton
+            # positive group. V2 retains that production record and S5 label,
+            # but emits positive truth only for a complete 2..4 member family.
+            if truth_version == TRUTH_VERSION_V1 or size >= 2:
+                duplicate_sets.append((f"cross-site-{family}", tuple(range(start, start + size))))
         elif code == "S6":
             rows.append(_row(
                 "" if family % 2 else f"M-{family:07d}",
@@ -139,13 +165,68 @@ def _scenario_rows(code: str, count: int, rng: random.Random):
     return rows, duplicate_sets, conflicts, bridges
 
 
+def validate_benchmark_truth(truth: BenchmarkTruth, *, record_count: int) -> None:
+    """Validate offline truth without importing it into product execution."""
+    if len(truth.scenario_by_source_row) != record_count:
+        raise BenchmarkTruthIntegrityError("TRUTH_SCENARIO_MEMBERSHIP_INVALID")
+    group_ids = [identity for identity, _members in truth.duplicate_sets]
+    if len(group_ids) != len(set(group_ids)):
+        raise BenchmarkTruthIntegrityError("TRUTH_GROUP_ID_DUPLICATE")
+    positive_membership = set()
+    positive_sets = []
+    for _identity, members in truth.duplicate_sets:
+        if not members:
+            raise BenchmarkTruthIntegrityError("TRUTH_GROUP_EMPTY")
+        if len(members) < 2:
+            raise BenchmarkTruthIntegrityError("TRUTH_GROUP_SINGLETON")
+        if len(members) != len(set(members)):
+            raise BenchmarkTruthIntegrityError("TRUTH_GROUP_MEMBER_DUPLICATE")
+        if any(member < 0 or member >= record_count for member in members):
+            raise BenchmarkTruthIntegrityError("TRUTH_RECORD_REFERENCE_INVALID")
+        if positive_membership.intersection(members):
+            raise BenchmarkTruthIntegrityError("TRUTH_RECORD_MULTI_MEMBERSHIP")
+        positive_membership.update(members)
+        positive_sets.append(set(members))
+    for members in (*truth.protected_conflict_sets, *truth.bridge_sets):
+        if any(member < 0 or member >= record_count for member in members):
+            raise BenchmarkTruthIntegrityError("TRUTH_RECORD_REFERENCE_INVALID")
+    for conflict in truth.protected_conflict_sets:
+        conflict_set = set(conflict)
+        if any(conflict_set <= positive for positive in positive_sets):
+            raise BenchmarkTruthIntegrityError(
+                "TRUTH_CANNOT_LINK_CONTRADICTS_IDENTITY"
+            )
+
+
+def _versioned_unique_truth_group_ids(
+    groups: list[tuple[str, tuple[int, ...]]], *, truth_version: str
+) -> list[tuple[str, tuple[int, ...]]]:
+    """Disambiguate only colliding v2 truth IDs; v1 remains historical."""
+    if truth_version == TRUTH_VERSION_V1:
+        return groups
+    counts = {}
+    for identity, _members in groups:
+        counts[identity] = counts.get(identity, 0) + 1
+    return [
+        (
+            f"{identity}@source-{members[0]}"
+            if counts[identity] > 1 else identity,
+            members,
+        )
+        for identity, members in groups
+    ]
+
+
 def generate_scale_corpus(
-    record_count: int, *, seed: int = 1101, scenario: str = CANONICAL_SCENARIO
+    record_count: int, *, seed: int = 1101, scenario: str = CANONICAL_SCENARIO,
+    truth_version: str = TRUTH_VERSION_V1,
 ) -> GeneratedScaleCorpus:
     if record_count <= 0 or record_count > 100_000:
         raise ValueError("record_count must be between 1 and 100000")
     if scenario != CANONICAL_SCENARIO and scenario not in SCENARIO_CODES:
         raise ValueError("unknown scale benchmark scenario")
+    if truth_version not in SUPPORTED_TRUTH_VERSIONS:
+        raise ValueError("unknown scale benchmark truth version")
     rng = random.Random(seed)
     codes = SCENARIO_CODES if scenario == CANONICAL_SCENARIO else (scenario,)
     base, remainder = divmod(record_count, len(codes))
@@ -157,7 +238,7 @@ def generate_scale_corpus(
     for position, code in enumerate(codes):
         count = base + (1 if position < remainder else 0)
         local_rows, local_sets, local_conflicts, local_bridges = _scenario_rows(
-            code, count, rng
+            code, count, rng, truth_version=truth_version
         )
         offset = len(records)
         records.extend(local_rows)
@@ -168,12 +249,17 @@ def generate_scale_corpus(
         )
         conflicts.extend(tuple(offset + index for index in members) for members in local_conflicts)
         bridges.extend(tuple(offset + index for index in members) for members in local_bridges)
+    duplicate_sets = _versioned_unique_truth_group_ids(
+        duplicate_sets, truth_version=truth_version
+    )
     truth = BenchmarkTruth(
         duplicate_sets=tuple(duplicate_sets),
         protected_conflict_sets=tuple(conflicts),
         bridge_sets=tuple(bridges),
         scenario_by_source_row=tuple(labels),
     )
+    if truth_version == TRUTH_VERSION_V2:
+        validate_benchmark_truth(truth, record_count=record_count)
     payload = {
         "version": GENERATOR_VERSION,
         "scenario": scenario,
@@ -181,11 +267,28 @@ def generate_scale_corpus(
         "records": records,
         "truth": truth,
     }
+    if truth_version != TRUTH_VERSION_V1:
+        payload["truth_version"] = truth_version
     return GeneratedScaleCorpus(
         scenario_name=scenario,
         version=GENERATOR_VERSION,
+        truth_version=truth_version,
         seed=seed,
         generator_fingerprint=stable_fingerprint(payload),
+        truth_fingerprint=stable_fingerprint({
+            "truth_version": truth_version,
+            "truth": truth,
+        }),
         records=pd.DataFrame.from_records(records),
         truth=truth,
+    )
+
+
+def generate_corrected_scale_corpus(
+    record_count: int, *, seed: int = 1101, scenario: str = CANONICAL_SCENARIO
+) -> GeneratedScaleCorpus:
+    """Explicit GF-12 seam selecting corrected offline truth v2."""
+    return generate_scale_corpus(
+        record_count, seed=seed, scenario=scenario,
+        truth_version=TRUTH_VERSION_V2,
     )
