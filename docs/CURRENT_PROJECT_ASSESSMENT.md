@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-12C1 demo-readiness commit: `a836585a6b7634e03f716cb470843f58f6b8fb8f`.
 - Baseline HEAD before the GF-12B3 validation commit: `1c4e7d9876719e194bad252f0f23e5a44202bd3a`.
 - Baseline HEAD before the GF-12B2 validation commit: `4b644b08dac59dddba2893556c356d71f4b55a8f`.
 - Baseline HEAD before the GF-11A implementation commit: `2dcc948c46675b57ff521a824c186bcad35758bb`.
@@ -996,3 +997,39 @@ Resume, production cancellation, and production scan timeout remain
 authorized human-review dataset. GF-11 remains IN PROGRESS, the waiver remains
 ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the 300-second target remains
 unmet.
+
+## GF-12C1 showable working product / demo readiness
+
+The product owner explicitly sequenced a complete showable local working
+product before deployment/integration architecture. GF-12C1 is **VERIFIED** for
+that bounded milestone. The repository-owned `SYNTHETIC_ONLY` LLM demo fixture
+now contains 17 records, including a third explicit synthetic motor variant to
+exercise one 3-member identity hypothesis without a threshold or algorithm
+change.
+
+DEMO1-DEMO24 pass. Three fresh `group_first_primary`, provider-none scans each
+completed with `visible_product_ready=true`, 10 GF2 proposals, 17 GF3
+neighborhoods, 10 completed GF4 evidence edges, 4 GF5/GF6 accepted groups (1
+likely and 3 review), 3 conflicts, 0 deferred work units, 8 unassigned records,
+and provider calls zero. Their normalized production-semantic fingerprint is
+identical. The authority-selected frontend/API flow covers summary, list,
+detail/evidence, distinct conflict/deferred outcomes, append-only review create
+and correction, System Group Export, and Reviewed Identity Export authority.
+A controlled synthetic failed scan remains non-authoritative and cannot expose
+final reads or exports.
+
+The primary product presentation is group-first; pair evidence remains advanced
+diagnostics only. The demo contract, non-Docker local runbook, 5–10 minute
+presenter script, and acceptance checklist are recorded under `docs/`. Cross-
+site duplicate identity is `NOT_AVAILABLE_IN_CURRENT_DEMO_FIXTURE` rather than
+manufactured.
+
+Milestone status is `SHOWABLE WORKING PRODUCT = VERIFIED` and `DEMO-READY =
+YES`. Production deployment readiness is not claimed. Deployment architecture,
+tenancy, application IAM/authorization, managed storage, cloud/platform work,
+external integrations, production network/retention policy, and reference
+hardware are deferred post-demo, not completed. GF-12 remains STARTED /
+production validation incomplete; GF-12A2 remains
+`HUMAN_REVIEW_DATASET_REQUIRED`. GF-11 remains IN PROGRESS, its waiver remains
+ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second
+target remains unmet.

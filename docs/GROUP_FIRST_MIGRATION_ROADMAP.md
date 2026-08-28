@@ -671,6 +671,25 @@ open; resume, production cancellation, and production scan timeout remain
 `NOT_IMPLEMENTED`. This does not complete GF-12 or resolve deployment/tenancy/
 authorization decisions.
 
+By explicit product-owner sequencing decision, the current milestone is
+`SHOWABLE WORKING PRODUCT / DEMO READINESS`, not deployment readiness. GF-12C1
+is VERIFIED for that bounded milestone: DEMO1-DEMO24 pass on the explicitly
+synthetic 17-record local fixture, the complete group-first scan/read/detail/
+review/export flow works, size-2 and size-3 identity sets are visible, conflict
+outcomes remain distinct, and three fresh runs have identical semantic product
+identity with provider calls zero. `SHOWABLE WORKING PRODUCT = VERIFIED` and
+`DEMO-READY = YES`; this is not production deployment or human-quality
+graduation.
+
+Deployment architecture, tenancy, application IAM/authorization, managed
+production storage, cloud/platform deployment, external integrations,
+production network and retention policy, and reference production hardware are
+deferred until after the demo milestone and remain future work. The post-demo
+tracks are: (A) authorized human-reviewed quality validation, (B) deployment/
+IAM/tenancy/storage/network/retention architecture, (C) authorized external
+integrations/provider strategy, and (D) remaining production performance/scale
+debt. GF-12 remains STARTED / production validation incomplete.
+
 Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
 Authorized independent work includes quality and false-
 positive/false-negative evaluation, group correctness, safety, privacy and

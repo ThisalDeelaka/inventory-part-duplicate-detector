@@ -25,7 +25,7 @@ def test_demo_csv_completes_deterministically_without_llm_provider_calls(db, mon
         {"PART_NO": "Stock Ref", "DESCRIPTION": "Item Narrative"},
     )
 
-    assert len(source) == 16
+    assert len(source) == 17
     assert metadata["resolved_column_mapping"]["PART_NO"] == "Stock Ref"
     assert metadata["resolved_column_mapping"]["DESCRIPTION"] == "Item Narrative"
     validation = validate_dataframe(mapped, ["CONTRACT", "UNIT_MEAS"])
@@ -51,7 +51,7 @@ def test_demo_csv_completes_deterministically_without_llm_provider_calls(db, mon
     )
 
     assert scan.status == "COMPLETED"
-    assert pair_count == 8
+    assert pair_count == 10
     assert scan.total_candidates == len(candidates)
     assert candidates
     assert any(item.eligible for item in eligibility)
