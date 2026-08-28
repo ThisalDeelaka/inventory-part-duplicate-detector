@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-12B3 validation commit: `1c4e7d9876719e194bad252f0f23e5a44202bd3a`.
 - Baseline HEAD before the GF-12B2 validation commit: `4b644b08dac59dddba2893556c356d71f4b55a8f`.
 - Baseline HEAD before the GF-11A implementation commit: `2dcc948c46675b57ff521a824c186bcad35758bb`.
 - Baseline HEAD before the GF-10B prerequisite schema-migration commit: `bb5f5775e0e93a8ec80d9e8411840c9ca5d0b72a`.
@@ -34,7 +35,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D remains insufficient/not graduated after GF-11D-RERUN3: the official post-CACHE1 100k run timed out during retrieval fusion/materialization at 300.009 seconds, while the single extended run completed the full pipeline with 324.468-second DISCOVERY, corrected/persisted GF5, and GF6. GF-11D-CHAR-PRE, GF-11D-CHAR1, GF-11D-GF5-PRE, GF-11D-GF5-FIX, and GF-11D-CACHE1 are verified. CACHE1 replaced per-row cache-save round trips with deterministic bounded prefetch and executemany persistence while preserving exact cache/transaction semantics; the RERUN3 fresh 100k cache save used 79 lookup SELECTs and 71 batched inserts in 7.137 seconds. CHAR_VECTOR is now the largest measured DISCOVERY stage at 128.777 seconds. The `<=300.000000 s` target remains unmet and bounded debt `GF11-PERF-100K-COLD-FULL` is OPEN under an ACTIVE supervising architect / product-owner waiver. GF-12 is STARTED; GF-12A1 is VERIFIED, GF-12A2 human-review protocol/tooling is VERIFIED with `HUMAN_REVIEW_DATASET_REQUIRED`, GF-12B1 is VERIFIED, and GF-12B2 is VERIFIED with durable resume status `NOT_IMPLEMENTED`. No human pilot, labels, human-quality metrics, final production-quality signoff, or GF-12 graduation exists.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D remains insufficient/not graduated after GF-11D-RERUN3: the official post-CACHE1 100k run timed out during retrieval fusion/materialization at 300.009 seconds, while the single extended run completed the full pipeline with 324.468-second DISCOVERY, corrected/persisted GF5, and GF6. GF-11D-CHAR-PRE, GF-11D-CHAR1, GF-11D-GF5-PRE, GF-11D-GF5-FIX, and GF-11D-CACHE1 are verified. CACHE1 replaced per-row cache-save round trips with deterministic bounded prefetch and executemany persistence while preserving exact cache/transaction semantics; the RERUN3 fresh 100k cache save used 79 lookup SELECTs and 71 batched inserts in 7.137 seconds. CHAR_VECTOR is now the largest measured DISCOVERY stage at 128.777 seconds. The `<=300.000000 s` target remains unmet and bounded debt `GF11-PERF-100K-COLD-FULL` is OPEN under an ACTIVE supervising architect / product-owner waiver. GF-12 is STARTED; GF-12A1 is VERIFIED, GF-12A2 human-review protocol/tooling is VERIFIED with `HUMAN_REVIEW_DATASET_REQUIRED`, GF-12B1 and GF-12B2 are VERIFIED, and GF-12B3 is VERIFIED with evidence-based operational gaps retained. No human pilot, labels, human-quality metrics, final production-quality signoff, or GF-12 graduation exists.
 
 ## GF-1 canonical scan-record catalog
 
@@ -961,6 +962,37 @@ retry or restart.
 No blocking recovery or integrity finding was evidenced. No production decision
 semantics, schema, migration, dependency, frontend, provider, or secret boundary
 changed. GF-12 remains STARTED, not complete; GF-12A2 still requires an
+authorized human-review dataset. GF-11 remains IN PROGRESS, the waiver remains
+ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the 300-second target remains
+unmet.
+
+## GF-12B3 observability, runbook, and operational-readiness baseline
+
+GF-12B3 is **VERIFIED** as a bounded validation/documentation unit. OR1-OR24
+passed on one successful and one controlled failed group-first integration with
+provider calls zero. Scan id, lifecycle status, timestamps, result ownership,
+health/readiness, final identity-read readiness, and review/export availability
+are operator-visible. Persisted orchestration stages, bounded failure categories,
+GF2-GF6 counts, and provider-call counters reconcile with the authoritative
+result, but several are not exposed through a public scan-status API.
+
+The operator runbook truthfully documents synchronous HTTP submission, 200/409/
+422 authority behavior, retry versus restart, and evidence capture. It explicitly
+prohibits database/source repair, intermediate-result publication, failed-scan
+review/export, provider enablement as recovery, and invented resume. The readiness
+checklist retains public stage/failure-history telemetry, structured scan logging,
+public group-provider status, enterprise database/storage, authentication,
+authorization, tenancy, retention/deletion, human evidence, and final approvals as
+open/not implemented/external-decision items.
+
+One narrow operational-safety defect was corrected: unexpected scan exceptions
+previously reached the HTTP 500 detail verbatim. The response now uses a fixed
+`scan_failure` category/message, and a synthetic-secret regression proves the
+unexpected exception text is absent. Scan decisions, lifecycle transitions,
+retrieval, GF2-GF6, schema, dependencies, and frontend behavior are unchanged.
+
+Resume, production cancellation, and production scan timeout remain
+`NOT_IMPLEMENTED`. GF-12 remains STARTED, not complete; GF-12A2 still requires an
 authorized human-review dataset. GF-11 remains IN PROGRESS, the waiver remains
 ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the 300-second target remains
 unmet.

@@ -267,8 +267,22 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
         privacy = security_transparency(file_hash=metadata["file_sha256"], sensitive_mode=sensitive_mode)
         privacy["file_size_bytes"] = metadata["file_size_bytes"]
         return scan_json(scan, privacy=privacy, retrieval=hybrid_retrieval_metrics(db, scan.id))
-    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
-    except Exception as exc: raise HTTPException(500, f"Scan failed safely: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(
+            422,
+            {
+                "category": "validation_failure",
+                "message": "Scan input or configuration was rejected safely",
+            },
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            500,
+            {
+                "category": "scan_failure",
+                "message": "Scan failed safely",
+            },
+        ) from exc
 
 
 @router.get("/{scan_id}/export")

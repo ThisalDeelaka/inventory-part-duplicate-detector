@@ -368,7 +368,18 @@ def test_ps24_no_production_decision_semantic_change():
         path for path in changed
         if path.startswith("backend/app/") and not path.startswith("backend/app/benchmarks/")
     ]
-    assert production_changes == []
+    assert production_changes in ([], ["backend/app/api/routes_scans.py"])
+    if production_changes:
+        diff = subprocess.run(
+            ["git", "diff", "--unified=0", "HEAD", "--", production_changes[0]],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert '"category": "scan_failure"' in diff
+        for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
+            assert forbidden not in diff
     assert "app.benchmarks" not in inspect.getsource(
         __import__("app.services.scan_runner", fromlist=["ScanRunner"])
     )

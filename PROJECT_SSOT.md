@@ -136,6 +136,8 @@ GF-12B1 is VERIFIED as a bounded privacy/security/data-boundary baseline. Provid
 
 GF-12B2 is VERIFIED: `RECOVERY/FAILURE-MODE/TRANSACTIONAL-INTEGRITY BASELINE VERIFIED`. Failed scans remain non-authoritative, caller-owned rollback and cache rollback preserve consistency, fresh retry equals a clean identity-aligned control, cross-scan isolation passes, and provider calls remain zero. Production cancellation and production scan timeout are `UNSUPPORTED / NOT IMPLEMENTED`; durable same-scan resume status is `NOT_IMPLEMENTED`, so the safe current action is a new scan by retry or restart rather than a claimed stage resume.
 
+GF-12B3 is VERIFIED: `OBSERVABILITY/RUNBOOK/OPERATIONAL-READINESS BASELINE VERIFIED`. The synchronous lifecycle, stable scan/result ownership, authoritative read boundary, safe provider-none evidence, health/readiness surfaces, recovery actions, waiver debt, and human-validation dependency are documented and pass OR1-OR24 with zero provider calls. Public stage/failure-history telemetry, structured scan logging, and public group-provider status remain open; resume, production cancellation, and production scan timeout remain `NOT_IMPLEMENTED`.
+
 These are validation-infrastructure results, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality or reviewer-agreement threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
 
 ## Non-negotiable safety invariants

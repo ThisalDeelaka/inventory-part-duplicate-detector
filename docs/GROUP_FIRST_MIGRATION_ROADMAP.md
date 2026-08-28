@@ -660,6 +660,17 @@ cancellation and production scan timeout are `UNSUPPORTED / NOT IMPLEMENTED`.
 Current recovery is a new scan by retry or restart, and no stage-resume capability
 is claimed. This validation does not complete GF-12.
 
+GF-12B3 observability/runbook/operational-readiness baseline is VERIFIED.
+OR1-OR24 validate scan lifecycle/correlation, persisted stage reconciliation,
+authoritative-read readiness, failed read/review/export isolation, secret-safe
+diagnostics, provider-none execution, health/readiness, waiver visibility, and
+human-validation dependency visibility. The operator runbook and fail-closed
+readiness checklist use only current synchronous interfaces. Public stage/failure-
+history telemetry, structured scan logging, and public group-provider status remain
+open; resume, production cancellation, and production scan timeout remain
+`NOT_IMPLEMENTED`. This does not complete GF-12 or resolve deployment/tenancy/
+authorization decisions.
+
 Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
 Authorized independent work includes quality and false-
 positive/false-negative evaluation, group correctness, safety, privacy and
