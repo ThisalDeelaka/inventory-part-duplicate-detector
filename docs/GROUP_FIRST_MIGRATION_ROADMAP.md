@@ -638,8 +638,11 @@ One-million-record distributed execution and external provider optimization.
 Implementation status: STARTED. GF-12A1 is VERIFIED: the group-first validation
 contract and corrected canonical offline quality baseline are established with
 corpus v1, truth v2, deterministic evaluation, and zero safety/provider
-violations. Human-reviewed production-quality validation and final graduation
-remain pending.
+violations. GF-12A2 human-review protocol/tooling is VERIFIED, but no explicitly
+authorized representative non-synthetic validation dataset exists in the
+repository. Its blinded pilot is NOT EXECUTED and the state is
+`HUMAN_REVIEW_DATASET_REQUIRED`. Human-reviewed production-quality validation
+and final graduation remain pending.
 
 Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
 Authorized independent work includes quality and false-

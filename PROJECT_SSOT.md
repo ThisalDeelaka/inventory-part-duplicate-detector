@@ -130,7 +130,9 @@ The waiver does not relax correctness, determinism, cannot-link enforcement, mem
 
 GF-12 is STARTED. GF-12A1 is VERIFIED: the group-first production-validation contract and corrected canonical offline quality baseline are established using `group-first-scale-corpus-v1`, `group-first-scale-truth-v2`, and evaluation contract `gf12-group-quality-v1`.
 
-This is validation-infrastructure evidence, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
+GF-12A2 human-review protocol/tooling is VERIFIED. No explicitly authorized representative non-synthetic validation dataset exists in the repository, so the blinded pilot is NOT EXECUTED, human labels and metrics are absent, and the state is `HUMAN_REVIEW_DATASET_REQUIRED`.
+
+These are validation-infrastructure results, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality or reviewer-agreement threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
 
 ## Non-negotiable safety invariants
 
