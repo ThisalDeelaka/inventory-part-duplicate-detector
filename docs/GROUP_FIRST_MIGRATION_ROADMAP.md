@@ -582,6 +582,14 @@ was 7.137 seconds; CHAR_VECTOR was the largest measured DISCOVERY stage at
 insufficient, GF-12 remains not started, and these units do not alter the GF-0
 through GF-12 order.
 
+The `<=300.000000 s` COLD_FULL 100k DISCOVERY target remains unmet. By explicit
+supervising architect / product-owner decision, the bounded
+`GF11-PERF-100K-COLD-FULL` performance waiver is ACTIVE. GF-11 remains IN
+PROGRESS and the debt remains OPEN; the waiver permits independent GF-12
+validation to start but does not grant GF-11 performance graduation or final
+production graduation. The controlling scope and expiry conditions are in
+`GF11_100K_COLD_FULL_PERFORMANCE_WAIVER.md`.
+
 ### Goal
 
 Meet measured 100k-record performance and reliability gates without changing identity semantics.
@@ -626,6 +634,15 @@ Select the previous discovery adapter/configuration version; keep resolver/G2 co
 One-million-record distributed execution and external provider optimization.
 
 ## GF-12 — Production validation and graduation
+
+Start status: NOT STARTED; START AUTHORIZED under the bounded GF-11 COLD_FULL
+performance waiver. Authorized independent work includes quality and false-
+positive/false-negative evaluation, group correctness, safety, privacy and
+security, recovery, observability, runbooks, UAT, deployment readiness,
+reference-hardware definition, warm/resume benchmark design, and workflow/SLO
+evidence. Final production graduation remains blocked while the open GF-11
+performance debt is unresolved unless a later explicit governance decision
+addresses it.
 
 ### Goal
 

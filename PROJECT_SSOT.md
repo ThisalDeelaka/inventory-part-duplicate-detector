@@ -118,6 +118,14 @@ The first serious production design target is 100,000 records per scan. The futu
 
 Global all-pairs computation and a full dense N-by-N matrix are prohibited as production architecture.
 
+## GF-11 bounded cold-full performance waiver
+
+The canonical 100,000-record `COLD_FULL` DISCOVERY target remains `<=300.000000 s` and remains unmet. The current three-run fresh/disposable-state sample is 304.764270 seconds minimum, 323.791250 seconds median, 324.468367 seconds maximum, 317.674629 seconds mean, and 2.8750% coefficient of variation.
+
+By explicit supervising architect / product-owner decision, the bounded `GF11-PERF-100K-COLD-FULL` performance waiver is ACTIVE solely to permit independent GF-12 production-validation work to begin. GF-11 remains IN PROGRESS, the performance debt remains OPEN, and this waiver is not GF-11 performance graduation, a claim that the 300-second target was met, or final production graduation. GF-12 remains NOT STARTED; START AUTHORIZED under this bounded waiver.
+
+The waiver does not relax correctness, determinism, cannot-link enforcement, membership uniqueness, provider isolation, GF-4 through GF-6 integrity, source immutability, deprecated-write prohibitions, security, or privacy. The detailed scope, expiry conditions, authorized GF-12 categories, blocked claims, and regression guard are authoritative in `docs/GF11_100K_COLD_FULL_PERFORMANCE_WAIVER.md`.
+
 ## Non-negotiable safety invariants
 
 - Naive connected-component acceptance is prohibited.
