@@ -651,6 +651,15 @@ input failure, and record-independent artifact paths with zero provider calls.
 Retention/deletion gaps remain documented as `UNSPECIFIED`; this result does not
 authorize a dataset or complete GF-12.
 
+GF-12B2 recovery/failure-mode/transactional-integrity baseline is VERIFIED.
+RF1-RF26 establish fail-closed publication, caller-owned rollback, cache rollback,
+deterministic fresh-rerun equality, cross-scan isolation, failed-read/review/export
+protection, a provider-free 500-record production-path exercise, and zero provider
+calls. Durable same-scan resume status is `NOT_IMPLEMENTED`; production
+cancellation and production scan timeout are `UNSUPPORTED / NOT IMPLEMENTED`.
+Current recovery is a new scan by retry or restart, and no stage-resume capability
+is claimed. This validation does not complete GF-12.
+
 Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
 Authorized independent work includes quality and false-
 positive/false-negative evaluation, group correctness, safety, privacy and

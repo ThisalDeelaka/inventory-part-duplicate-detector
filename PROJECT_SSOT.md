@@ -134,6 +134,8 @@ GF-12A2 human-review protocol/tooling is VERIFIED. No explicitly authorized repr
 
 GF-12B1 is VERIFIED as a bounded privacy/security/data-boundary baseline. Provider-none isolation, synthetic-secret non-disclosure, offline truth/human-label separation, export/review allowlists, controlled input failure, and record-independent artifact paths pass PS1-PS24 with zero provider calls. Current retention/deletion policy gaps remain explicitly `UNSPECIFIED`.
 
+GF-12B2 is VERIFIED: `RECOVERY/FAILURE-MODE/TRANSACTIONAL-INTEGRITY BASELINE VERIFIED`. Failed scans remain non-authoritative, caller-owned rollback and cache rollback preserve consistency, fresh retry equals a clean identity-aligned control, cross-scan isolation passes, and provider calls remain zero. Production cancellation and production scan timeout are `UNSUPPORTED / NOT IMPLEMENTED`; durable same-scan resume status is `NOT_IMPLEMENTED`, so the safe current action is a new scan by retry or restart rather than a claimed stage resume.
+
 These are validation-infrastructure results, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality or reviewer-agreement threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
 
 ## Non-negotiable safety invariants
