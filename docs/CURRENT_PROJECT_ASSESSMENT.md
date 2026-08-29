@@ -1033,3 +1033,21 @@ production validation incomplete; GF-12A2 remains
 `HUMAN_REVIEW_DATASET_REQUIRED`. GF-11 remains IN PROGRESS, its waiver remains
 ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second
 target remains unmet.
+
+## GF-12C1-R1 real CSV intake compatibility
+
+The exact historical 3,265,800-byte, 5,327-row real CSV is byte-identical to the
+blob committed at `f6889ef` and validates at the current browser/API boundary.
+Historical `Part Description in Use` fallback compatibility is restored without
+making dual description columns ambiguous. The synthetic demo now validates and
+uploads through browser defaults rather than a test-only explicit mapping.
+
+This corrects `R3_HEADER_ALIAS_MAPPING_REMOVED` and
+`R7_DEMO_HARNESS_BYPASSES_BROWSER_VALIDATION`; it does not prove that group-first
+introduced the user's reported real-file missing-column response. A provider-none
+full real scan reaches canonical intake, then fails safely in character retrieval
+with `PRIMARY_IDENTITY_FAILED` because the LSH candidate pool has too few positive-
+cosine candidates. Real-target intake is VERIFIED; real-target end-to-end product
+readiness is BLOCKED. The synthetic `SHOWABLE WORKING PRODUCT = VERIFIED` claim is
+retained only with that qualification. No production/human-quality graduation is
+claimed.

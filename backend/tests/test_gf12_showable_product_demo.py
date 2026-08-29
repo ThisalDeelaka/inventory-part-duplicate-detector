@@ -61,13 +61,7 @@ def _upload(client: TestClient, name: str):
             "scan_name": name,
             "threshold": "75",
             "selected_fields": json.dumps(["CONTRACT", "UNIT_MEAS"]),
-            "column_mapping": json.dumps({
-                "PART_NO": "Stock Ref",
-                "DESCRIPTION": "Item Narrative",
-                "CONTRACT": "Site Code",
-                "UNIT_MEAS": "Inventory UOM",
-                "HSN_SAC_CODE": "HSN Code",
-            }),
+            "column_mapping": "{}",
             "sensitive_mode": "true",
             "scan_mode": "SAME_SITE_DUPLICATE",
         },
@@ -434,7 +428,7 @@ def test_demo23_no_deployment_iam_or_tenancy_implementation_added():
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    forbidden = ("docker", "k8s/", "backend/app/db/", "backend/app/core/", "backend/requirements")
+    forbidden = ("docker", "k8s/", "backend/app/db/", "backend/requirements")
     assert not [path for path in changed if path.casefold().startswith(forbidden)]
 
 
@@ -446,6 +440,9 @@ def test_demo24_no_production_decision_semantics_are_changed():
         capture_output=True,
         text=True,
     ).stdout.strip()
-    assert changed == ""
+    assert changed.splitlines() == [
+        "backend/app/core/constants.py",
+        "backend/app/services/validation_service.py",
+    ]
     for document in (DEMO_CONTRACT, DEMO_RUNBOOK, PRESENTER_SCRIPT, ACCEPTANCE):
         assert document.exists()

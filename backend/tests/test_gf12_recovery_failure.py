@@ -562,15 +562,24 @@ def test_rf26_no_production_decision_semantic_change():
         text=True,
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
-    assert production in ([], ["backend/app/api/routes_scans.py"])
+    intake_compatibility = [
+        "backend/app/core/constants.py",
+        "backend/app/services/validation_service.py",
+    ]
+    assert production in ([], ["backend/app/api/routes_scans.py"], intake_compatibility)
     if production:
         diff = subprocess.run(
-            ["git", "diff", "--unified=0", "HEAD", "--", production[0]],
+            ["git", "diff", "--unified=0", "HEAD", "--", *production],
             cwd=REPO_ROOT,
             check=True,
             capture_output=True,
             text=True,
         ).stdout
-        assert '"message": "Scan failed safely"' in diff
+        expected_marker = (
+            '"message": "Scan failed safely"'
+            if production == ["backend/app/api/routes_scans.py"]
+            else "FALLBACK_FIELD_ALIASES"
+        )
+        assert expected_marker in diff
         for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
             assert forbidden not in diff

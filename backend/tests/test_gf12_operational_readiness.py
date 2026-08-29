@@ -423,16 +423,25 @@ def test_or24_only_safe_error_serialization_changes_in_production():
         text=True,
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
-    assert production in ([], ["backend/app/api/routes_scans.py"])
+    intake_compatibility = [
+        "backend/app/core/constants.py",
+        "backend/app/services/validation_service.py",
+    ]
+    assert production in ([], ["backend/app/api/routes_scans.py"], intake_compatibility)
     if not production:
         return
     diff = subprocess.run(
-        ["git", "diff", "--unified=0", "HEAD", "--", "backend/app/api/routes_scans.py"],
+        ["git", "diff", "--unified=0", "HEAD", "--", *production],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
         text=True,
     ).stdout
-    assert '"category": "scan_failure"' in diff
+    expected_marker = (
+        '"category": "scan_failure"'
+        if production == ["backend/app/api/routes_scans.py"]
+        else "FALLBACK_FIELD_ALIASES"
+    )
+    assert expected_marker in diff
     assert "generate_candidate_pairs" not in diff
     assert "threshold" not in diff.casefold()

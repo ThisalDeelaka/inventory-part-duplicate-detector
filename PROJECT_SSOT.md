@@ -140,6 +140,17 @@ GF-12B3 is VERIFIED: `OBSERVABILITY/RUNBOOK/OPERATIONAL-READINESS BASELINE VERIF
 
 The product owner has selected `SHOWABLE WORKING PRODUCT / DEMO READINESS` as the current milestone before deployment/integration architecture. GF-12C1 is VERIFIED for that bounded milestone: the explicitly synthetic 17-record local demo completes end to end through group-first scan, identity-read UI, 2..N group detail, conflict visibility, append-only review, and authority-selected System/Reviewed exports. DEMO1-DEMO24 and three fresh semantic-equivalence runs pass with provider calls zero. `SHOWABLE WORKING PRODUCT = VERIFIED` and `DEMO-READY = YES`; production deployment readiness and final human-quality signoff remain unclaimed.
 
+GF-12C1-R1 restores deterministic real/legacy CSV intake compatibility and closes
+the synthetic demo-harness/browser mapping gap. The unchanged historical 5,327-row
+target CSV validates through the actual New Scan multipart contract, and the
+synthetic fixture now does so without a hidden explicit mapping. The complete real
+scan is not product-ready: character retrieval fails safely with
+`PRIMARY_IDENTITY_FAILED` because the LSH candidate pool has too few
+positive-cosine candidates. Therefore `SHOWABLE WORKING PRODUCT = VERIFIED`
+remains qualified to the synthetic demo; real-target intake is VERIFIED but
+real-target end-to-end demonstration is BLOCKED. See
+`docs/GF12_REAL_CSV_INGESTION_REGRESSION.md`.
+
 Until after this milestone, deployment architecture, tenancy, an application IAM/authorization platform, managed production storage, cloud/platform deployment, external integrations, production network/retention policy, and reference production hardware are deferred, not completed. Post-demo work remains separated into authorized human-reviewed quality validation; deployment/IAM/tenancy/storage/network/retention architecture; authorized integrations/provider strategy; and remaining production performance/scale debt.
 
 These are validation-infrastructure results, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality or reviewer-agreement threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.

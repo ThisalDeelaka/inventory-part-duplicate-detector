@@ -841,3 +841,14 @@ Table deletion is not part of this roadmap and requires a separate destructive-m
 ## Recommended first implementation phase
 
 GF-0 is the prerequisite governance and contract-freeze phase. Once its documentation commit is reviewed and accepted, **GF-1 — Canonical scan-record catalog** is the first production implementation phase. No later phase may start by skipping its prerequisites.
+
+## GF-12C1-R1 real-input compatibility checkpoint
+
+The historical real CSV input contract and New Scan/demo browser parity are
+restored without changing canonical identity fields or group-first authority.
+Real-target Validate only is VERIFIED. Small representative real-schema uploads
+complete in same-site and cross-site group-first modes with zero provider calls.
+The full 5,327-row real run remains BLOCKED after intake by a typed character-
+retrieval candidate-pool failure; it is not a CSV mapping failure and does not
+authorize retrieval-semantic weakening. GF-11 remains IN PROGRESS, its waiver is
+ACTIVE, `GF11-PERF-100K-COLD-FULL` is OPEN, and 300 seconds remains NOT MET.

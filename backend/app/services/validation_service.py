@@ -6,7 +6,12 @@ import unicodedata
 import pandas as pd
 from fastapi import HTTPException, UploadFile
 
-from app.core.constants import FIELD_ALIASES, FIELD_DEFINITIONS, REQUIRED_FIELDS
+from app.core.constants import (
+    FALLBACK_FIELD_ALIASES,
+    FIELD_ALIASES,
+    FIELD_DEFINITIONS,
+    REQUIRED_FIELDS,
+)
 from app.core.config import settings
 from app.services.privacy_service import detect_sensitive_patterns, file_sha256, security_transparency
 
@@ -63,6 +68,15 @@ def apply_column_mapping(df: pd.DataFrame, explicit_mapping: dict[str, str] | No
     for column in original_columns:
         normalized_lookup.setdefault(normalize_column_name(column), []).append(column)
 
+    # A historical IFS export can contain both a preferred description column
+    # and a compatibility fallback.  Decide whether the fallback is needed
+    # before iterating so source-column order cannot create a false collision.
+    primary_targets = {
+        FIELD_ALIASES.get(normalized, normalized)
+        for normalized in normalized_lookup
+        if normalized not in FALLBACK_FIELD_ALIASES
+    }
+
     explicit_sources = {}
     for canonical, requested_source in explicit_mapping.items():
         matches = normalized_lookup.get(normalize_column_name(requested_source), [])
@@ -83,7 +97,13 @@ def apply_column_mapping(df: pd.DataFrame, explicit_mapping: dict[str, str] | No
         if source in explicit_sources:
             target = explicit_sources[source]
         else:
-            automatic = FIELD_ALIASES.get(normalized, normalized)
+            if normalized in FALLBACK_FIELD_ALIASES:
+                fallback_target = FALLBACK_FIELD_ALIASES[normalized]
+                automatic = (
+                    normalized if fallback_target in primary_targets else fallback_target
+                )
+            else:
+                automatic = FIELD_ALIASES.get(normalized, normalized)
             target = f"UNMAPPED_{normalized}_{position}" if automatic in reserved_targets else automatic
         renamed[source] = target
         target_sources.setdefault(target, []).append(source)

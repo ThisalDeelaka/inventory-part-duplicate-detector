@@ -22,9 +22,11 @@ OPTIONAL_FIELDS = [item["field"] for item in FIELD_DEFINITIONS if not item["requ
 SELECTABLE_FIELDS = [f for f in OPTIONAL_FIELDS]
 
 FIELD_ALIASES = {
+    "STOCK_REF": "PART_NO",
     "PART_NUMBER": "PART_NO",
     "ITEM_NO": "PART_NO",
     "ITEM_NUMBER": "PART_NO",
+    "ITEM_NARRATIVE": "DESCRIPTION",
     "PART_DESCRIPTION": "DESCRIPTION",
     "ITEM_DESCRIPTION": "DESCRIPTION",
     "SITE": "CONTRACT",
@@ -48,6 +50,15 @@ FIELD_ALIASES = {
     "PRODUCT_CATEGORY": "PRODUCT_CATEGORY_ID",
     "HSN_CODE": "HSN_SAC_CODE",
     "SAC_CODE": "HSN_SAC_CODE",
+}
+
+# These historical IFS labels are valid only as fallbacks.  Some exports include
+# both "Part Description in Use" and "Part Description"; mapping both eagerly
+# would make the required DESCRIPTION field ambiguous.  The validation service
+# therefore uses these aliases only when no primary DESCRIPTION source exists.
+FALLBACK_FIELD_ALIASES = {
+    "PART_DESCRIPTION_IN_USE": "DESCRIPTION",
+    "DESCRIPTION_IN_USE": "DESCRIPTION",
 }
 
 CONFIDENCE_ACTIONS = {
