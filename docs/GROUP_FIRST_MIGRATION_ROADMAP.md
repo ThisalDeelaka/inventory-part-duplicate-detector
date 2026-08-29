@@ -856,3 +856,12 @@ corrected stage but remained nonterminal beyond 900 seconds, so end-to-end produ
 readiness remains BLOCKED by a separate downstream runtime condition. GF-11
 remains IN PROGRESS, its waiver is ACTIVE, `GF11-PERF-100K-COLD-FULL` is OPEN,
 and 300 seconds remains NOT MET.
+
+GF-12C1-R3 directly localizes that runtime condition after completed DISCOVERY
+and GF4. Real GF5 forms 244 work units; several dense units remain eligible
+under the unchanged 20-member cap, including an 18-record/130-edge unit with a
+106,743-subset theoretical space and the existing 16,400-attempt bound.
+Candidate-group generation is the proven dominant stage, GF6 is not reached,
+and stopped diagnostics remain non-authoritative. No optimization or semantic
+change was made. The single next category is
+`NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`.

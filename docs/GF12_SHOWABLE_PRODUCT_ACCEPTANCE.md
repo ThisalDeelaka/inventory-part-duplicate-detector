@@ -11,7 +11,7 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Synthetic demo browser-default mapping | `PASS` | New Scan multipart defaults; no hidden explicit mapping in acceptance helper |
 | Real target CSV intake | `PASS` | Unchanged 5,327-row historical file validates through browser/API contract |
 | Real target character retrieval | `PASS` | Three deterministic runs; 5,324 full-K anchors, 3 legitimate zero-neighbor anchors, zero failures |
-| Real target CSV end-to-end product | `FAIL` | Corrected scan crossed character retrieval but remained nonterminal beyond 900 seconds |
+| Real target CSV end-to-end product | `FAIL` | R3 proves GF5 bounded candidate-group generation dominates on dense eligible work units; GF6 not reached |
 | Scan completes | `PASS` | Three fresh group-first scans `COMPLETED` |
 | Authoritative group result displays | `PASS` | Identity-read summary/list/detail and group-first Scan Results UI |
 | 2..N semantics visible | `PASS` | Size-2 groups plus one size-3 motor group |
@@ -57,5 +57,8 @@ This checklist does not mark GF-12 production validation complete.
 
 Real-target character retrieval is verified without fabricated neighbors or an
 exact large-N fallback. The end-to-end real scan remains blocked by a separate
-nonterminal runtime beyond 900 seconds. No retrieval threshold, candidate budget,
-identity semantics, or group-first authority was weakened to hide it.
+GF5 candidate-generation runtime condition. R3 completed DISCOVERY and GF4,
+then directly measured the 18-record/130-edge eligible work-unit search as the
+dominant blocker; GF6 was not reached. No retrieval threshold, candidate budget,
+resolver bound, identity semantics, or group-first authority was weakened to
+hide it, and no production optimization was performed.

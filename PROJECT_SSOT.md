@@ -155,7 +155,13 @@ fabricated candidates or large-N exact fallback. The full real scan crossed that
 stage but remained nonterminal beyond 900 seconds, so real-target end-to-end
 product readiness remains BLOCKED by a separate downstream runtime condition. See
 `docs/GF12_REAL_CSV_INGESTION_REGRESSION.md` and
-`docs/GF12_REAL_DATA_CHARACTER_RETRIEVAL_CORRECTION.md`.
+`docs/GF12_REAL_DATA_CHARACTER_RETRIEVAL_CORRECTION.md`. GF-12C1-R3 localizes
+that condition to GF5 bounded candidate-group generation for dense eligible
+work units: DISCOVERY and GF4 complete, an 18-record/130-edge unit remains in
+candidate generation beyond the bounded diagnostic window, and GF6 is not
+reached. No production optimization or semantic change was made; the authorized
+next category is `NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`. See
+`docs/GF12_REAL_DATA_DOWNSTREAM_RUNTIME_LOCALIZATION.md`.
 
 Until after this milestone, deployment architecture, tenancy, an application IAM/authorization platform, managed production storage, cloud/platform deployment, external integrations, production network/retention policy, and reference production hardware are deferred, not completed. Post-demo work remains separated into authorized human-reviewed quality validation; deployment/IAM/tenancy/storage/network/retention architecture; authorized integrations/provider strategy; and remaining production performance/scale debt.
 

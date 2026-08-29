@@ -1059,3 +1059,22 @@ character retrieval are VERIFIED; real-target end-to-end product readiness remai
 BLOCKED by a separate downstream runtime condition. The synthetic `SHOWABLE
 WORKING PRODUCT = VERIFIED` claim is retained only with that qualification. No
 production/human-quality graduation is claimed.
+
+## GF-12C1-R3 downstream runtime localization
+
+Two bounded provider-none, same-site diagnostics completed real DISCOVERY in
+42.562 and 33.084 seconds and GF4 in 12.518 and 12.105 seconds, then remained
+nonterminal in GF5. The 300-second observation measured 219.962 completed
+seconds in candidate-group generation alone. The focused confirmation remained
+inside one 18-record/130-edge candidate-generation call for more than 129
+seconds; GF6 was not reached.
+
+The real graph has 244 GF5 work units. Six oversized units defer under the
+unchanged 20-member cap, but dense eligible units of 18, 14, and 12 records have
+130, 64, and 66 candidate edges. The size-18 unit has 106,743 theoretical
+subsets of size 2..8 and reaches the existing 16,400-attempt bound. Canonical
+5k's largest eligible unit is only 11 records/14 edges; its 1,250-record unit
+defers immediately. This proves CPU-bound GF5 algorithmic work expansion rather
+than SQL/persistence amplification. No production optimization, semantic,
+schema, migration, dependency, frontend, provider, or secret change occurred.
+The single next category is `NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`.
