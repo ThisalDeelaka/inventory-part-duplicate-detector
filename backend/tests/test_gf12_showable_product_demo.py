@@ -441,8 +441,7 @@ def test_demo24_no_production_decision_semantics_are_changed():
         text=True,
     ).stdout.strip()
     assert changed.splitlines() == [
-        "backend/app/core/constants.py",
-        "backend/app/services/validation_service.py",
+        "backend/app/services/character_retrieval.py",
     ]
     for document in (DEMO_CONTRACT, DEMO_RUNBOOK, PRESENTER_SCRIPT, ACCEPTANCE):
         assert document.exists()

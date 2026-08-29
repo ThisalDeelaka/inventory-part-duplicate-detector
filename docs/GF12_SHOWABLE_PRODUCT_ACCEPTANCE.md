@@ -10,7 +10,8 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Demo dataset loads | `PASS` | 17-row explicitly synthetic CSV through validate/upload API |
 | Synthetic demo browser-default mapping | `PASS` | New Scan multipart defaults; no hidden explicit mapping in acceptance helper |
 | Real target CSV intake | `PASS` | Unchanged 5,327-row historical file validates through browser/API contract |
-| Real target CSV end-to-end product | `FAIL` | Intake succeeds; character retrieval fails safely with `PRIMARY_IDENTITY_FAILED` |
+| Real target character retrieval | `PASS` | Three deterministic runs; 5,324 full-K anchors, 3 legitimate zero-neighbor anchors, zero failures |
+| Real target CSV end-to-end product | `FAIL` | Corrected scan crossed character retrieval but remained nonterminal beyond 900 seconds |
 | Scan completes | `PASS` | Three fresh group-first scans `COMPLETED` |
 | Authoritative group result displays | `PASS` | Identity-read summary/list/detail and group-first Scan Results UI |
 | 2..N semantics visible | `PASS` | Size-2 groups plus one size-3 motor group |
@@ -54,6 +55,7 @@ GF-11 PERFORMANCE DEBT:
 
 This checklist does not mark GF-12 production validation complete.
 
-The real-target failure is downstream of CSV intake: the LSH candidate pool has
-too few positive-cosine candidates. No retrieval threshold, candidate budget,
+Real-target character retrieval is verified without fabricated neighbors or an
+exact large-N fallback. The end-to-end real scan remains blocked by a separate
+nonterminal runtime beyond 900 seconds. No retrieval threshold, candidate budget,
 identity semantics, or group-first authority was weakened to hide it.

@@ -423,11 +423,8 @@ def test_or24_only_safe_error_serialization_changes_in_production():
         text=True,
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
-    intake_compatibility = [
-        "backend/app/core/constants.py",
-        "backend/app/services/validation_service.py",
-    ]
-    assert production in ([], ["backend/app/api/routes_scans.py"], intake_compatibility)
+    character_correction = ["backend/app/services/character_retrieval.py"]
+    assert production in ([], ["backend/app/api/routes_scans.py"], character_correction)
     if not production:
         return
     diff = subprocess.run(
@@ -440,7 +437,7 @@ def test_or24_only_safe_error_serialization_changes_in_production():
     expected_marker = (
         '"category": "scan_failure"'
         if production == ["backend/app/api/routes_scans.py"]
-        else "FALLBACK_FIELD_ALIASES"
+        else "zero_neighbor_anchors"
     )
     assert expected_marker in diff
     assert "generate_candidate_pairs" not in diff

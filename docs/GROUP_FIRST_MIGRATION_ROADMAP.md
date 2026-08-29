@@ -848,7 +848,11 @@ The historical real CSV input contract and New Scan/demo browser parity are
 restored without changing canonical identity fields or group-first authority.
 Real-target Validate only is VERIFIED. Small representative real-schema uploads
 complete in same-site and cross-site group-first modes with zero provider calls.
-The full 5,327-row real run remains BLOCKED after intake by a typed character-
-retrieval candidate-pool failure; it is not a CSV mapping failure and does not
-authorize retrieval-semantic weakening. GF-11 remains IN PROGRESS, its waiver is
-ACTIVE, `GF11-PERF-100K-COLD-FULL` is OPEN, and 300 seconds remains NOT MET.
+GF-12C1-R2 verifies character retrieval on the full 5,327-row input. Three zero
+vectors deterministically return zero legitimate neighbors; the other 5,324
+anchors return K=5, and three runs have identical output fingerprints. No large-N
+exact fallback or fabricated neighbor was added. The full real scan crossed the
+corrected stage but remained nonterminal beyond 900 seconds, so end-to-end product
+readiness remains BLOCKED by a separate downstream runtime condition. GF-11
+remains IN PROGRESS, its waiver is ACTIVE, `GF11-PERF-100K-COLD-FULL` is OPEN,
+and 300 seconds remains NOT MET.

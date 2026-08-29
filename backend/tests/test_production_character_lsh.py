@@ -202,11 +202,13 @@ def test_p16_large_strategy_failure_never_calls_exact_fallback(monkeypatch):
     assert caught.value.safe_category == "LSH_QUERY_FAILED"
 
 
-def test_p17_insufficient_viable_pool_fails_typed():
+def test_p17_fewer_than_k_positive_neighbors_returns_legitimate_subset():
     matrix = np.eye(8, 384, dtype=np.float32)
-    with pytest.raises(CharacterRetrievalError) as caught:
-        retrieve_lsh_directed_neighbors(matrix, _refs(8), 3, _test_configuration(8))
-    assert caught.value.safe_category == "LSH_CANDIDATE_POOL_INSUFFICIENT"
+    result = retrieve_lsh_directed_neighbors(
+        matrix, _refs(8), 3, _test_configuration(8)
+    )
+    assert result.directed_neighbors == {index: () for index in range(8)}
+    assert result.metrics.zero_neighbor_anchors == 8
 
 
 def test_p18_production_lsh_has_no_benchmark_truth_dependency():

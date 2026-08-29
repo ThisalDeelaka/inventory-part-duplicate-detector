@@ -1045,9 +1045,17 @@ uploads through browser defaults rather than a test-only explicit mapping.
 This corrects `R3_HEADER_ALIAS_MAPPING_REMOVED` and
 `R7_DEMO_HARNESS_BYPASSES_BROWSER_VALIDATION`; it does not prove that group-first
 introduced the user's reported real-file missing-column response. A provider-none
-full real scan reaches canonical intake, then fails safely in character retrieval
-with `PRIMARY_IDENTITY_FAILED` because the LSH candidate pool has too few positive-
-cosine candidates. Real-target intake is VERIFIED; real-target end-to-end product
-readiness is BLOCKED. The synthetic `SHOWABLE WORKING PRODUCT = VERIFIED` claim is
-retained only with that qualification. No production/human-quality graduation is
-claimed.
+full real scan previously reached canonical intake, then failed safely in character
+retrieval because three zero vectors could not satisfy an impossible full-K
+positive-neighbor postcondition.
+
+GF-12C1-R2 corrects that condition with the existing exact-path 0..K legitimate
+subset contract. Three full real character runs complete with identical
+fingerprints, 5,324 full-K anchors, three zero-neighbor anchors, and zero provider
+calls. No exact large-N fallback, fabricated neighbor, threshold change, or GF2-GF6
+semantic change was introduced. The subsequent full real scan crossed character
+retrieval but remained nonterminal beyond 900 seconds. Real-target intake and
+character retrieval are VERIFIED; real-target end-to-end product readiness remains
+BLOCKED by a separate downstream runtime condition. The synthetic `SHOWABLE
+WORKING PRODUCT = VERIFIED` claim is retained only with that qualification. No
+production/human-quality graduation is claimed.

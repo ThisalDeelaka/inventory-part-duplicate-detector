@@ -148,8 +148,14 @@ scan is not product-ready: character retrieval fails safely with
 `PRIMARY_IDENTITY_FAILED` because the LSH candidate pool has too few
 positive-cosine candidates. Therefore `SHOWABLE WORKING PRODUCT = VERIFIED`
 remains qualified to the synthetic demo; real-target intake is VERIFIED but
-real-target end-to-end demonstration is BLOCKED. See
-`docs/GF12_REAL_CSV_INGESTION_REGRESSION.md`.
+real-target end-to-end demonstration is BLOCKED. GF-12C1-R2 subsequently verifies
+the real 5,327-row character channel: three zero vectors now return the legitimate
+empty neighbor subset instead of failing an impossible full-K condition, with no
+fabricated candidates or large-N exact fallback. The full real scan crossed that
+stage but remained nonterminal beyond 900 seconds, so real-target end-to-end
+product readiness remains BLOCKED by a separate downstream runtime condition. See
+`docs/GF12_REAL_CSV_INGESTION_REGRESSION.md` and
+`docs/GF12_REAL_DATA_CHARACTER_RETRIEVAL_CORRECTION.md`.
 
 Until after this milestone, deployment architecture, tenancy, an application IAM/authorization platform, managed production storage, cloud/platform deployment, external integrations, production network/retention policy, and reference production hardware are deferred, not completed. Post-demo work remains separated into authorized human-reviewed quality validation; deployment/IAM/tenancy/storage/network/retention architecture; authorized integrations/provider strategy; and remaining production performance/scale debt.
 

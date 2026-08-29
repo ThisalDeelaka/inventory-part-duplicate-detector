@@ -118,6 +118,9 @@ class CharacterRetrievalWorkMetrics:
     exact_rerank_evaluations: int = 0
     max_candidate_pool: int = 0
     retrieval_time_ms: float = 0.0
+    zero_neighbor_anchors: int = 0
+    short_neighbor_anchors: int = 0
+    full_neighbor_anchors: int = 0
 
 
 @dataclass(frozen=True)
@@ -348,6 +351,9 @@ def retrieve_lsh_directed_neighbors(
     pool_evaluations = 0
     rerank_evaluations = 0
     max_pool = 0
+    zero_neighbor_anchors = 0
+    short_neighbor_anchors = 0
+    full_neighbor_anchors = 0
     query_started = time.perf_counter()
     try:
         source = 0
@@ -365,11 +371,6 @@ def retrieve_lsh_directed_neighbors(
                         candidates.discard(anchor)
                     if len(candidates) >= gather_limit:
                         break
-                if len(candidates) < required:
-                    raise CharacterRetrievalError(
-                        CharacterRetrievalFailureCategory.LSH_CANDIDATE_POOL_INSUFFICIENT,
-                        "LSH candidate pool cannot satisfy final character top-k",
-                    )
                 candidate_array = np.fromiter(candidates, dtype=np.int64)
                 xor = np.bitwise_xor(
                     index.signatures[candidate_array], index.signatures[anchor]
@@ -389,11 +390,17 @@ def retrieve_lsh_directed_neighbors(
                 pools.append(retained)
 
             lengths = [len(pool) for pool in pools]
-            width = max(lengths)
+            # Empty pools are legitimate for records with no character evidence.
+            # Keep a one-column scratch matrix for vectorized reranking without
+            # inventing a candidate in the length-delimited result.
+            width = max(1, max(lengths))
             pool_matrix = np.empty((len(pools), width), dtype=np.int64)
             for offset, pool in enumerate(pools):
-                pool_matrix[offset, : len(pool)] = pool
-                pool_matrix[offset, len(pool) :] = pool[0]
+                if len(pool):
+                    pool_matrix[offset, : len(pool)] = pool
+                    pool_matrix[offset, len(pool) :] = pool[0]
+                else:
+                    pool_matrix[offset, :] = source + offset
             rerank_evaluations += sum(lengths)
             exact_batch = np.einsum(
                 "bkd,bd->bk",
@@ -404,22 +411,22 @@ def retrieve_lsh_directed_neighbors(
             for offset, anchor in enumerate(range(source, batch_end)):
                 pool = pool_matrix[offset, : lengths[offset]]
                 scores = exact_batch[offset, : lengths[offset]]
-                exact_order = np.lexsort(
+                positive_positions = np.flatnonzero(scores > 0)
+                exact_order = positive_positions[np.lexsort(
                     (
                         np.asarray(
-                            [index.refs[item] for item in pool], dtype=object
+                            [index.refs[pool[item]] for item in positive_positions],
+                            dtype=object,
                         ),
-                        -scores,
+                        -scores[positive_positions],
                     )
-                )[:required]
-                if (
-                    len(exact_order) < required
-                    or np.any(scores[exact_order] <= 0)
-                ):
-                    raise CharacterRetrievalError(
-                        CharacterRetrievalFailureCategory.LSH_CANDIDATE_POOL_INSUFFICIENT,
-                        "LSH candidate pool has too few positive-cosine candidates",
-                    )
+                )[:required]]
+                if len(exact_order) == 0:
+                    zero_neighbor_anchors += 1
+                elif len(exact_order) < required:
+                    short_neighbor_anchors += 1
+                else:
+                    full_neighbor_anchors += 1
                 directed_stable[anchor] = tuple(
                     (int(pool[position]), float(scores[position]))
                     for position in exact_order
@@ -452,5 +459,8 @@ def retrieve_lsh_directed_neighbors(
             exact_rerank_evaluations=rerank_evaluations,
             max_candidate_pool=max_pool,
             retrieval_time_ms=round(index.build_time_ms + query_ms, 3),
+            zero_neighbor_anchors=zero_neighbor_anchors,
+            short_neighbor_anchors=short_neighbor_anchors,
+            full_neighbor_anchors=full_neighbor_anchors,
         ),
     )
