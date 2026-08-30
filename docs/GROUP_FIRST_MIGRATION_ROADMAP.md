@@ -883,3 +883,13 @@ and fails closed through persisted group-first read authority. This does not
 change the ACTIVE GF-11 waiver, OPEN `GF11-PERF-100K-COLD-FULL` debt, unmet
 300-second target, `HUMAN_REVIEW_DATASET_REQUIRED` status, or post-demo deferral
 of deployment/integration work.
+
+GF-12C1-R6 verifies that the ordinary browser New Scan explicitly selects the
+current group-first product, persists policy-v2/G2-v2 authority, and preserves
+explicit legacy compatibility and historical reads. It also repairs the
+Microsoft Excel table/filter conflict by leaving the Group Data AutoFilter to
+the table alone. Fresh real scan 27 has exact API/CSV/XLSX parity, but its
+read-only canary is `Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION`: tyre subtypes,
+wheel versus tyre, and dirty carbon-stick versus pencil are repeatable review-
+group failure patterns. Detector semantics were not changed in R6. A separate
+bounded correction is required before freezing this real output for demo use.

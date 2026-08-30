@@ -19,6 +19,10 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Review read path works | `PASS` | Versioned current/history route |
 | Review create/update works | `PASS` | Append-only create, Unsure correction, and restored confirm-all current event |
 | System Group Export works | `PASS` | 9 member rows plus header; member-shaped, group-first |
+| Ordinary New Scan selects current authority | `PASS` | Typed browser/API selection persists policy-v2, group-first primary, and G2-v2 even under legacy configuration default |
+| Microsoft Excel table/filter compatibility | `PASS` | Group Data table owns one AutoFilter; package-level and round-trip regressions cover the reported repair defect |
+| Fresh real G2-v2 API/CSV/XLSX parity | `PASS` | Scan 27: 207 groups and 440 member rows match across the exact authority-selected snapshot and exports |
+| Fresh real-output quality canary | `FAIL` | Q2: tyre subtype, wheel/tyre, and dirty carbon-stick/pencil review groups require a separate bounded correction before freezing the real workbook |
 | Reviewed Identity Export authority | `PASS` | Header-only before/Unsure; 3 member rows only after current confirmed review |
 | Failure boundary safe | `PASS` | Controlled synthetic failed scan is non-authoritative; final read/export return 409 |
 | Pair provider none | `PASS` | `LLM_DEMO_ENABLED=false`, `LLM_PROVIDER=none` |
@@ -54,6 +58,13 @@ GF-11 PERFORMANCE DEBT:
 ```
 
 This checklist does not mark GF-12 production validation complete.
+
+R6 proves the interactive authority and XLSX repair, but its read-only real
+quality canary is `Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION`. The synthetic demo
+acceptance remains verified; the fresh real workbook must not be frozen as the
+demo candidate until the three documented deterministic review-group patterns
+receive a separate bounded correction. GF-12A2 remains
+`HUMAN_REVIEW_DATASET_REQUIRED`.
 
 Real-target character retrieval remains verified without fabricated neighbors
 or an exact large-N fallback. R4 corrects the GF5 runtime blocker by enforcing

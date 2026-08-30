@@ -67,6 +67,7 @@ export default function NewScan() {
     f.append('column_mapping', JSON.stringify(columnMapping))
     f.append('sensitive_mode', sensitiveMode)
     f.append('scan_mode', scanMode)
+    f.append('product_authority', 'current_product')
     return f
   }
 

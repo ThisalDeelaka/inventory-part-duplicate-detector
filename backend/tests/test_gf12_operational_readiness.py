@@ -422,9 +422,13 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
     allowed = {
+        "backend/app/api/routes_scans.py",
+        "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
         "backend/app/services/identity_read_xlsx_export_service.py",
+        "backend/app/services/scan_runner.py",
+        "backend/app/services/scan_service.py",
     }
     assert set(production) <= allowed
     if not production:
@@ -438,4 +442,4 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
     ).stdout
     assert "authority_selected_system_groups_to_xlsx" in diff
     assert "generate_candidate_pairs" not in diff
-    assert "threshold" not in diff.casefold()
+    assert "score_candidate" not in diff

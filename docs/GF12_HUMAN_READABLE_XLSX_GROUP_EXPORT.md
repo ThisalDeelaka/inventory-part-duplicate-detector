@@ -96,3 +96,21 @@ human-quality validation, deployment certification, canonical-master decision,
 or ERP action plan. GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`. GF-11's
 waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, the 300-second
 target remains unmet, and deployment/integration remains deferred post-demo.
+
+## R6 Excel compatibility and current-product authority
+
+R6 package inspection proved that the original Group Data worksheet and its
+Excel Table both declared an AutoFilter over the same range. Microsoft Excel
+repaired that overlap by discarding the table/filter. Group Data now has no
+worksheet-level AutoFilter; its `SystemGroupData` table owns the single filter.
+Package-level tests cover the exact XML relationship, range, columns, filter,
+merged-range validity, and round-trip table retention.
+
+The ordinary browser New Scan also now sends the typed public
+`current_product` selection, so a fresh interactive scan persists group-first
+primary authority and exports G2-v2 rather than inheriting the legacy config
+default. Explicit legacy compatibility and historical G2-v1 reads remain.
+Fresh scan 27 proves exact API/CSV/XLSX parity for 207 G2-v2 groups and 440
+member rows. Its read-only quality canary is Q2, so the workbook is evidence for
+authority/export correctness but is not yet the frozen real demo candidate.
+See `docs/GF12_INTERACTIVE_G2V2_XLSX_AND_REAL_OUTPUT_AUDIT.md`.

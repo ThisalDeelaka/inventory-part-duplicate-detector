@@ -92,7 +92,8 @@ def test_xlsx1_to_xlsx15_workbook_contract_membership_merges_and_review(db, clie
     assert tuple(cell.value for cell in grouped[1]) == ALL_COLUMNS
     assert tuple(cell.value for cell in flat[1]) == ALL_COLUMNS
     assert grouped.freeze_panes == "A2" and flat.freeze_panes == "A2"
-    assert flat.auto_filter.ref == f"A1:T{flat.max_row}"
+    assert flat.auto_filter.ref is None
+    assert flat.tables["SystemGroupData"].ref == f"A1:T{flat.max_row}"
 
     csv_rows = list(csv.DictReader(io.StringIO(csv_response.text)))
     flat_rows = _rows(flat)

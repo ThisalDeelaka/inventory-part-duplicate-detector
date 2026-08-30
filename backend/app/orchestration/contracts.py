@@ -14,6 +14,22 @@ class ScanOrchestrationMode(str, Enum):
     GROUP_FIRST_PRIMARY = "group_first_primary"
 
 
+class ProductScanAuthority(str, Enum):
+    """Allowlisted request-level product selection, separate from scan scope."""
+
+    CURRENT_PRODUCT = "current_product"
+    LEGACY_COMPATIBILITY = "legacy_compatibility"
+
+
+def orchestration_mode_for_product_authority(
+    authority: ProductScanAuthority | str,
+) -> ScanOrchestrationMode:
+    authority = ProductScanAuthority(authority)
+    if authority == ProductScanAuthority.CURRENT_PRODUCT:
+        return ScanOrchestrationMode.GROUP_FIRST_PRIMARY
+    return ScanOrchestrationMode.LEGACY_PRIMARY
+
+
 class PrimaryIdentityPipeline(str, Enum):
     LEGACY_PAIR_G1 = "LEGACY_PAIR_G1"
     GROUP_FIRST_GF1_GF6 = "GROUP_FIRST_GF1_GF6"

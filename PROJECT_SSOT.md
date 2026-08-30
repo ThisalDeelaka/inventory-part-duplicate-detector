@@ -226,3 +226,17 @@ Current: pair machinery remains operational compatibility infrastructure and int
 Target: pair machinery ceases to be the business-domain center.
 
 The non-destructive migration order is to hide normal pair prominence, introduce independent discovery and evidence, graduate the new resolver through controlled shadow validation, stop new pair feedback and pair LLM writes, stop `DuplicateCandidate` business writes only after consumers migrate, and retain historical read-only diagnostics. Pair tables, APIs, and historical records are not removed in GF-0.
+
+## GF-12C1-R6 current interactive authority and export status
+
+GF-12C1-R6 verifies the ordinary interactive New Scan authority and Excel
+compatibility boundary. The browser now selects the allowlisted current product,
+which persists policy-v2, group-first-primary, and G2-v2 without changing
+explicit legacy compatibility or historical G2-v1 interpretation. The Group
+Data Excel Table now owns its single AutoFilter, eliminating the package
+conflict that Microsoft Excel repaired. Fresh real scan 27 completes with zero
+provider calls and exact G2-v2 API/CSV/XLSX parity. Its read-only quality gate is
+`Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION` for tyre subtype, wheel-versus-tyre,
+and dirty carbon-stick-versus-pencil review-group patterns. No detector change
+is part of R6; the real output is not frozen as the demo candidate. GF-12A2 and
+GF-11 performance debt remain open.

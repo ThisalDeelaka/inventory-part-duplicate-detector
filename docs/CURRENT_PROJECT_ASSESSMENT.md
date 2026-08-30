@@ -1117,3 +1117,27 @@ readiness only. GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 remains
 IN PROGRESS under its ACTIVE waiver; `GF11-PERF-100K-COLD-FULL` remains OPEN;
 the 300-second target remains unmet; and deployment/integration remains deferred
 post-demo.
+
+## GF-12C1-R6 interactive G2-v2 authority and Excel repair
+
+GF-12C1-R6 is VERIFIED for product-path authority and export compatibility.
+The pre-R6 browser omitted orchestration authority, allowing the legacy config
+default to persist G2-v1. New Scan now sends an allowlisted public
+`current_product` value that maps to the existing group-first-primary mode;
+explicit legacy compatibility, non-product config behavior, and historical
+scan interpretation remain unchanged.
+
+The reported Microsoft Excel repair was caused by overlapping worksheet and
+table AutoFilters on Group Data. The table now owns the only filter, with
+package-level and round-trip regression coverage. Fresh real scan 27 completed
+with policy-v2/G2-v2 authority, 5,327 canonical records, 207 groups (113 likely,
+94 review), 19 conflicts, 31 deferred units, 4,887 unassigned records, zero
+provider calls, and exact 440-member API/CSV/XLSX parity.
+
+The read-only real-output result is
+`Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION`. Explicit tyre subtypes were grouped,
+an MLR wheel was grouped with an MLR tyre, and a dirty shared description grouped
+a carbon-stick part with a pencil part. No detector semantics were changed.
+The real workbook is not the frozen demo candidate pending a separate bounded
+correction. Human-quality certification remains open and GF-12A2 remains
+`HUMAN_REVIEW_DATASET_REQUIRED`.

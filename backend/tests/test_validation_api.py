@@ -25,7 +25,7 @@ def test_health_and_scan_upload(client):
 
 
 def test_feedback_endpoint(client, db):
-    upload = client.post("/api/scans/upload", files={"file": ("parts.csv", CSV, "text/csv")}, data={"selected_fields":'["CONTRACT","UNIT_MEAS"]',"threshold":"50","scan_name":"Feedback"})
+    upload = client.post("/api/scans/upload", files={"file": ("parts.csv", CSV, "text/csv")}, data={"selected_fields":'["CONTRACT","UNIT_MEAS"]',"threshold":"50","scan_name":"Feedback","product_authority":"legacy_compatibility"})
     candidate = db.query(DuplicateCandidate).first()
     assert candidate is not None
     response = client.post(f"/api/candidates/{candidate.id}/feedback", json={"user_decision":"DUPLICATE","user_comment":"Reviewed","created_by":"tester"})
@@ -249,7 +249,7 @@ def test_below_threshold_business_rule_exclusions_are_auditable(client):
     upload = client.post(
         "/api/scans/upload",
         files={"file": ("rule-exclusion.csv", csv, "text/csv")},
-        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "75"},
+        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "75", "product_authority": "legacy_compatibility"},
     )
 
     assert upload.status_code == 200
@@ -280,7 +280,7 @@ def test_structural_role_candidate_keeps_mismatch_evidence(client):
     upload = client.post(
         "/api/scans/upload",
         files={"file": ("structural-role.csv", csv, "text/csv")},
-        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "75"},
+        data={"selected_fields": '["CONTRACT","UNIT_MEAS"]', "threshold": "75", "product_authority": "legacy_compatibility"},
     )
 
     assert upload.status_code == 200

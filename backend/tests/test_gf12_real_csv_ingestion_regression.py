@@ -45,12 +45,13 @@ def _browser_data(mode="SAME_SITE_DUPLICATE"):
         "column_mapping": "{}",
         "sensitive_mode": "true",
         "scan_mode": mode,
+        "product_authority": "current_product",
     }
 
 
 def _provider_none():
     return Settings(
-        identity_orchestration_mode="group_first_primary",
+        identity_orchestration_mode="legacy_primary",
         group_first_shadow_comparison_enabled=False,
         llm_demo_enabled=False,
         llm_provider="none",

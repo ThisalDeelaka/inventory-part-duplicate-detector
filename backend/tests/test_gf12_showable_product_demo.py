@@ -64,6 +64,7 @@ def _upload(client: TestClient, name: str):
             "column_mapping": "{}",
             "sensitive_mode": "true",
             "scan_mode": "SAME_SITE_DUPLICATE",
+            "product_authority": "current_product",
         },
     )
     assert response.status_code == 200, response.text
@@ -441,9 +442,13 @@ def test_demo24_only_bounded_xlsx_export_production_files_change():
         text=True,
     ).stdout.strip()
     assert set(changed.splitlines()) <= {
+        "backend/app/api/routes_scans.py",
+        "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
         "backend/app/services/identity_read_xlsx_export_service.py",
+        "backend/app/services/scan_runner.py",
+        "backend/app/services/scan_service.py",
     }
     for document in (DEMO_CONTRACT, DEMO_RUNBOOK, PRESENTER_SCRIPT, ACCEPTANCE):
         assert document.exists()

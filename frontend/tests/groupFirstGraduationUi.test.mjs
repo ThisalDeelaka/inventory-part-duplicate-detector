@@ -133,6 +133,8 @@ test('F17 opaque igk1 keys are encoded and never parsed for business meaning', (
 test('F18 frontend has no current-process orchestration authority logic', () => {
   const all = `${page}\n${client}`
   assert.doesNotMatch(all, /IDENTITY_ORCHESTRATION_MODE|group_first_primary|legacy_primary|import\.meta\.env.*ORCHESTRATION/)
+  const newScan = readFileSync(new URL('../src/pages/NewScan.jsx', import.meta.url), 'utf8')
+  assert.match(newScan, /f\.append\('product_authority', 'current_product'\)/)
 })
 
 test('versioned review payload omits legacy projection and numeric identities', () => {

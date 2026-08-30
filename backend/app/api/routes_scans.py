@@ -45,6 +45,10 @@ from app.orchestration.pair_path_deprecation import (
     PairDiagnosticsAvailability,
     pair_path_write_policy,
 )
+from app.orchestration.contracts import (
+    ProductScanAuthority,
+    orchestration_mode_for_product_authority,
+)
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
@@ -225,13 +229,21 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
     if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
     df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
     validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
     try:
-        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode), configuration=configuration)
+        scan, _ = run_scan(
+            db, df, scan_name.strip() or "Inventory duplicate scan",
+            parse_selected_fields(selected_fields), threshold,
+            sensitive_mode=sensitive_mode,
+            scan_mode=normalize_scan_mode(scan_mode), configuration=configuration,
+            orchestration_mode=orchestration_mode_for_product_authority(
+                product_authority
+            ),
+        )
         pair_diagnostics = pair_diagnostics_state_for_scan(db, scan.id)
         try:
             if pair_diagnostics.availability == PairDiagnosticsAvailability.NOT_GENERATED_NOT_APPLICABLE:

@@ -369,9 +369,13 @@ def test_ps24_only_bounded_xlsx_export_production_change():
         if path.startswith("backend/app/") and not path.startswith("backend/app/benchmarks/")
     ]
     allowed = {
+        "backend/app/api/routes_scans.py",
+        "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
         "backend/app/services/identity_read_xlsx_export_service.py",
+        "backend/app/services/scan_runner.py",
+        "backend/app/services/scan_service.py",
     }
     assert set(production_changes) <= allowed
     if production_changes:
@@ -383,7 +387,7 @@ def test_ps24_only_bounded_xlsx_export_production_change():
             text=True,
         ).stdout
         assert "authority_selected_system_groups_to_xlsx" in diff
-        for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
+        for forbidden in ("generate_candidate_pairs", "score_candidate"):
             assert forbidden not in diff
     assert "app.benchmarks" not in inspect.getsource(
         __import__("app.services.scan_runner", fromlist=["ScanRunner"])

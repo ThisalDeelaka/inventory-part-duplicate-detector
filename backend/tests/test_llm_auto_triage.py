@@ -496,6 +496,7 @@ def test_scan_upload_automatically_creates_run_and_schedules_after_completion(cl
             "selected_fields": '["CONTRACT","UNIT_MEAS"]',
             "column_mapping": '{"PART_NO":"Stock Ref","DESCRIPTION":"Item Narrative"}',
             "threshold": "75",
+            "product_authority": "legacy_compatibility",
         },
     )
     assert response.status_code == 200

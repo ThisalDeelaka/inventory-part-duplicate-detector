@@ -265,7 +265,9 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
 
     for sheet in (grouped, flat):
         _style_dimensions(sheet)
-        sheet.auto_filter.ref = f"A1:{get_column_letter(len(ALL_COLUMNS))}{max(1, sheet.max_row)}"
+    grouped.auto_filter.ref = (
+        f"A1:{get_column_letter(len(ALL_COLUMNS))}{max(1, grouped.max_row)}"
+    )
     if flat.max_row >= 2:
         table = Table(displayName="SystemGroupData", ref=f"A1:T{flat.max_row}")
         table.tableStyleInfo = TableStyleInfo(

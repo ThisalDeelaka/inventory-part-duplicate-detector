@@ -102,12 +102,16 @@ class ScanRunner:
             selected_fields=selected_fields,
         )
 
-    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
+    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE", orchestration_mode: ScanOrchestrationMode | str | None = None):
         scan_mode = normalize_scan_mode(scan_mode)
-        mode = getattr(
-            self.configuration,
-            "identity_orchestration_mode",
-            ScanOrchestrationMode.LEGACY_PRIMARY.value,
+        mode = (
+            orchestration_mode
+            if orchestration_mode is not None
+            else getattr(
+                self.configuration,
+                "identity_orchestration_mode",
+                ScanOrchestrationMode.LEGACY_PRIMARY.value,
+            )
         )
         shadow_enabled = bool(getattr(
             self.configuration,
