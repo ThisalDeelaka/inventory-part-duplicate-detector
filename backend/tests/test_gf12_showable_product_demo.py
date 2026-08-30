@@ -440,6 +440,9 @@ def test_demo24_no_production_decision_semantics_are_changed():
         capture_output=True,
         text=True,
     ).stdout.strip()
-    assert changed.splitlines() == []
+    assert changed.splitlines() == [
+        "backend/app/benchmarks/real_data_runtime_localization.py",
+        "backend/app/resolution/resolver.py",
+    ]
     for document in (DEMO_CONTRACT, DEMO_RUNBOOK, PRESENTER_SCRIPT, ACCEPTANCE):
         assert document.exists()

@@ -563,7 +563,14 @@ def test_rf26_no_production_decision_semantic_change():
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
     character_correction = ["backend/app/services/character_retrieval.py"]
-    assert production in ([], ["backend/app/api/routes_scans.py"], character_correction)
+    gf5_dense_correction = [
+        "backend/app/benchmarks/real_data_runtime_localization.py",
+        "backend/app/resolution/resolver.py",
+    ]
+    assert production in (
+        [], ["backend/app/api/routes_scans.py"], character_correction,
+        gf5_dense_correction,
+    )
     if production:
         diff = subprocess.run(
             ["git", "diff", "--unified=0", "HEAD", "--", *production],
@@ -572,11 +579,11 @@ def test_rf26_no_production_decision_semantic_change():
             capture_output=True,
             text=True,
         ).stdout
-        expected_marker = (
-            '"message": "Scan failed safely"'
-            if production == ["backend/app/api/routes_scans.py"]
-            else "zero_neighbor_anchors"
-        )
+        expected_marker = {
+            ("backend/app/api/routes_scans.py",): '"message": "Scan failed safely"',
+            tuple(character_correction): "zero_neighbor_anchors",
+            tuple(gf5_dense_correction): "_candidate_subset_count",
+        }[tuple(production)]
         assert expected_marker in diff
         for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
             assert forbidden not in diff

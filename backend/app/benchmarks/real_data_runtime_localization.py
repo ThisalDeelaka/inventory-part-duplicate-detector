@@ -9,10 +9,12 @@ not from the environment.
 from __future__ import annotations
 
 import argparse
+import cProfile
 import hashlib
 import io
 import json
 import multiprocessing
+import pstats
 import tempfile
 import time
 from collections import Counter, defaultdict
@@ -264,6 +266,8 @@ def inspect_database(
                 "targeted_results": resolution.targeted_evidence_result_count
                 if resolution else None,
                 "groups": resolution.accepted_group_count if resolution else None,
+                "likely": resolution.likely_group_count if resolution else None,
+                "review": resolution.review_group_count if resolution else None,
                 "conflicts": resolution.conflict_count if resolution else None,
                 "deferred": resolution.deferred_work_unit_count if resolution else None,
                 "unassigned": resolution.unassigned_record_count if resolution else None,
@@ -276,6 +280,11 @@ def inspect_database(
             "gf6": {
                 "status": projection.status if projection else None,
                 "groups": projection.accepted_group_count if projection else None,
+                "likely": projection.likely_group_count if projection else None,
+                "review": projection.review_group_count if projection else None,
+                "conflicts": projection.conflict_count if projection else None,
+                "deferred": projection.deferred_count if projection else None,
+                "unassigned": projection.unassigned_record_count if projection else None,
                 "seconds": _duration(projection.started_at, projection.completed_at)
                 if projection else None,
                 "safe_failure_category": projection.safe_failure_category
@@ -293,7 +302,12 @@ def inspect_database(
 
 
 @contextmanager
-def _additional_instrumentation(collector: _Collector):
+def _additional_instrumentation(
+    collector: _Collector,
+    *,
+    dense_candidate_repetitions: int = 1,
+    profile_dense_reference: bool = False,
+):
     originals = {}
 
     def patch(owner, name, replacement):
@@ -482,9 +496,63 @@ def _additional_instrumentation(collector: _Collector):
     patch(resolver.CanonicalEvaluatorTargetedEvidenceProvider, "evaluate", evaluate)
 
     original_candidates = resolver._candidate_groups
+    dense_reference_profiled = False
     def candidates(*args, **kwargs):
+        nonlocal dense_reference_profiled
         unit = args[1]
         counters = args[4]
+        if len(unit.member_ids) == 18 and not dense_reference_profiled:
+            dense_reference_profiled = True
+            if profile_dense_reference:
+                reference_counters = resolver._ExecutionCounters()
+                profiler = cProfile.Profile()
+                reference_started = time.perf_counter()
+                profiler.enable()
+                reference_result = resolver._candidate_groups_reference(
+                    args[0], unit, args[2], args[3], reference_counters
+                )
+                profiler.disable()
+                stats = pstats.Stats(profiler)
+                named = {}
+                for (_path, _line, name), values in stats.stats.items():
+                    if name in {
+                        "_build_group", "fingerprint_payload",
+                        "identity_group_hypothesis_fingerprint",
+                        "validate_group_hypothesis", "_bridge_summary",
+                    }:
+                        named[name] = {
+                            "calls": values[1],
+                            "self_seconds": round(values[2], 6),
+                            "cumulative_seconds": round(values[3], 6),
+                        }
+                collector.counts["gf5_dense_reference_profile"] = {
+                    "elapsed_seconds": round(
+                        time.perf_counter() - reference_started, 6
+                    ),
+                    "visited": reference_counters.candidate_partitions_explored,
+                    "retained": len(reference_result[0]),
+                    "exhausted": reference_result[1],
+                    "functions": dict(sorted(named.items())),
+                }
+                collector.checkpoint()
+            repeated = []
+            for _ in range(max(1, dense_candidate_repetitions)):
+                repeat_counters = resolver._ExecutionCounters()
+                repeat_started = time.perf_counter()
+                repeat_result = original_candidates(
+                    args[0], unit, args[2], args[3], repeat_counters
+                )
+                repeated.append({
+                    "seconds": round(time.perf_counter() - repeat_started, 9),
+                    "visited": repeat_counters.candidate_partitions_explored,
+                    "retained": len(repeat_result[0]),
+                    "exhausted": repeat_result[1],
+                    "fingerprints": tuple(
+                        item.group.hypothesis_fingerprint for item in repeat_result[0]
+                    ),
+                })
+            collector.counts["gf5_dense_corrected_runs"] = repeated
+            collector.checkpoint()
         before = counters.candidate_partitions_explored
         started = time.perf_counter()
         collector.active_sub_stage = "GF5_CANDIDATE_GENERATION"
@@ -587,6 +655,8 @@ def _load_real_csv(path: Path) -> tuple[pd.DataFrame, str]:
 def run_localization(
     *, csv_path: str | Path, db_path: str | Path,
     checkpoint_path: str | Path | None = None,
+    dense_candidate_repetitions: int = 1,
+    profile_dense_reference: bool = False,
 ) -> dict:
     csv = Path(csv_path).resolve()
     database = Path(db_path).resolve()
@@ -632,7 +702,11 @@ def run_localization(
             stack.enter_context(_instrumented_production_path(
                 collector, session, stop_after_discovery=False
             ))
-            stack.enter_context(_additional_instrumentation(collector))
+            stack.enter_context(_additional_instrumentation(
+                collector,
+                dense_candidate_repetitions=dense_candidate_repetitions,
+                profile_dense_reference=profile_dense_reference,
+            ))
             ScanRunner(session, benchmark_configuration()).run(
                 frame,
                 "GF-12C1-R3 real runtime localization",
@@ -700,6 +774,8 @@ def _worker(arguments: dict, result_path: str):
 
 def execute_bounded_localization(
     *, csv_path: str | Path, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    dense_candidate_repetitions: int = 1,
+    profile_dense_reference: bool = False,
 ) -> dict:
     with tempfile.TemporaryDirectory(prefix="gf12c1-r3-") as directory:
         root = Path(directory)
@@ -712,6 +788,8 @@ def execute_bounded_localization(
                 "csv_path": str(Path(csv_path).resolve()),
                 "db_path": str(database),
                 "checkpoint_path": str(checkpoint),
+                "dense_candidate_repetitions": dense_candidate_repetitions,
+                "profile_dense_reference": profile_dense_reference,
             }, str(result_path)),
         )
         started = time.perf_counter()
@@ -749,9 +827,14 @@ def main(argv=None) -> int:
     parser.add_argument("--csv", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--dense-candidate-repetitions", type=int, default=1)
+    parser.add_argument("--profile-dense-reference", action="store_true")
     args = parser.parse_args(argv)
     result = execute_bounded_localization(
-        csv_path=args.csv, timeout_seconds=args.timeout_seconds
+        csv_path=args.csv,
+        timeout_seconds=args.timeout_seconds,
+        dense_candidate_repetitions=args.dense_candidate_repetitions,
+        profile_dense_reference=args.profile_dense_reference,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

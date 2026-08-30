@@ -369,7 +369,11 @@ def test_ps24_no_production_decision_semantic_change():
         if path.startswith("backend/app/") and not path.startswith("backend/app/benchmarks/")
     ]
     character_correction = ["backend/app/services/character_retrieval.py"]
-    assert production_changes in ([], ["backend/app/api/routes_scans.py"], character_correction)
+    gf5_dense_correction = ["backend/app/resolution/resolver.py"]
+    assert production_changes in (
+        [], ["backend/app/api/routes_scans.py"], character_correction,
+        gf5_dense_correction,
+    )
     if production_changes:
         diff = subprocess.run(
             ["git", "diff", "--unified=0", "HEAD", "--", *production_changes],
@@ -378,11 +382,11 @@ def test_ps24_no_production_decision_semantic_change():
             capture_output=True,
             text=True,
         ).stdout
-        expected_marker = (
-            '"category": "scan_failure"'
-            if production_changes == ["backend/app/api/routes_scans.py"]
-            else "zero_neighbor_anchors"
-        )
+        expected_marker = {
+            ("backend/app/api/routes_scans.py",): '"category": "scan_failure"',
+            tuple(character_correction): "zero_neighbor_anchors",
+            tuple(gf5_dense_correction): "_candidate_subset_count",
+        }[tuple(production_changes)]
         assert expected_marker in diff
         for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
             assert forbidden not in diff

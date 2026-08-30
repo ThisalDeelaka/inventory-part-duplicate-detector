@@ -11,7 +11,7 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Synthetic demo browser-default mapping | `PASS` | New Scan multipart defaults; no hidden explicit mapping in acceptance helper |
 | Real target CSV intake | `PASS` | Unchanged 5,327-row historical file validates through browser/API contract |
 | Real target character retrieval | `PASS` | Three deterministic runs; 5,324 full-K anchors, 3 legitimate zero-neighbor anchors, zero failures |
-| Real target CSV end-to-end product | `FAIL` | R3 proves GF5 bounded candidate-group generation dominates on dense eligible work units; GF6 not reached |
+| Real target CSV end-to-end product | `PASS` | R4 preserves existing GF5 cap semantics and completes the unchanged 5,327-row target through authoritative GF6 with `visible_product_ready=true` |
 | Scan completes | `PASS` | Three fresh group-first scans `COMPLETED` |
 | Authoritative group result displays | `PASS` | Identity-read summary/list/detail and group-first Scan Results UI |
 | 2..N semantics visible | `PASS` | Size-2 groups plus one size-3 motor group |
@@ -38,7 +38,7 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 
 ```text
 SHOWABLE WORKING PRODUCT:
-  VERIFIED FOR SYNTHETIC DEMO; REAL TARGET E2E BLOCKED
+  VERIFIED FOR SYNTHETIC DEMO AND REAL-TARGET END-TO-END EXECUTION
 
 DEMO-READY:
   YES
@@ -55,10 +55,11 @@ GF-11 PERFORMANCE DEBT:
 
 This checklist does not mark GF-12 production validation complete.
 
-Real-target character retrieval is verified without fabricated neighbors or an
-exact large-N fallback. The end-to-end real scan remains blocked by a separate
-GF5 candidate-generation runtime condition. R3 completed DISCOVERY and GF4,
-then directly measured the 18-record/130-edge eligible work-unit search as the
-dominant blocker; GF6 was not reached. No retrieval threshold, candidate budget,
-resolver bound, identity semantics, or group-first authority was weakened to
-hide it, and no production optimization was performed.
+Real-target character retrieval remains verified without fabricated neighbors
+or an exact large-N fallback. R4 corrects the GF5 runtime blocker by enforcing
+the existing candidate-generation exhaustion result before discarded candidate
+construction. The real scan completes GF5 and authoritative GF6 with zero
+provider calls. No retrieval threshold, candidate budget, resolver bound,
+identity semantics, cannot-link rule, or group-first authority was weakened.
+This verifies executable product flow, not human-reviewed accuracy, deployment
+readiness, GF-11 graduation, or GF-12 completion.

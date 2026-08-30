@@ -424,7 +424,14 @@ def test_or24_only_safe_error_serialization_changes_in_production():
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
     character_correction = ["backend/app/services/character_retrieval.py"]
-    assert production in ([], ["backend/app/api/routes_scans.py"], character_correction)
+    gf5_dense_correction = [
+        "backend/app/benchmarks/real_data_runtime_localization.py",
+        "backend/app/resolution/resolver.py",
+    ]
+    assert production in (
+        [], ["backend/app/api/routes_scans.py"], character_correction,
+        gf5_dense_correction,
+    )
     if not production:
         return
     diff = subprocess.run(
@@ -434,11 +441,11 @@ def test_or24_only_safe_error_serialization_changes_in_production():
         capture_output=True,
         text=True,
     ).stdout
-    expected_marker = (
-        '"category": "scan_failure"'
-        if production == ["backend/app/api/routes_scans.py"]
-        else "zero_neighbor_anchors"
-    )
+    expected_marker = {
+        ("backend/app/api/routes_scans.py",): '"category": "scan_failure"',
+        tuple(character_correction): "zero_neighbor_anchors",
+        tuple(gf5_dense_correction): "_candidate_subset_count",
+    }[tuple(production)]
     assert expected_marker in diff
     assert "generate_candidate_pairs" not in diff
     assert "threshold" not in diff.casefold()

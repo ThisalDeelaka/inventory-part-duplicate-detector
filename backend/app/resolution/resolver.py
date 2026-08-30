@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from itertools import combinations
+from math import comb
 from typing import Protocol
 
 from app.engine.identity_edge import IdentityEdgeClass
@@ -427,12 +428,25 @@ def _build_group(value, unit, members, lookup, targeted_results):
     return group
 
 
-def _candidate_groups(value, unit, lookup, targeted_results, counters):
-    limit = value.resolver_configuration.complete_pairwise_member_limit
-    maximum_explored = (
+def _candidate_generation_limit(value) -> int:
+    return (
         value.resolver_configuration.max_resolution_members ** 2
         * max(1, value.resolver_configuration.max_targeted_checks_per_work_unit + 1)
     )
+
+
+def _candidate_subset_count(member_count: int, pairwise_limit: int) -> int:
+    """Return the exact number of subsets the canonical generator would visit."""
+    return sum(
+        comb(member_count, size)
+        for size in range(min(member_count, pairwise_limit), 1, -1)
+    )
+
+
+def _candidate_groups_reference(value, unit, lookup, targeted_results, counters):
+    """Historical exhaustive generator retained as the bounded semantic oracle."""
+    limit = value.resolver_configuration.complete_pairwise_member_limit
+    maximum_explored = _candidate_generation_limit(value)
     candidates = []
     exhausted = False
     starting_count = counters.candidate_partitions_explored
@@ -462,11 +476,30 @@ def _candidate_groups(value, unit, lookup, targeted_results, counters):
     return tuple(sorted(unique.values(), key=lambda item: item.group.hypothesis_id)), exhausted
 
 
-def _select_partition(value, candidates, counters):
-    maximum_explored = (
-        value.resolver_configuration.max_resolution_members ** 2
-        * max(1, value.resolver_configuration.max_targeted_checks_per_work_unit + 1)
+def _candidate_groups(value, unit, lookup, targeted_results, counters):
+    """Enforce the existing exhaustive-search budget before discarded work.
+
+    The reference generator always returns ``exhausted=True`` and its caller
+    discards every candidate when the canonical subset count exceeds the
+    unchanged per-work-unit limit.  Counting those subsets combinatorially is
+    therefore an exact fast-forward of that already-authorized outcome.
+    Metrics retain the reference path's strict ``limit + 1`` observation.
+    """
+    maximum_explored = _candidate_generation_limit(value)
+    subset_count = _candidate_subset_count(
+        len(unit.member_ids),
+        value.resolver_configuration.complete_pairwise_member_limit,
     )
+    if subset_count > maximum_explored:
+        counters.candidate_partitions_explored += maximum_explored + 1
+        return (), True
+    return _candidate_groups_reference(
+        value, unit, lookup, targeted_results, counters
+    )
+
+
+def _select_partition(value, candidates, counters):
+    maximum_explored = _candidate_generation_limit(value)
     best_objective = None
     best_partitions = set()
     exhausted = False

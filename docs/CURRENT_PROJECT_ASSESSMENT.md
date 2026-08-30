@@ -1078,3 +1078,26 @@ defers immediately. This proves CPU-bound GF5 algorithmic work expansion rather
 than SQL/persistence amplification. No production optimization, semantic,
 schema, migration, dependency, frontend, provider, or secret change occurred.
 The single next category is `NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`.
+
+## GF-12C1-R4 GF5 dense real-work-unit correction
+
+GF-12C1-R4 is VERIFIED. Exact profiling of the actual 18-record/130-edge unit
+measured 140.614 seconds in the historical generator, dominated by repeated
+group validation for partial candidates discarded after the unchanged 16,400
+attempt budget was exceeded. GF5 now counts the exact canonical subset space
+first and fast-forwards only that inevitable exhausted result, retaining the
+historical generator unchanged for every below-cap and at-cap work unit.
+
+The isolated corrected real call has a three-run median of 0.0000116 seconds
+with identical exhaustion, candidate sequence, and counter behavior. A fresh
+provider-none disposable real scan completed in 146.090 seconds, including
+111.230 seconds GF5 orchestration and 4.668 seconds GF6 orchestration. It
+persisted 214 review groups, 12 conflicts, 22 deferred units, and 4,879
+unassigned records with `visible_product_ready=true` and zero provider calls.
+
+No threshold, evidence rule, cannot-link behavior, group-size limit, targeted
+budget, safety cap, GF2/GF3/GF4/GF6 semantic, schema, migration, dependency,
+frontend, provider, or secret boundary changed. Real-target end-to-end
+group-first execution is VERIFIED. Human accuracy remains unverified, GF-12A2
+remains `HUMAN_REVIEW_DATASET_REQUIRED`, and GF-11 remains IN PROGRESS under
+its ACTIVE waiver with the 300-second debt OPEN.

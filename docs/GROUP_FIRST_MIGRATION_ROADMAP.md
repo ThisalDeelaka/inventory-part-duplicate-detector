@@ -865,3 +865,12 @@ Candidate-group generation is the proven dominant stage, GF6 is not reached,
 and stopped diagnostics remain non-authoritative. No optimization or semantic
 change was made. The single next category is
 `NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`.
+
+GF-12C1-R4 is verified. The resolver now fast-forwards only the mathematically
+inevitable existing candidate-generation exhaustion outcome, preserving the
+16,400 bound, strict limit-plus-one metric, defer reason, complete within-bound
+enumeration, candidate/group semantics, cannot-links, deterministic ranking,
+and all downstream contracts. The real 5,327-row target completes GF5 and GF6
+authoritatively with zero provider calls. Real-target execution is verified;
+human quality, deployment readiness, GF-11 performance graduation, and GF-12
+completion remain open.

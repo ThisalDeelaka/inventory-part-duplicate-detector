@@ -163,6 +163,17 @@ reached. No production optimization or semantic change was made; the authorized
 next category is `NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`. See
 `docs/GF12_REAL_DATA_DOWNSTREAM_RUNTIME_LOCALIZATION.md`.
 
+GF-12C1-R4 corrects that proven GF5 blocker without changing any resolver
+threshold, evidence rule, cannot-link guarantee, group-size limit, ordering
+rule, or safety cap. GF5 now enforces its existing 16,400-attempt exhaustive
+generation budget before constructing candidates that the exhausted path must
+discard. The unchanged 5,327-row target completes authoritatively through GF6
+with `visible_product_ready=true`, 214 review groups, 12 conflicts, 22 deferred
+units, 4,879 unassigned records, and zero provider calls. This verifies the
+real target's current end-to-end group-first execution path; it does not verify
+human accuracy, deployment readiness, GF-11 graduation, or GF-12 completion.
+See `docs/GF12_GF5_DENSE_REAL_WORK_UNIT_CORRECTION.md`.
+
 Until after this milestone, deployment architecture, tenancy, an application IAM/authorization platform, managed production storage, cloud/platform deployment, external integrations, production network/retention policy, and reference production hardware are deferred, not completed. Post-demo work remains separated into authorized human-reviewed quality validation; deployment/IAM/tenancy/storage/network/retention architecture; authorized integrations/provider strategy; and remaining production performance/scale debt.
 
 These are validation-infrastructure results, not final human-reviewed production-quality signoff or GF-12 completion. No numeric quality or reviewer-agreement threshold is authorized. GF-11 remains IN PROGRESS, its performance waiver remains ACTIVE, `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target remains unmet.
