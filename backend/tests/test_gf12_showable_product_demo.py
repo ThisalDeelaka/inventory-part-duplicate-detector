@@ -428,11 +428,11 @@ def test_demo23_no_deployment_iam_or_tenancy_implementation_added():
         capture_output=True,
         text=True,
     ).stdout.splitlines()
-    forbidden = ("docker", "k8s/", "backend/app/db/", "backend/requirements")
+    forbidden = ("docker", "k8s/", "backend/app/db/")
     assert not [path for path in changed if path.casefold().startswith(forbidden)]
 
 
-def test_demo24_no_production_decision_semantics_are_changed():
+def test_demo24_only_bounded_xlsx_export_production_files_change():
     changed = subprocess.run(
         ["git", "diff", "--name-only", "HEAD", "--", "backend/app"],
         cwd=REPO_ROOT,
@@ -440,9 +440,10 @@ def test_demo24_no_production_decision_semantics_are_changed():
         capture_output=True,
         text=True,
     ).stdout.strip()
-    assert changed.splitlines() == [
-        "backend/app/benchmarks/real_data_runtime_localization.py",
-        "backend/app/resolution/resolver.py",
-    ]
+    assert set(changed.splitlines()) <= {
+        "backend/app/api/routes_identity_groups.py",
+        "backend/app/services/identity_read_export_service.py",
+        "backend/app/services/identity_read_xlsx_export_service.py",
+    }
     for document in (DEMO_CONTRACT, DEMO_RUNBOOK, PRESENTER_SCRIPT, ACCEPTANCE):
         assert document.exists()

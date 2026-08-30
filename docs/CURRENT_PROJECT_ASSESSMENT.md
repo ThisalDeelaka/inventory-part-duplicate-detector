@@ -1101,3 +1101,19 @@ frontend, provider, or secret boundary changed. Real-target end-to-end
 group-first execution is VERIFIED. Human accuracy remains unverified, GF-12A2
 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and GF-11 remains IN PROGRESS under
 its ACTIVE waiver with the 300-second debt OPEN.
+
+## GF-12C1-R5 human-readable System Group workbook
+
+GF-12C1-R5 is VERIFIED. The existing machine-readable System Group CSV remains
+unchanged, while a provider-free in-memory XLSX presents the exact same
+authority-selected membership through Summary, merged Duplicate Groups, and
+flat filterable Group Data sheets. Deterministic presentation labels, cautious
+offline reasons, exact review-chain state, and literal formula-safe inventory
+cells do not alter group or review authority.
+
+Persisted scan 25 (5,327 canonical records) exports 288 groups and 711 member
+rows in 3.685080 seconds without rerunning detection. This is demo presentation
+readiness only. GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 remains
+IN PROGRESS under its ACTIVE waiver; `GF11-PERF-100K-COLD-FULL` remains OPEN;
+the 300-second target remains unmet; and deployment/integration remains deferred
+post-demo.

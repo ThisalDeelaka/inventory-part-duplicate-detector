@@ -110,10 +110,13 @@ test('F14 pair diagnostics are demoted under Advanced and have no review control
 test('F15 product export controls use only canonical authority-selected endpoints', () => {
   assert.deepEqual(identityReadExportTargets(21), {
     systemGroups: { path: '/api/scans/21/identity-read/system-groups/export.csv', filename: 'scan-21-system-groups.csv' },
+    systemGroupsExcel: { path: '/api/scans/21/identity-read/system-groups/export.xlsx', filename: 'scan-21-system-groups.xlsx' },
     reviewedIdentities: { path: '/api/scans/21/identity-read/reviewed-identities/export.csv', filename: 'scan-21-reviewed-identities.csv' },
     conflicts: { path: '/api/scans/21/identity-read/conflicts/export.csv', filename: 'scan-21-identity-conflicts.csv' },
     deferred: { path: '/api/scans/21/identity-read/deferred/export.csv', filename: 'scan-21-deferred-identity-work.csv' },
   })
+  assert.match(page, />Export CSV</)
+  assert.match(page, />Export Excel</)
 })
 
 test('F16 valid zero-group rendering is distinct from not-ready rendering', () => {

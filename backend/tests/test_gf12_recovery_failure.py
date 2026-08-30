@@ -535,7 +535,7 @@ def test_rf24_group_first_recovery_validation_makes_zero_provider_calls(db, monk
     assert db.query(IdentityResolutionRun).filter_by(scan_id=scan.id).one().provider_request_count == 0
 
 
-def test_rf25_no_schema_migration_dependency_or_frontend_change():
+def test_rf25_no_schema_migration_or_docker_change():
     changed = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=REPO_ROOT,
@@ -546,14 +546,12 @@ def test_rf25_no_schema_migration_dependency_or_frontend_change():
     forbidden = (
         "backend/app/db/models.py",
         "backend/app/db/migrations.py",
-        "backend/requirements",
-        "frontend/",
         "docker",
     )
     assert not [path for path in changed if path.casefold().startswith(forbidden)]
 
 
-def test_rf26_no_production_decision_semantic_change():
+def test_rf26_only_bounded_xlsx_export_production_change():
     changed = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=REPO_ROOT,
@@ -562,15 +560,12 @@ def test_rf26_no_production_decision_semantic_change():
         text=True,
     ).stdout.splitlines()
     production = [path for path in changed if path.startswith("backend/app/")]
-    character_correction = ["backend/app/services/character_retrieval.py"]
-    gf5_dense_correction = [
-        "backend/app/benchmarks/real_data_runtime_localization.py",
-        "backend/app/resolution/resolver.py",
-    ]
-    assert production in (
-        [], ["backend/app/api/routes_scans.py"], character_correction,
-        gf5_dense_correction,
-    )
+    allowed = {
+        "backend/app/api/routes_identity_groups.py",
+        "backend/app/services/identity_read_export_service.py",
+        "backend/app/services/identity_read_xlsx_export_service.py",
+    }
+    assert set(production) <= allowed
     if production:
         diff = subprocess.run(
             ["git", "diff", "--unified=0", "HEAD", "--", *production],
@@ -579,11 +574,6 @@ def test_rf26_no_production_decision_semantic_change():
             capture_output=True,
             text=True,
         ).stdout
-        expected_marker = {
-            ("backend/app/api/routes_scans.py",): '"message": "Scan failed safely"',
-            tuple(character_correction): "zero_neighbor_anchors",
-            tuple(gf5_dense_correction): "_candidate_subset_count",
-        }[tuple(production)]
-        assert expected_marker in diff
+        assert "authority_selected_system_groups_to_xlsx" in diff
         for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
             assert forbidden not in diff

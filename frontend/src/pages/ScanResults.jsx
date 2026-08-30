@@ -230,7 +230,8 @@ export default function ScanResults() {
       <p>{scan && `${scan.total_records} records scanned · threshold ${scan.threshold} · ${scan.scan_mode}`}</p></div>
       <LlmStatus />
       <div className="actions"><Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
-        <button type="button" onClick={() => download(exports.systemGroups)}>Export System Groups</button>
+        <button type="button" onClick={() => download(exports.systemGroups)}>Export CSV</button>
+        <button type="button" onClick={() => download(exports.systemGroupsExcel)}>Export Excel</button>
         <button type="button" onClick={() => download(exports.reviewedIdentities)}>Export Reviewed Identities</button>
         {!!summary?.conflict_count && <button type="button" className="secondary" onClick={() => download(exports.conflicts)}>Export Conflicts</button>}
         {!!summary?.deferred_count && <button type="button" className="secondary" onClick={() => download(exports.deferred)}>Export Deferred</button>}

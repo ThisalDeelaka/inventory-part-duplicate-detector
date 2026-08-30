@@ -21,7 +21,8 @@ test('canonical reviewed identity export has a distinct authority-selected route
     filename: 'scan-21-reviewed-identities.csv',
   })
   assert.match(resultsSource, />Export Reviewed Identities</)
-  assert.match(resultsSource, />Export System Groups</)
+  assert.match(resultsSource, />Export CSV</)
+  assert.match(resultsSource, />Export Excel</)
 })
 
 test('reviewed export targets an exact selected projection when available', () => {

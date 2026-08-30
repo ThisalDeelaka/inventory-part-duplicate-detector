@@ -56,6 +56,9 @@ from app.services.identity_read_export_service import (
     authority_selected_reviewed_identities_to_csv,
     authority_selected_system_groups_to_csv,
 )
+from app.services.identity_read_xlsx_export_service import (
+    authority_selected_system_groups_to_xlsx,
+)
 from app.identity_read.fingerprints import canonical_value
 from app.identity_read.key_codec import (
     InvalidVersionedIdentityGroupKey,
@@ -243,6 +246,26 @@ def export_authoritative_system_groups(scan_id: int, db: Session = Depends(get_d
     return _identity_read_csv(
         scan_id, db, authority_selected_system_groups_to_csv,
         f"scan-{scan_id}-system-groups.csv",
+    )
+
+
+@router.get("/{scan_id}/identity-read/system-groups/export.xlsx")
+def export_authoritative_system_groups_xlsx(
+    scan_id: int, db: Session = Depends(get_db)
+):
+    _service(db, scan_id)
+    content = _identity_read_safe(
+        lambda: authority_selected_system_groups_to_xlsx(db, scan_id)
+    )
+    return Response(
+        content,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="scan-{scan_id}-system-groups.xlsx"'
+        },
     )
 
 

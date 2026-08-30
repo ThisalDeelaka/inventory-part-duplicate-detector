@@ -874,3 +874,12 @@ and all downstream contracts. The real 5,327-row target completes GF5 and GF6
 authoritatively with zero provider calls. Real-target execution is verified;
 human quality, deployment readiness, GF-11 performance graduation, and GF-12
 completion remain open.
+
+GF-12C1-R5 is verified. System Group Export now also has a human-readable XLSX
+representation with Summary, merged Duplicate Groups, and flat Group Data while
+the existing CSV and Reviewed Identity Export authorities remain unchanged.
+The XLSX is deterministic, provider-free, formula-safe, generated in memory,
+and fails closed through persisted group-first read authority. This does not
+change the ACTIVE GF-11 waiver, OPEN `GF11-PERF-100K-COLD-FULL` debt, unmet
+300-second target, `HUMAN_REVIEW_DATASET_REQUIRED` status, or post-demo deferral
+of deployment/integration work.

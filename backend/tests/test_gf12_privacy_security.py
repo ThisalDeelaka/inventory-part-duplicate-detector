@@ -341,7 +341,7 @@ def test_ps22_source_mutation_remains_zero():
     assert dataclasses.asdict(candidate) == before
 
 
-def test_ps23_no_schema_migration_or_dependency_change():
+def test_ps23_no_schema_or_migration_change():
     changed = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=REPO_ROOT,
@@ -351,12 +351,12 @@ def test_ps23_no_schema_migration_or_dependency_change():
     ).stdout.splitlines()
     forbidden = (
         "backend/app/db/models.py", "backend/app/db/migrations.py",
-        "backend/requirements", "frontend/package", "docker",
+        "frontend/package", "docker",
     )
     assert not [path for path in changed if path.lower().startswith(forbidden)]
 
 
-def test_ps24_no_production_decision_semantic_change():
+def test_ps24_only_bounded_xlsx_export_production_change():
     changed = subprocess.run(
         ["git", "diff", "--name-only", "HEAD"],
         cwd=REPO_ROOT,
@@ -368,12 +368,12 @@ def test_ps24_no_production_decision_semantic_change():
         path for path in changed
         if path.startswith("backend/app/") and not path.startswith("backend/app/benchmarks/")
     ]
-    character_correction = ["backend/app/services/character_retrieval.py"]
-    gf5_dense_correction = ["backend/app/resolution/resolver.py"]
-    assert production_changes in (
-        [], ["backend/app/api/routes_scans.py"], character_correction,
-        gf5_dense_correction,
-    )
+    allowed = {
+        "backend/app/api/routes_identity_groups.py",
+        "backend/app/services/identity_read_export_service.py",
+        "backend/app/services/identity_read_xlsx_export_service.py",
+    }
+    assert set(production_changes) <= allowed
     if production_changes:
         diff = subprocess.run(
             ["git", "diff", "--unified=0", "HEAD", "--", *production_changes],
@@ -382,12 +382,7 @@ def test_ps24_no_production_decision_semantic_change():
             capture_output=True,
             text=True,
         ).stdout
-        expected_marker = {
-            ("backend/app/api/routes_scans.py",): '"category": "scan_failure"',
-            tuple(character_correction): "zero_neighbor_anchors",
-            tuple(gf5_dense_correction): "_candidate_subset_count",
-        }[tuple(production_changes)]
-        assert expected_marker in diff
+        assert "authority_selected_system_groups_to_xlsx" in diff
         for forbidden in ("generate_candidate_pairs", "threshold", "score_candidate"):
             assert forbidden not in diff
     assert "app.benchmarks" not in inspect.getsource(

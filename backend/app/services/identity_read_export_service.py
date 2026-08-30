@@ -109,11 +109,18 @@ def _member(member):
         "uom": member.uom,
         "product_category": member.product_category_id,
         "hsn_sac": member.hsn_sac_code,
+        "part_type": member.type_code,
+        "commodity_group_01": member.prime_commodity,
+        "commodity_group_02": member.second_commodity,
+        "safety_code": member.hazard_code,
+        "accounting_group": member.accounting_group,
+        "product_code": member.part_product_code,
+        "product_family": member.part_product_family,
     }
 
 
-def authority_selected_system_groups_to_csv(db, scan_id: int) -> str:
-    """Export exactly one row per authoritative group member."""
+def authority_selected_system_group_rows(db, scan_id: int):
+    """Return the authoritative snapshot and shared member-shaped export rows."""
     snapshot = IdentityReadService(db).load_identity_read_snapshot(scan_id)
     base = _projection(snapshot)
     rows = []
@@ -139,6 +146,12 @@ def authority_selected_system_groups_to_csv(db, scan_id: int) -> str:
                 "genericity_risk_summary": _json(group.genericity_risk_summary),
                 "missing_evidence_summary": _json(group.missing_evidence_summary),
             })
+    return snapshot, tuple(rows)
+
+
+def authority_selected_system_groups_to_csv(db, scan_id: int) -> str:
+    """Export exactly one row per authoritative group member."""
+    _, rows = authority_selected_system_group_rows(db, scan_id)
     return _csv(SYSTEM_GROUP_EXPORT_FIELDS, rows)
 
 
