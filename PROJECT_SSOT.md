@@ -240,3 +240,16 @@ provider calls and exact G2-v2 API/CSV/XLSX parity. Its read-only quality gate i
 and dirty carbon-stick-versus-pencil review-group patterns. No detector change
 is part of R6; the real output is not frozen as the demo candidate. GF-12A2 and
 GF-11 performance debt remain open.
+
+## GF-12C1-R7 deterministic real-identity quality status
+
+GF-12C1-R7 is verified. The GF4 evidence seam now emits protected, auditable
+cannot-links for explicit incompatible object classes, mutually exclusive tyre
+variants, and the proven dirty-description composite. The existing GF5 resolver
+and G2-v2 projection consume those edges without threshold, cap, group-size,
+status, review, or export changes. Fresh real scan 29 removes the C5/C6/C7 false
+groups, preserves the F30/B38 controls, contains zero surviving groups with the
+new contradiction, makes zero provider calls, and has exact API/CSV/XLSX parity.
+The result is `Q1_DEMO_QUALITY_PLAUSIBLE`; product-owner workbook inspection and
+GF-12A2 human-review validation remain required. GF-11 and its active waiver,
+open 100k cold-full debt, and unmet 300-second target remain unchanged.

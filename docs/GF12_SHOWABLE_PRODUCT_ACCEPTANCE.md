@@ -22,7 +22,8 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Ordinary New Scan selects current authority | `PASS` | Typed browser/API selection persists policy-v2, group-first primary, and G2-v2 even under legacy configuration default |
 | Microsoft Excel table/filter compatibility | `PASS` | Group Data table owns one AutoFilter; package-level and round-trip regressions cover the reported repair defect |
 | Fresh real G2-v2 API/CSV/XLSX parity | `PASS` | Scan 27: 207 groups and 440 member rows match across the exact authority-selected snapshot and exports |
-| Fresh real-output quality canary | `FAIL` | Q2: tyre subtype, wheel/tyre, and dirty carbon-stick/pencil review groups require a separate bounded correction before freezing the real workbook |
+| R6 fresh real-output quality canary | `FAIL` | Historical Q2 finding: tyre subtype, wheel/tyre, and dirty carbon-stick/pencil false review groups |
+| R7 corrected real-output quality canary | `PASS` | Scan 29 removes all three false groups through protected GF4 contradictions, preserves F30/B38 controls, and has no surviving group with the new contradiction |
 | Reviewed Identity Export authority | `PASS` | Header-only before/Unsure; 3 member rows only after current confirmed review |
 | Failure boundary safe | `PASS` | Controlled synthetic failed scan is non-authoritative; final read/export return 409 |
 | Pair provider none | `PASS` | `LLM_DEMO_ENABLED=false`, `LLM_PROVIDER=none` |
@@ -65,6 +66,12 @@ acceptance remains verified; the fresh real workbook must not be frozen as the
 demo candidate until the three documented deterministic review-group patterns
 receive a separate bounded correction. GF-12A2 remains
 `HUMAN_REVIEW_DATASET_REQUIRED`.
+
+R7 resolves the three documented R6 deterministic false-group patterns without
+changing retrieval, GF5 thresholds/caps, projection, review, or export
+authority. Fresh scan 29 is `Q1_DEMO_QUALITY_PLAUSIBLE` and has exact G2-v2
+API/CSV/XLSX parity. Product-owner workbook inspection and GF-12A2 human-label
+validation remain required before any broader accuracy claim.
 
 Real-target character retrieval remains verified without fabricated neighbors
 or an exact large-N fallback. R4 corrects the GF5 runtime blocker by enforcing

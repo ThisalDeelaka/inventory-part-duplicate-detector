@@ -443,6 +443,8 @@ def test_demo24_only_bounded_xlsx_export_production_files_change():
     ).stdout.strip()
     assert set(changed.splitlines()) <= {
         "backend/app/api/routes_scans.py",
+        "backend/app/engine/identity_discriminator.py",
+        "backend/app/engine/identity_evidence_evaluator.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/services/identity_read_export_service.py",

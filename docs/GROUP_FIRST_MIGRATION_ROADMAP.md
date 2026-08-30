@@ -893,3 +893,12 @@ read-only canary is `Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION`: tyre subtypes,
 wheel versus tyre, and dirty carbon-stick versus pencil are repeatable review-
 group failure patterns. Detector semantics were not changed in R6. A separate
 bounded correction is required before freezing this real output for demo use.
+
+GF-12C1-R7 is verified. A bounded `identity-discriminator-v1` now promotes
+explicit incompatible physical classes, mutually exclusive tyre variants, and
+the proven copied-description/part-number/UOM composite to auditable GF4
+cannot-links. Existing GF5 whole-group safety consumes those edges unchanged.
+Fresh scan 29 removes C5/C6/C7, preserves C8/C9, contains zero accepted groups
+with the new contradiction, and has exact G2-v2 API/CSV/XLSX parity. Its quality
+gate is `Q1_DEMO_QUALITY_PLAUSIBLE`; manual workbook inspection and GF-12A2
+human-label validation remain open.

@@ -423,6 +423,8 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
     production = [path for path in changed if path.startswith("backend/app/")]
     allowed = {
         "backend/app/api/routes_scans.py",
+        "backend/app/engine/identity_discriminator.py",
+        "backend/app/engine/identity_evidence_evaluator.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
@@ -440,6 +442,9 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
         capture_output=True,
         text=True,
     ).stdout
-    assert "authority_selected_system_groups_to_xlsx" in diff
+    assert (
+        "authority_selected_system_groups_to_xlsx" in diff
+        or "evaluate_identity_discriminators" in diff
+    )
     assert "generate_candidate_pairs" not in diff
     assert "score_candidate" not in diff

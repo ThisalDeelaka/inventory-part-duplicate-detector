@@ -1141,3 +1141,21 @@ a carbon-stick part with a pencil part. No detector semantics were changed.
 The real workbook is not the frozen demo candidate pending a separate bounded
 correction. Human-quality certification remains open and GF-12A2 remains
 `HUMAN_REVIEW_DATASET_REQUIRED`.
+
+## GF-12C1-R7 deterministic identity contradictions
+
+GF-12C1-R7 is VERIFIED. Root-cause tracing proved that C5 subtype evidence and
+C6/C7 object-class evidence were absent from GF4, rather than dropped by GF5.
+The new bounded discriminator uses explicit part-number/description classes,
+explicit mutually exclusive tyre variants, and a narrowly composite copied-
+description rule whose UOM evidence is contextual rather than universally
+authoritative. It persists auditable provenance through existing GF4 fields and
+requires no schema change.
+
+Fresh real scan 29 completed current-product G2-v2 authority in 449.346238
+seconds with 206 groups (113 likely, 93 review), 24 conflicts, 31 deferred
+units, 4,890 unassigned records, and zero provider calls. C5/C6/C7 are protected
+conflicts; F30 and B38 corresponding groups remain intact; no surviving group
+contains the new contradiction; and API/CSV/XLSX membership parity is exact.
+The result is `Q1_DEMO_QUALITY_PLAUSIBLE`, not human accuracy certification.
+Manual workbook inspection and GF-12A2 remain open.

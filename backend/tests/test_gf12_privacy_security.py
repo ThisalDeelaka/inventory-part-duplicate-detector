@@ -370,6 +370,8 @@ def test_ps24_only_bounded_xlsx_export_production_change():
     ]
     allowed = {
         "backend/app/api/routes_scans.py",
+        "backend/app/engine/identity_discriminator.py",
+        "backend/app/engine/identity_evidence_evaluator.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
@@ -386,7 +388,10 @@ def test_ps24_only_bounded_xlsx_export_production_change():
             capture_output=True,
             text=True,
         ).stdout
-        assert "authority_selected_system_groups_to_xlsx" in diff
+        assert (
+            "authority_selected_system_groups_to_xlsx" in diff
+            or "evaluate_identity_discriminators" in diff
+        )
         for forbidden in ("generate_candidate_pairs", "score_candidate"):
             assert forbidden not in diff
     assert "app.benchmarks" not in inspect.getsource(

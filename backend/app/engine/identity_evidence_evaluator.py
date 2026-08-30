@@ -12,6 +12,10 @@ from app.engine.identity_edge import (
     IdentityEdgeClass,
     classify_identity_edge,
 )
+from app.engine.identity_discriminator import (
+    IDENTITY_DISCRIMINATOR_VERSION,
+    evaluate_identity_discriminators,
+)
 from app.engine.scoring import score_candidate
 from app.engine.uom_relationship import classify_uom_relationship
 from app.services.canonical_record_service import (
@@ -21,7 +25,7 @@ from app.services.canonical_record_service import (
 
 
 IDENTITY_EVIDENCE_CONTRACT_VERSION = "identity-evidence-edge-v1"
-IDENTITY_EVIDENCE_EVALUATOR_VERSION = "canonical-identity-evaluator-v1"
+IDENTITY_EVIDENCE_EVALUATOR_VERSION = "canonical-identity-evaluator-v2"
 _COMPONENT_FIELDS = (
     "description_similarity",
     "tfidf_score",
@@ -68,6 +72,7 @@ def deterministic_context_payload(context: DeterministicIdentityContext) -> dict
     return {
         "evaluator_version": IDENTITY_EVIDENCE_EVALUATOR_VERSION,
         "edge_classifier_version": IDENTITY_EDGE_CLASSIFIER_VERSION,
+        "identity_discriminator_version": IDENTITY_DISCRIMINATOR_VERSION,
         "scan_mode": str(context.scan_mode),
         "selected_fields": sorted(set(context.selected_fields)),
         "uom_is_mapping_context": True,
@@ -96,11 +101,18 @@ def evaluate_canonical_identity_relationship(
         context.scan_mode,
         allow_uom_mapping_review=True,
     )
-    classification = classify_identity_edge(result)
+    discriminator = evaluate_identity_discriminators(
+        left.part_no, left.description, left.uom,
+        right.part_no, right.description, right.uom,
+    )
+    protected_conflicts = list(result.get("critical_mismatches") or [])
+    protected_conflicts.extend(discriminator.protected_conflicts)
+    classification_input = dict(result)
+    classification_input["critical_mismatches"] = protected_conflicts
+    classification = classify_identity_edge(classification_input)
     component_scores = {
         field: float(result.get(field) or 0.0) for field in _COMPONENT_FIELDS
     }
-    protected_conflicts = list(result.get("critical_mismatches") or [])
     generic_evidence = {
         "description_1_generic": is_generic_description(left.description),
         "description_2_generic": is_generic_description(right.description),
@@ -118,6 +130,7 @@ def evaluate_canonical_identity_relationship(
         "normalized_description_2": result.get("normalized_description_b") or "",
         "normalized_part_no_1": result.get("normalized_part_no_a") or "",
         "normalized_part_no_2": result.get("normalized_part_no_b") or "",
+        "identity_discriminator": discriminator.evidence_payload,
     }
     uom = classify_uom_relationship(left.uom, right.uom)
     uom_context = {
