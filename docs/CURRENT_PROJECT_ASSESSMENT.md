@@ -6,6 +6,7 @@ This document describes the observed repository state. It is not a requirements 
 
 ## Assessed baseline
 
+- Baseline HEAD before the GF-12C1-R12 evidence commit: `73e3e382f5275ed3c00582ba3ab130a978ca34f7`.
 - Baseline HEAD before the GF-12C1 demo-readiness commit: `a836585a6b7634e03f716cb470843f58f6b8fb8f`.
 - Baseline HEAD before the GF-12B3 validation commit: `1c4e7d9876719e194bad252f0f23e5a44202bd3a`.
 - Baseline HEAD before the GF-12B2 validation commit: `4b644b08dac59dddba2893556c356d71f4b55a8f`.
@@ -1216,3 +1217,23 @@ accuracy remains unverified, GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`,
 GF-11 remains `IN PROGRESS` with its waiver `ACTIVE`, the 100k cold-full debt
 `OPEN`, and the 300-second target unmet. Deployment/integration remains
 deferred.
+
+## GF-12C1-R12 final freeze-only quality result
+
+R12 is `DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`. R11 scan 2 was not locally
+available as its authoritative 5,327-record snapshot, so the one permitted
+fresh browser-equivalent run used a disposable database and the unchanged R11
+baseline. Scan 1 completed in 893.978466 seconds with current-product policy
+v2, group-first primary, G2-v2 visible authority, 205 groups, 431 grouped
+members, 114 likely, 91 review, 31 conflicts, 30 deferred units, 4,896
+unassigned records, and zero provider calls. API, CSV, both XLSX group views,
+and package guards pass exactly; the all-group deterministic contradiction
+sweep is zero.
+
+The deterministic risk screen flagged 204 of 205 groups and all 204 were
+inspected. Audit labels are A=52, B=35, C=111, D=4, E=2. The four D groups are
+brush/paint, Model S/Model X, wood/steel-frame, and coil-spring/staplers under
+copied or dirty text. The freeze fails without a detector change and the
+architecture assessment is `ARCHITECTURE_PATCHING_RISK_REMAINS_HIGH`. GF-11,
+GF-12A2, deployment, tenancy, IAM, storage, integrations, and human-quality
+certification remain open or unclaimed.

@@ -305,3 +305,21 @@ bounded detector-quality pass, not human accuracy certification. GF-12A2 stays
 `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 stays `IN PROGRESS` under its `ACTIVE`
 waiver, `GF11-PERF-100K-COLD-FULL` stays `OPEN`, the 300-second target remains
 unmet, and deployment/integration remains deferred.
+
+## GF-12C1-R12 final freeze-only audit status
+
+GF-12C1-R12 is `DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`. The one permitted fresh
+browser-equivalent real run completed on the unchanged R11 detector baseline
+with current-product G2-v2 authority, visible readiness, exact API/CSV/XLSX
+parity, valid XLSX packaging, zero provider calls, and zero internal persisted
+cannot-link or bounded discriminator contradictions. Its deterministic
+all-group risk screen required inspection of 204 groups.
+
+The offline audit found four likely false groups: brush/paint, Model S/Model X,
+wood/steel-frame, and coil-spring/staplers under copied or dirty descriptions.
+No detector semantic was changed and the demo candidate is not frozen. This
+repeated appearance of obvious unrelated identity nouns outside successive
+bounded vocabularies is `ARCHITECTURE_PATCHING_RISK_REMAINS_HIGH`; further
+noun-specific expansion is not authorized by this status update. GF-12A2 and
+GF-11 performance debt remain open, and deployment/integration remains
+deferred.

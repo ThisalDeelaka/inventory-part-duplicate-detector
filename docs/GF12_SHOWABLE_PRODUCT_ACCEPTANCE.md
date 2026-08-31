@@ -28,6 +28,7 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | R9 repeated semantic freeze audit | `FAIL` | A distinct left-side/right-side shock abbreviation group remains under a copied description; classification is `R9_QUALITY_CORRECTION_PARTIAL_NEW_BLOCKER` |
 | R10 directional-side target | `PASS` | Scan 31 places the LEFT/RIGHT shock pair in a protected conflict; no accepted group contains a side contradiction |
 | R10 repeated semantic freeze audit | `FAIL` | The directional implementation is verified; a distinct BUFFER01/MIRROR01 copied-description false group still blocks overall freeze |
+| R12 final freeze-only real audit | `FAIL` | Exact product/export authority and package guards pass, but four likely false groups block freezing the full-real demo candidate |
 | Reviewed Identity Export authority | `PASS` | Header-only before/Unsure; 3 member rows only after current confirmed review |
 | Failure boundary safe | `PASS` | Controlled synthetic failed scan is non-authoritative; final read/export return 409 |
 | Pair provider none | `PASS` | `LLM_DEMO_ENABLED=false`, `LLM_PROVIDER=none` |
@@ -50,7 +51,7 @@ SHOWABLE WORKING PRODUCT:
   VERIFIED FOR SYNTHETIC DEMO AND REAL-TARGET END-TO-END EXECUTION
 
 DEMO-READY:
-  YES
+  SYNTHETIC PATH YES; FULL-REAL FREEZE NO
 
 PRODUCTION DEPLOYMENT READY:
   NO CLAIM
@@ -109,3 +110,13 @@ holds. This is `R11_QUALITY_PASS_READY_FOR_FINAL_FREEZE`; it authorizes one
 freeze-only audit with no further detector changes. It does not complete
 GF-12A2 human validation, GF-11 performance graduation, deployment, tenancy,
 IAM, storage, or integration readiness.
+
+R12 performs the authorized freeze-only audit without changing detector
+semantics. Its exact current-product G2-v2 product path, API/CSV/XLSX parity,
+workbook package, provider-none boundary, and deterministic internal safety
+sweep pass. The complete flagged-group inspection nevertheless finds four
+likely false identity groups outside the successive bounded vocabularies.
+Therefore the synthetic path remains showable and the full-real path remains
+executable, but the full-real candidate is not frozen and must not be described
+as demo-ready. The architecture/evidence boundary requires reassessment before
+further semantic expansion.
