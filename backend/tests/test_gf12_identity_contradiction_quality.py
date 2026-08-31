@@ -129,6 +129,7 @@ def test_n1_n6_explicit_negative_fixtures_become_cannot_link(left, right, reason
     if reason != "STRUCTURAL_ROLE":
         assert conflicts[-1]["provenance"] in {
             "EXPLICIT_TWO_SIDED_OBJECT_CLASS",
+            "EXPLICIT_TWO_SIDED_PART_NUMBER_CLASS",
             "EXPLICIT_TWO_SIDED_VARIANT",
             "PART_NUMBER_DESCRIPTION_UOM_COMPOSITE",
         }
@@ -243,7 +244,7 @@ def test_gf4_provenance_and_fingerprint_are_orientation_stable_and_repeatable():
     reverse = evaluated(right, left)
     assert runs[0] == runs[1] == runs[2] == reverse
     technical = json.loads(runs[0].technical_evidence_json)
-    assert technical["identity_discriminator"]["version"] == "identity-discriminator-v1"
+    assert technical["identity_discriminator"]["version"] == "identity-discriminator-v2"
     assert json.loads(runs[0].protected_conflicts_json)[0]["provenance"] == (
         "EXPLICIT_TWO_SIDED_OBJECT_CLASS"
     )

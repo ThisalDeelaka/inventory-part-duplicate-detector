@@ -219,6 +219,25 @@ The approved sequence is:
 
 The phase order may change only through an explicit architecture decision.
 
+## GF-12C1-R9 discriminator coverage status
+
+GF-12C1-R9 is `R9_QUALITY_CORRECTION_PARTIAL_NEW_BLOCKER`. The bounded
+`identity-discriminator-v2` corrects all four R8 false groups through reusable
+wheel/rim aliasing, explicit physical-component classes, explicit commercial
+construct classes, and two-sided part-number contradiction provenance. Fresh
+current-product scan 30 completed with G2-v2 authority, 196 groups, 414 grouped
+members, 113 likely, 83 review, 30 conflicts, 31 deferred units, 4,913
+unassigned records, and zero provider calls. All current protected endpoints
+remain outside accepted groups and CSV/XLSX parity is exact.
+
+The repeated 45-group audit found one distinct next blocker: left-side versus
+right-side shock abbreviations under a copied description. R9 does not broaden
+its ontology to cover that separate variant family. The real output is not
+freeze-ready. GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 remains
+`IN PROGRESS` under its `ACTIVE` waiver, `GF11-PERF-100K-COLD-FULL` remains
+`OPEN`, and the 300-second target remains unmet. Deployment and integration
+remain deferred.
+
 ## Pair-path migration status
 
 Current: pair machinery remains operational compatibility infrastructure and internal evidence.

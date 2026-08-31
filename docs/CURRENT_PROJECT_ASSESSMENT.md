@@ -1159,3 +1159,22 @@ conflicts; F30 and B38 corresponding groups remain intact; no surviving group
 contains the new contradiction; and API/CSV/XLSX membership parity is exact.
 The result is `Q1_DEMO_QUALITY_PLAUSIBLE`, not human accuracy certification.
 Manual workbook inspection and GF-12A2 remain open.
+
+## GF-12C1-R9 false-group discriminator coverage
+
+R9 corrects the four R8 failures without changing retrieval, thresholds, GF5
+caps, group size, status, review/export authority, schema, dependencies, or the
+frontend. `identity-discriminator-v2` adds bounded record-local class and
+construct coverage plus auditable two-sided part-number contradiction
+provenance. Fresh current-product scan 30 completed in 696.028868 seconds with
+196 groups (113 likely, 83 review), 30 conflicts, 31 deferred units, 4,913
+unassigned records, zero provider calls, no protected endpoints inside accepted
+groups, and exact 414-member CSV/XLSX parity.
+
+The repeated deterministic 45-group semantic audit is A=6, B=11, C=26, D=1,
+E=1. The remaining D case is a distinct left-side/right-side shock abbreviation
+variant gap obscured by a copied description. Therefore the classification is
+`R9_QUALITY_CORRECTION_PARTIAL_NEW_BLOCKER`, not freeze readiness or human
+accuracy certification. GF-12A2 stays `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11
+stays `IN PROGRESS` with its waiver `ACTIVE`, the 100k cold-full debt `OPEN`,
+and the 300-second target not met. Deployment/integration stays deferred.

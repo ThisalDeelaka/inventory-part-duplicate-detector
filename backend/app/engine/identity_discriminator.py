@@ -15,16 +15,32 @@ from app.engine.normalizer import normalize_description
 from app.engine.uom_relationship import UomRelationship, classify_uom_relationship
 
 
-IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v1"
+IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v2"
 
 _OBJECT_CLASS_PATTERNS = {
     "carbon-stick": (r"\bcarbon\s+sticks?\b",),
+    "clutch-disk": (r"\bclutch\s*dis[ck]s?\b",),
+    "coil-spring": (r"\bcoil\s*springs?\b",),
+    "commercial-condition": (r"\bconditions?\b",),
+    "commercial-discount": (r"\bdiscounts?\b",),
+    "dust-cap": (r"\bdust\s*caps?\b",),
+    "nail": (r"\bnails?\b",),
     "pencil": (r"\bpencils?\b",),
+    "table": (r"\btables?\b",),
     "tyre": (r"\btyres?\b", r"\btires?\b"),
-    "wheel": (r"\bwheels?\b",),
+    "wheel": (r"\bwheels?\b", r"\brims?\b"),
 }
+_PART_NUMBER_ONLY_CLASSES = frozenset({
+    "commercial-condition",
+    "commercial-discount",
+})
 _INCOMPATIBLE_OBJECT_CLASSES = frozenset({
     frozenset(("carbon-stick", "pencil")),
+    frozenset(("clutch-disk", "coil-spring")),
+    frozenset(("clutch-disk", "dust-cap")),
+    frozenset(("coil-spring", "dust-cap")),
+    frozenset(("commercial-condition", "commercial-discount")),
+    frozenset(("nail", "table")),
     frozenset(("tyre", "wheel")),
 })
 _TYRE_VARIANT_PATTERNS = {
@@ -49,11 +65,15 @@ class IdentityDiscriminatorResult:
     evidence_payload: dict
 
 
-def _classes(value) -> tuple[str, ...]:
+def _classes(value, source_family: str) -> tuple[str, ...]:
     normalized = normalize_description(value)
     return tuple(sorted(
         object_class
         for object_class, patterns in _OBJECT_CLASS_PATTERNS.items()
+        if not (
+            source_family != "PART_NUMBER"
+            and object_class in _PART_NUMBER_ONLY_CLASSES
+        )
         if any(re.search(pattern, normalized) for pattern in patterns)
     ))
 
@@ -71,8 +91,8 @@ def _tyre_variants(value, classes: tuple[str, ...]) -> set[str]:
 
 def extract_record_discriminators(part_no, description) -> RecordDiscriminatorEvidence:
     """Extract only explicit, record-local evidence; unknown stays unknown."""
-    part_classes = _classes(part_no)
-    description_classes = _classes(description)
+    part_classes = _classes(part_no, "PART_NUMBER")
+    description_classes = _classes(description, "DESCRIPTION")
     shared = set(part_classes) & set(description_classes)
     if len(shared) == 1:
         resolved = next(iter(shared))
@@ -103,6 +123,24 @@ def _incompatible(left: str | None, right: str | None) -> bool:
         left and right
         and frozenset((left, right)) in _INCOMPATIBLE_OBJECT_CLASSES
     )
+
+
+def _explicit_part_number_conflict(
+    first: RecordDiscriminatorEvidence,
+    second: RecordDiscriminatorEvidence,
+) -> tuple[str, str] | None:
+    """Prefer two explicit incompatible part-number nouns over copied text."""
+    if len(first.part_number_classes) != 1 or len(second.part_number_classes) != 1:
+        return None
+    left = first.part_number_classes[0]
+    right = second.part_number_classes[0]
+    return (left, right) if _incompatible(left, right) else None
+
+
+def _conflict_group(left: str, right: str) -> tuple[str, str]:
+    if left.startswith("commercial-") and right.startswith("commercial-"):
+        return "IDENTITY_CONSTRUCT_CLASS", "commercial identity construct"
+    return "IDENTITY_OBJECT_CLASS", "physical object class"
 
 
 def _dirty_description_conflict(
@@ -140,26 +178,34 @@ def evaluate_identity_discriminators(
     conflicts = []
 
     if _incompatible(first.resolved_object_class, second.resolved_object_class):
+        group, label = _conflict_group(
+            first.resolved_object_class, second.resolved_object_class
+        )
         conflicts.append({
-            "group": "IDENTITY_OBJECT_CLASS",
-            "label": "physical object class",
+            "group": group,
+            "label": label,
             "values_a": [first.resolved_object_class],
             "values_b": [second.resolved_object_class],
             "provenance": "EXPLICIT_TWO_SIDED_OBJECT_CLASS",
         })
     else:
-        composite = _dirty_description_conflict(first, second, uom.relationship)
+        composite = _explicit_part_number_conflict(first, second)
+        provenance = "EXPLICIT_TWO_SIDED_PART_NUMBER_CLASS"
+        if composite is None:
+            composite = _dirty_description_conflict(first, second, uom.relationship)
+            provenance = "PART_NUMBER_DESCRIPTION_UOM_COMPOSITE"
         if composite is None:
             reverse = _dirty_description_conflict(second, first, uom.relationship)
             if reverse is not None:
                 composite = (reverse[1], reverse[0])
         if composite is not None:
+            group, label = _conflict_group(*composite)
             conflicts.append({
-                "group": "IDENTITY_OBJECT_CLASS",
-                "label": "physical object class",
+                "group": group,
+                "label": label,
                 "values_a": [composite[0]],
                 "values_b": [composite[1]],
-                "provenance": "PART_NUMBER_DESCRIPTION_UOM_COMPOSITE",
+                "provenance": provenance,
             })
 
     if (

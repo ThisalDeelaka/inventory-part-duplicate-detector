@@ -902,3 +902,14 @@ Fresh scan 29 removes C5/C6/C7, preserves C8/C9, contains zero accepted groups
 with the new contradiction, and has exact G2-v2 API/CSV/XLSX parity. Its quality
 gate is `Q1_DEMO_QUALITY_PLAUSIBLE`; manual workbook inspection and GF-12A2
 human-label validation remain open.
+
+GF-12C1-R9 is a partial quality correction. It extends the same GF4 identity
+discriminator contract with bounded reusable aliases/classes and explicit
+two-sided part-number contradiction provenance. Fresh scan 30 safely separates
+all four R8 D families, preserves R7 controls, makes zero provider calls, has
+zero protected contradictions inside accepted groups, and retains exact
+G2-v2 CSV/XLSX parity. A repeated 45-group audit nevertheless finds one new,
+separate left-side/right-side shock abbreviation family. The next work, if
+authorized, is limited to that proven directional-variant gap; the demo freeze
+must not be claimed yet. GF-11 performance debt and GF-12A2 human review remain
+open and deployment/integration remains deferred.

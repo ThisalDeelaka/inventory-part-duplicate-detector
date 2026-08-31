@@ -24,6 +24,8 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Fresh real G2-v2 API/CSV/XLSX parity | `PASS` | Scan 27: 207 groups and 440 member rows match across the exact authority-selected snapshot and exports |
 | R6 fresh real-output quality canary | `FAIL` | Historical Q2 finding: tyre subtype, wheel/tyre, and dirty carbon-stick/pencil false review groups |
 | R7 corrected real-output quality canary | `PASS` | Scan 29 removes all three false groups through protected GF4 contradictions, preserves F30/B38 controls, and has no surviving group with the new contradiction |
+| R9 bounded D1-D4 correction | `PASS` | Scan 30 safely separates all four R8 false-group families; R7 controls remain safe and no accepted group contains protected endpoints |
+| R9 repeated semantic freeze audit | `FAIL` | A distinct left-side/right-side shock abbreviation group remains under a copied description; classification is `R9_QUALITY_CORRECTION_PARTIAL_NEW_BLOCKER` |
 | Reviewed Identity Export authority | `PASS` | Header-only before/Unsure; 3 member rows only after current confirmed review |
 | Failure boundary safe | `PASS` | Controlled synthetic failed scan is non-authoritative; final read/export return 409 |
 | Pair provider none | `PASS` | `LLM_DEMO_ENABLED=false`, `LLM_PROVIDER=none` |
@@ -81,3 +83,12 @@ provider calls. No retrieval threshold, candidate budget, resolver bound,
 identity semantics, cannot-link rule, or group-first authority was weakened.
 This verifies executable product flow, not human-reviewed accuracy, deployment
 readiness, GF-11 graduation, or GF-12 completion.
+
+R9 corrects the four R8 detector-quality targets through bounded deterministic
+identity semantics and preserves exact scan-30 G2-v2 API/CSV/XLSX membership.
+The repeated 45-group audit still contains one likely false group caused by a
+separate left-side/right-side shock abbreviation extraction gap. Consequently
+the synthetic product remains showable and the real end-to-end path remains
+executable, but the fresh real result is not a frozen demo candidate. No Reason
+polish is authorized. GF-12A2 human validation, GF-11 performance debt, and
+deployment/integration remain open.
