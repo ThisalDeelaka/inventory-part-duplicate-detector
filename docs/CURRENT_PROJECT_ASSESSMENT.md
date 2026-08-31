@@ -1277,3 +1277,16 @@ every record with zero failures in 23.488907 seconds. No pair evidence, GF4
 classification, persistence, or runtime call site is introduced. The detector
 remains unfrozen; R12, GF-11/waiver/performance debt, GF-12A2 human evidence,
 and deferred deployment/integration statuses are unchanged.
+
+## GF-12C1-R16 signed evidence shadow
+
+R16 implements pure pairwise `SignedIdentityEvidence` derivation for tests and
+offline audit only. It preserves independent support and contradiction channels,
+maps protected historical conflicts to bounded contradictions, and gives no
+misleading identity support to the four R12 false groups. Across all 252
+accepted-group edges, 240 are lexical-only and 12 contain trusted identity.
+The result is `R16_SIGNED_EVIDENCE_VERIFIED_BUT_GATE_NOT_READY`: seven named
+legitimate controls still lack trusted identity evidence, so no GF4 gate,
+runtime import, persistence, or detector semantic change is authorized. The
+detector remains unfrozen; R12, GF-11/waiver/performance debt, GF-12A2 human
+evidence, and deferred deployment/integration statuses are unchanged.

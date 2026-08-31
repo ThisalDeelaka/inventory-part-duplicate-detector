@@ -211,12 +211,14 @@ def derive_identity_signature(record, *, record_reference: str | None = None) ->
             class_matches = discriminator.part_number_class_matches
             sides = discriminator.part_number_sides
             side_matches = discriminator.part_number_side_matches
+            side_base = discriminator.part_number_side_base
         else:
             discriminator = extract_record_discriminators("", raw_value)
             classes = discriminator.description_classes
             class_matches = discriminator.description_class_matches
             sides = discriminator.description_sides
             side_matches = discriminator.description_side_matches
+            side_base = discriminator.description_side_base
 
         for object_class in classes:
             evidence = tuple(class_matches) or (object_class,)
@@ -249,6 +251,19 @@ def derive_identity_signature(record, *, record_reference: str | None = None) ->
             recognized_tokens_by_source[source_field].update(
                 token for item in evidence for token in normalize_description(item).split()
             )
+
+        if sides and side_base:
+            source = _source_observation(
+                source_field, _bounded_tokens(side_base), generic=generic,
+                description_master_match=description_master_match,
+                purpose=f"{IDENTITY_DISCRIMINATOR_VERSION}_SIDE_BASE",
+            )
+            _add_observation(
+                grouped, IdentitySemanticCategory.VARIANT_IDENTITY,
+                "directional_component_base", side_base, source,
+                "BOUNDED_DIRECTIONAL_COMPONENT_BASE_RECOGNIZED",
+            )
+            recognized_tokens_by_source[source_field].update(side_base.split())
 
         for tyre_variant in discriminator.tyre_variants:
             source = _source_observation(

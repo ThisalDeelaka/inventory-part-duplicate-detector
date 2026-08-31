@@ -365,3 +365,19 @@ unfrozen and R12 remains `DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`. GF-11 remains
 `IN PROGRESS` under its `ACTIVE` waiver, `GF11-PERF-100K-COLD-FULL` remains
 `OPEN`, the 300-second target remains unmet, GF-12A2 remains
 `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration remain deferred.
+
+## GF-12C1-R16 signed identity evidence shadow status
+
+GF-12C1-R16 is `R16_SIGNED_EVIDENCE_VERIFIED_BUT_GATE_NOT_READY`. Pure,
+non-authoritative pairwise signed evidence keeps identity, attribute, lexical,
+and contradiction channels distinct. Protected historical families retain
+explicit contradictions, while the four R12 false groups remain lexical or
+unresolved without misleading identity support. A read-only audit of all 252
+complete-pair edges in the 205 accepted R12 groups classified 240 as lexical
+only and 12 as trusted identity. Seven named legitimate controls remain
+lexical-only risks, so no GF4 gate or runtime integration is authorized. The
+detector remains unfrozen and R12 remains `DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`.
+GF-11 remains `IN PROGRESS` under its `ACTIVE` waiver,
+`GF11-PERF-100K-COLD-FULL` remains `OPEN`, the 300-second target remains unmet,
+GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration
+remain deferred.

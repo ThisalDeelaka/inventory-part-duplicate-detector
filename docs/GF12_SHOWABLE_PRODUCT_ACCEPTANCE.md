@@ -147,3 +147,12 @@ rows with zero failures proves representation coverage, not demo quality. The
 R12 full-real freeze failure and unfrozen detector status remain unchanged;
 GF-11 debt, GF-12A2 human validation, and deployment/integration remain open or
 deferred.
+
+R16 adds only pure pairwise signed-evidence derivation in tests and offline
+shadow audit. Protected contradictions remain represented and the four R12
+false groups receive lexical/unresolved evidence without misleading identity
+support, but seven legitimate controls remain lexical-only risks. This is not
+a quality fix and does not authorize a GF4 gate, a normal scan, or any visible
+product authority change. The full-real detector remains unfrozen and the R12
+freeze failure remains in force; GF-11 debt, GF-12A2 human validation, and
+deployment/integration remain open or deferred.

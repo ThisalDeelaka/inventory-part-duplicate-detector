@@ -226,6 +226,11 @@ def _incompatible(left: str | None, right: str | None) -> bool:
     )
 
 
+def object_classes_are_incompatible(left: str | None, right: str | None) -> bool:
+    """Expose the existing bounded relation without creating a second ontology."""
+    return _incompatible(left, right)
+
+
 def _explicit_part_number_conflict(
     first: RecordDiscriminatorEvidence,
     second: RecordDiscriminatorEvidence,

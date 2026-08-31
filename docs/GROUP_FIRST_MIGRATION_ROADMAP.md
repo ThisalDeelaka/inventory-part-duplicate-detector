@@ -962,3 +962,13 @@ provider calls. The next permitted unit is non-authoritative pairwise
 `SignedIdentityEvidence` derivation in tests/offline shadow mode, with no GF4
 support-classification change. The detector remains unfrozen; all GF-11,
 GF-12A2, and deployment/integration constraints remain in force.
+
+GF-12C1-R16 completes the non-authoritative pairwise signed-evidence shadow
+unit. Protected contradictions remain explicit and the four R12 false groups
+receive no misleading identity support, but seven named legitimate controls
+remain lexical-only. The next permitted unit is a bounded representation and
+evidence study for those seven controls in golden tests and offline shadow
+mode. It must not make copied text or structural family prefixes authoritative
+and must not add a GF4 decision gate or runtime integration. The detector
+remains unfrozen; all GF-11, GF-12A2, and deployment/integration constraints
+remain in force.
