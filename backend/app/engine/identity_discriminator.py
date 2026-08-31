@@ -11,19 +11,22 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.engine.generic_description_guard import is_generic_description
 from app.engine.normalizer import normalize_description
 from app.engine.uom_relationship import UomRelationship, classify_uom_relationship
 
 
-IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v3"
+IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v4"
 
 _OBJECT_CLASS_PATTERNS = {
+    "buffer": (r"\bbuffers?\b",),
     "carbon-stick": (r"\bcarbon\s+sticks?\b",),
     "clutch-disk": (r"\bclutch\s*dis[ck]s?\b",),
     "coil-spring": (r"\bcoil\s*springs?\b",),
     "commercial-condition": (r"\bconditions?\b",),
     "commercial-discount": (r"\bdiscounts?\b",),
     "dust-cap": (r"\bdust\s*caps?\b",),
+    "mirror": (r"\bmirrors?\b",),
     "nail": (r"\bnails?\b",),
     "pencil": (r"\bpencils?\b",),
     "table": (r"\btables?\b",),
@@ -35,6 +38,7 @@ _PART_NUMBER_ONLY_CLASSES = frozenset({
     "commercial-discount",
 })
 _INCOMPATIBLE_OBJECT_CLASSES = frozenset({
+    frozenset(("buffer", "mirror")),
     frozenset(("carbon-stick", "pencil")),
     frozenset(("clutch-disk", "coil-spring")),
     frozenset(("clutch-disk", "dust-cap")),
@@ -68,6 +72,8 @@ _PART_NUMBER_BARE_SIDE_PATTERNS = {
 class RecordDiscriminatorEvidence:
     part_number_classes: tuple[str, ...]
     description_classes: tuple[str, ...]
+    part_number_class_matches: tuple[str, ...]
+    description_class_matches: tuple[str, ...]
     resolved_object_class: str | None
     object_class_provenance: str
     tyre_variants: tuple[str, ...]
@@ -87,17 +93,27 @@ class IdentityDiscriminatorResult:
     evidence_payload: dict
 
 
-def _classes(value, source_family: str) -> tuple[str, ...]:
+def _class_evidence(
+    value, source_family: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     normalized = normalize_description(value)
-    return tuple(sorted(
-        object_class
-        for object_class, patterns in _OBJECT_CLASS_PATTERNS.items()
-        if not (
+    classes = []
+    matches = []
+    for object_class, patterns in _OBJECT_CLASS_PATTERNS.items():
+        if (
             source_family != "PART_NUMBER"
             and object_class in _PART_NUMBER_ONLY_CLASSES
-        )
-        if any(re.search(pattern, normalized) for pattern in patterns)
-    ))
+        ):
+            continue
+        class_matches = {
+            match.group(0)
+            for pattern in patterns
+            for match in re.finditer(pattern, normalized)
+        }
+        if class_matches:
+            classes.append(object_class)
+            matches.extend(class_matches)
+    return tuple(sorted(classes)), tuple(sorted(set(matches)))
 
 
 def _tyre_variants(value, classes: tuple[str, ...]) -> set[str]:
@@ -155,8 +171,10 @@ def _resolved_side(
 
 def extract_record_discriminators(part_no, description) -> RecordDiscriminatorEvidence:
     """Extract only explicit, record-local evidence; unknown stays unknown."""
-    part_classes = _classes(part_no, "PART_NUMBER")
-    description_classes = _classes(description, "DESCRIPTION")
+    part_classes, part_class_matches = _class_evidence(part_no, "PART_NUMBER")
+    description_classes, description_class_matches = _class_evidence(
+        description, "DESCRIPTION"
+    )
     shared = set(part_classes) & set(description_classes)
     if len(shared) == 1:
         resolved = next(iter(shared))
@@ -185,6 +203,8 @@ def extract_record_discriminators(part_no, description) -> RecordDiscriminatorEv
     return RecordDiscriminatorEvidence(
         part_number_classes=part_classes,
         description_classes=description_classes,
+        part_number_class_matches=part_class_matches,
+        description_class_matches=description_class_matches,
         resolved_object_class=resolved,
         object_class_provenance=provenance,
         tyre_variants=tuple(sorted(variants)),
@@ -236,6 +256,48 @@ def _side_bases(item: RecordDiscriminatorEvidence) -> set[str]:
     }
 
 
+def _object_source_fields(item: RecordDiscriminatorEvidence) -> list[str]:
+    fields = []
+    if item.resolved_object_class in item.part_number_classes:
+        fields.append("PART_NUMBER")
+    if item.resolved_object_class in item.description_classes:
+        fields.append("DESCRIPTION")
+    return fields
+
+
+def _description_reliability(
+    description_1,
+    description_2,
+    first: RecordDiscriminatorEvidence,
+    second: RecordDiscriminatorEvidence,
+) -> dict:
+    normalized_1 = normalize_description(description_1)
+    normalized_2 = normalize_description(description_2)
+    generic_1 = is_generic_description(description_1)
+    generic_2 = is_generic_description(description_2)
+    if (
+        normalized_1
+        and normalized_1 == normalized_2
+        and not first.description_classes
+        and not second.description_classes
+    ):
+        classification = "IDENTICAL_NON_OBJECT_BEARING_TEXT"
+    elif generic_1 or generic_2 or not normalized_1 or not normalized_2:
+        classification = "GENERIC_OR_MISSING_TEXT"
+    elif normalized_1 == normalized_2:
+        classification = "IDENTICAL_OBJECT_BEARING_TEXT"
+    else:
+        classification = "DISTINCT_TEXT"
+    return {
+        "classification": classification,
+        "description_1_generic": generic_1,
+        "description_2_generic": generic_2,
+        "normalized_descriptions_equal": bool(
+            normalized_1 and normalized_1 == normalized_2
+        ),
+    }
+
+
 def _dirty_description_conflict(
     trusted: RecordDiscriminatorEvidence,
     copied: RecordDiscriminatorEvidence,
@@ -268,6 +330,9 @@ def evaluate_identity_discriminators(
     first = extract_record_discriminators(part_no_1, description_1)
     second = extract_record_discriminators(part_no_2, description_2)
     uom = classify_uom_relationship(uom_1, uom_2)
+    description_reliability = _description_reliability(
+        description_1, description_2, first, second
+    )
     conflicts = []
 
     if _incompatible(first.resolved_object_class, second.resolved_object_class):
@@ -280,6 +345,18 @@ def evaluate_identity_discriminators(
             "values_a": [first.resolved_object_class],
             "values_b": [second.resolved_object_class],
             "provenance": "EXPLICIT_TWO_SIDED_OBJECT_CLASS",
+            "source_fields_a": _object_source_fields(first),
+            "source_fields_b": _object_source_fields(second),
+            "matched_normalized_evidence_a": list(
+                first.part_number_class_matches
+                + first.description_class_matches
+            ),
+            "matched_normalized_evidence_b": list(
+                second.part_number_class_matches
+                + second.description_class_matches
+            ),
+            "description_reliability": description_reliability,
+            "incompatibility_relation": "BOUNDED_OBJECT_CLASS_INCOMPATIBILITY",
         })
 
     else:
@@ -333,6 +410,8 @@ def evaluate_identity_discriminators(
         return {
             "part_number_classes": list(item.part_number_classes),
             "description_classes": list(item.description_classes),
+            "part_number_class_matches": list(item.part_number_class_matches),
+            "description_class_matches": list(item.description_class_matches),
             "resolved_object_class": item.resolved_object_class,
             "object_class_provenance": item.object_class_provenance,
             "tyre_variants": list(item.tyre_variants),
@@ -353,6 +432,7 @@ def evaluate_identity_discriminators(
             "record_1": payload(first),
             "record_2": payload(second),
             "uom_relationship": uom.relationship.value,
+            "description_reliability": description_reliability,
             "protected_conflict_count": len(conflicts),
         },
     )

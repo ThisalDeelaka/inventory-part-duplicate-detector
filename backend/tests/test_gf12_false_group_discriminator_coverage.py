@@ -134,7 +134,7 @@ def test_r9_11_r9_12_r9_17_r9_18_explicit_conflicts_are_protected(
     assert conflict["provenance"] == provenance
     assert json.loads(edge.technical_evidence_json)["identity_discriminator"][
         "version"
-    ] == "identity-discriminator-v3"
+    ] == "identity-discriminator-v4"
 
 
 def test_r9_8_to_r9_10_unknown_and_generic_evidence_do_not_invent_conflicts():

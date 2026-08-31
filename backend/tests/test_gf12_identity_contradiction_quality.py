@@ -244,7 +244,7 @@ def test_gf4_provenance_and_fingerprint_are_orientation_stable_and_repeatable():
     reverse = evaluated(right, left)
     assert runs[0] == runs[1] == runs[2] == reverse
     technical = json.loads(runs[0].technical_evidence_json)
-    assert technical["identity_discriminator"]["version"] == "identity-discriminator-v3"
+    assert technical["identity_discriminator"]["version"] == "identity-discriminator-v4"
     assert json.loads(runs[0].protected_conflicts_json)[0]["provenance"] == (
         "EXPLICIT_TWO_SIDED_OBJECT_CLASS"
     )

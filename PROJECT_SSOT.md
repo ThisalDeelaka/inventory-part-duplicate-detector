@@ -289,3 +289,19 @@ gate remains closed, while R10A authorizes committing the verified directional
 implementation. GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 remains
 `IN PROGRESS` under its `ACTIVE` waiver, the cold-full debt remains `OPEN`, the
 300-second target remains unmet, and deployment/integration remains deferred.
+
+## GF-12C1-R11 buffer/mirror object-identity status
+
+GF-12C1-R11 is `R11_QUALITY_PASS_READY_FOR_FINAL_FREEZE`. Bounded reusable
+`buffer` and `mirror` object classes plus one explicit incompatibility relation
+now promote trusted two-sided part-number evidence through GF4. Fresh
+current-product scan 2 safely separates the reported LG pair and independently
+finds the same CS buffer/mirror family. No accepted group contains a cannot-link
+or discriminator contradiction, provider calls remain zero, and exact G2-v2
+CSV/XLSX parity holds for 201 groups and 423 members.
+
+The repeated 46-group semantic audit is A=4, B=13, C=28, D=0, E=1. This is a
+bounded detector-quality pass, not human accuracy certification. GF-12A2 stays
+`HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 stays `IN PROGRESS` under its `ACTIVE`
+waiver, `GF11-PERF-100K-COLD-FULL` stays `OPEN`, the 300-second target remains
+unmet, and deployment/integration remains deferred.

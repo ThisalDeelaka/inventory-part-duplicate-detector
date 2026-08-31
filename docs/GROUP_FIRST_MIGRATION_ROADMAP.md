@@ -923,3 +923,12 @@ description false group, so the overall demo is not freeze-ready. R10A commits
 the independently verified directional implementation. Any next detector work
 is limited to that newly proven family. GF-11 and GF-12A2 remain open;
 deployment/integration remains deferred.
+
+GF-12C1-R11 is verified as a bounded quality pass. Two reusable object classes
+and one explicit incompatibility relation safely separate both real
+buffer/mirror instances through existing GF4/GF5 authority. Scan 2 has zero
+protected contradictions inside accepted groups, zero provider calls, exact
+423-member G2-v2 CSV/XLSX parity, and a repeated 46-group audit with D=0. The
+next permitted step is a final freeze-only audit with no detector changes.
+GF-12A2 human validation and GF-11 performance debt remain open;
+deployment/integration remains deferred.

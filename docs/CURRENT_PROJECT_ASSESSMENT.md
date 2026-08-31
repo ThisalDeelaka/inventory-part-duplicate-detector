@@ -1194,3 +1194,25 @@ object-class/copied-description family. The R10 directional implementation is
 `VERIFIED` and commit-eligible; the overall demo freeze remains blocked by that
 distinct family. GF-12A2, GF-11 performance debt, and deployment/integration
 remain open.
+
+## GF-12C1-R11 bounded copied-description object identities
+
+R11 is `R11_QUALITY_PASS_READY_FOR_FINAL_FREEZE`. The v4 discriminator adds
+only reusable buffer/mirror object classes and their explicit incompatibility,
+with source-field, normalized-match, description-reliability, relation, and
+provenance evidence persisted through existing GF4 fields. It does not infer a
+contradiction from arbitrary differing part-number words.
+
+Fresh current-product scan 2 completed in 717.115631 seconds with 201 groups,
+423 grouped members, 112 likely, 89 review, 31 conflicts, 30 deferred units,
+4,904 unassigned records, and zero provider calls. Both the reported LG pair
+and an independent CS buffer/mirror pair receive protected edges; accepted
+groups contain zero cannot-links and zero direct discriminator contradictions.
+CSV/XLSX authority parity is exact. The repeated 46-group audit is A=4, B=13,
+C=28, D=0, E=1.
+
+This authorizes only a final freeze-only audit with no detector changes. Human
+accuracy remains unverified, GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`,
+GF-11 remains `IN PROGRESS` with its waiver `ACTIVE`, the 100k cold-full debt
+`OPEN`, and the 300-second target unmet. Deployment/integration remains
+deferred.
