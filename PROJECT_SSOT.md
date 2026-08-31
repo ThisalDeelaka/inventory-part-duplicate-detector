@@ -352,3 +352,16 @@ GF-11 remains `IN PROGRESS` under its `ACTIVE` waiver,
 `GF11-PERF-100K-COLD-FULL` remains `OPEN`, the 300-second target remains unmet,
 GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration
 remain deferred.
+
+## GF-12C1-R15 deterministic signature derivation status
+
+GF-12C1-R15 adds an unused pure `record -> IdentitySignature` deriver and a
+read-only audit harness. It reuses existing bounded recognizers and preserves
+unknown, unresolved, generic/copied, and multi-source evidence without creating
+pair support or contradiction. All 5,327 protected CSV rows derive in memory
+with zero failures and zero provider calls. There is no GF4/GF5 integration,
+persistence, scan-path import, or detector semantic change. The detector remains
+unfrozen and R12 remains `DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`. GF-11 remains
+`IN PROGRESS` under its `ACTIVE` waiver, `GF11-PERF-100K-COLD-FULL` remains
+`OPEN`, the 300-second target remains unmet, GF-12A2 remains
+`HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration remain deferred.

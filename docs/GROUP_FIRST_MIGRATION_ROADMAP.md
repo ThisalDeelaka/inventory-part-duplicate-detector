@@ -953,3 +953,12 @@ connected. The next permitted unit is deterministic per-record signature
 derivation behind the unused seam, still without GF4 behavior change. The
 detector remains unfrozen and all GF-11, GF-12A2, and deployment/integration
 constraints remain in force.
+
+GF-12C1-R15 completes deterministic record-local signature derivation behind
+the unused seam. Its bounded residual representation preserves unknown and
+source-conflicted information but has no support, contradiction, or grouping
+authority. The full protected CSV derives read-only with no failures and no
+provider calls. The next permitted unit is non-authoritative pairwise
+`SignedIdentityEvidence` derivation in tests/offline shadow mode, with no GF4
+support-classification change. The detector remains unfrozen; all GF-11,
+GF-12A2, and deployment/integration constraints remain in force.

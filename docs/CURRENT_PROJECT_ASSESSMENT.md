@@ -1265,3 +1265,15 @@ module imports the seam, so detector behavior and authority are unchanged. The
 detector remains unfrozen; R12 remains a quality failure; GF-11, its active
 waiver and open performance debt, GF-12A2 human evidence, and deferred
 deployment/integration remain unchanged.
+
+## GF-12C1-R15 deterministic per-record derivation
+
+R15 implements only pure, unused, deterministic per-record signature derivation
+behind the R14 seam. Existing bounded object, role, model, variant, technical,
+normalization, and genericity primitives are reused without mutation. Unmatched
+source tokens remain bounded unresolved evidence, and description/master
+matches remain metadata rather than trust. The read-only 5,327-row audit derives
+every record with zero failures in 23.488907 seconds. No pair evidence, GF4
+classification, persistence, or runtime call site is introduced. The detector
+remains unfrozen; R12, GF-11/waiver/performance debt, GF-12A2 human evidence,
+and deferred deployment/integration statuses are unchanged.

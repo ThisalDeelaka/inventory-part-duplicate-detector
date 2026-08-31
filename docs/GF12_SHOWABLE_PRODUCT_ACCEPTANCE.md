@@ -139,3 +139,11 @@ authority. Consequently the R12 full-real freeze failure and unfrozen detector
 status are unchanged. The synthetic path remains showable; GF-11 performance
 debt, GF-12A2 human validation, and deployment/integration remain open or
 deferred exactly as before.
+
+R15 adds only unused per-record identity-signature derivation and a read-only
+coverage audit. It does not compare records, build pair evidence, change GF4,
+run a normal scan, or alter visible product authority. Deriving all 5,327 CSV
+rows with zero failures proves representation coverage, not demo quality. The
+R12 full-real freeze failure and unfrozen detector status remain unchanged;
+GF-11 debt, GF-12A2 human validation, and deployment/integration remain open or
+deferred.
