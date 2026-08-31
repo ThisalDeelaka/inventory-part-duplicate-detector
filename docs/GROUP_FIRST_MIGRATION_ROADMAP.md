@@ -932,3 +932,15 @@ protected contradictions inside accepted groups, zero provider calls, exact
 next permitted step is a final freeze-only audit with no detector changes.
 GF-12A2 human validation and GF-11 performance debt remain open;
 deployment/integration remains deferred.
+
+GF-12C1-R12 failed the final full-real freeze with four likely false groups.
+GF-12C1-R13 completes the architecture reassessment and selects
+`R13-E_COMBINE_SIGNATURE_AND_SUPPORT_GATE`; it does not change detector
+semantics or reopen noun-by-noun production patching. The next permitted unit is
+a versioned pure identity-signature/signed-evidence seam plus historical and
+positive-control golden cases, with no runtime call-site integration. Later
+phases must derive signatures, shadow GF4 classifications, prove regression
+safety, integrate GF4 in a bounded commit, and then repeat a fresh real G2-v2
+scan and freeze audit. The detector remains unfrozen. GF-11 remains in progress
+under its active waiver with open cold-full debt and an unmet 300-second target;
+GF-12A2 remains human-review-data-required; deployment/integration is deferred.

@@ -1237,3 +1237,19 @@ copied or dirty text. The freeze fails without a detector change and the
 architecture assessment is `ARCHITECTURE_PATCHING_RISK_REMAINS_HIGH`. GF-11,
 GF-12A2, deployment, tenancy, IAM, storage, integrations, and human-quality
 certification remain open or unclaimed.
+
+## GF-12C1-R13 identity representation reassessment
+
+R13 completes the requested architecture analysis without changing production
+detector semantics. Exact reconstruction confirms all four R12 D groups and the
+recurring cause: copied lexical evidence can create strong/review support
+without trusted identity agreement, whereas contradiction depends on bounded
+semantic recognition. Offline counterfactuals show that the mechanism can
+withhold all four groups, but a crude residual-token gate affects 124 accepted
+groups and harms F30 and Fan Blade controls; it is therefore not production
+safe. The selected target is `R13-E_COMBINE_SIGNATURE_AND_SUPPORT_GATE`, with
+source-aware signatures at the enrichment seam and signed evidence at GF4;
+ontology is `ONTOLOGY_SUPPORTING`. The detector remains unfrozen. Only pure
+contracts and golden cases, with no runtime integration, are the next bounded
+implementation unit. GF-11/waiver/performance debt, GF-12A2 human evidence, and
+deployment/integration statuses are unchanged.

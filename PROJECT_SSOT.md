@@ -323,3 +323,19 @@ bounded vocabularies is `ARCHITECTURE_PATCHING_RISK_REMAINS_HIGH`; further
 noun-specific expansion is not authorized by this status update. GF-12A2 and
 GF-11 performance debt remain open, and deployment/integration remains
 deferred.
+
+## GF-12C1-R13 identity-evidence architecture status
+
+GF-12C1-R13 is `ARCHITECTURE_REASSESSMENT_COMPLETE_DETECTOR_UNFROZEN`.
+Read-only reconstruction confirms that R12's four D groups are consequences of
+broad lexical positive support crossing a narrower, ontology-dependent negative
+evidence boundary. The selected target is
+`R13-E_COMBINE_SIGNATURE_AND_SUPPORT_GATE`, with ontology
+`ONTOLOGY_SUPPORTING`: source-aware per-record identity signatures feed signed
+GF4 evidence, while unknown identity remains unknown and cannot-link remains
+reserved for protected contradictions. R13 changes no production detector
+semantic. The smallest authorized next unit is pure seam/contracts and golden
+cases without runtime integration. GF-11 remains `IN PROGRESS`, its waiver is
+`ACTIVE`, `GF11-PERF-100K-COLD-FULL` is `OPEN`, the 300-second target remains
+unmet, GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment and
+integration remain deferred.

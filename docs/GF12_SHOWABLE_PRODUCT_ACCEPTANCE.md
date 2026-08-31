@@ -120,3 +120,14 @@ Therefore the synthetic path remains showable and the full-real path remains
 executable, but the full-real candidate is not frozen and must not be described
 as demo-ready. The architecture/evidence boundary requires reassessment before
 further semantic expansion.
+
+R13 completes the architecture reassessment without changing production
+semantics. It confirms that the R12 failures arise from broad lexical support
+and narrow ontology-dependent contradiction evidence, selects source-aware
+identity signatures plus a GF4 identity-support gate, and classifies ontology
+as supporting rather than primary. Offline experiments prove the direction but
+also show that a crude token gate would overcorrect known-positive groups.
+Accordingly only pure seam/contracts and golden cases are authorized next. The
+full-real detector remains unfrozen and must not be called demo-ready; synthetic
+showability, GF-11 debt, GF-12A2 human validation, and deferred deployment/
+integration statuses are unchanged.
