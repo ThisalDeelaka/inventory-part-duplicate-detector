@@ -339,3 +339,16 @@ cases without runtime integration. GF-11 remains `IN PROGRESS`, its waiver is
 `ACTIVE`, `GF11-PERF-100K-COLD-FULL` is `OPEN`, the 300-second target remains
 unmet, GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment and
 integration remain deferred.
+
+## GF-12C1-R14 identity-signature contract seam status
+
+GF-12C1-R14 adds only unused, immutable, versioned `IdentitySignature` and
+`SignedIdentityEvidence` contracts plus golden representation cases. There is
+no extractor, runtime import, GF4 integration, scoring/gate change, persistence,
+or detector semantic change. Unknown and unresolved evidence remain distinct
+from explicit contradiction; signed evidence channels remain independent. The
+detector is still unfrozen and R12 remains `DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`.
+GF-11 remains `IN PROGRESS` under its `ACTIVE` waiver,
+`GF11-PERF-100K-COLD-FULL` remains `OPEN`, the 300-second target remains unmet,
+GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration
+remain deferred.

@@ -1253,3 +1253,15 @@ ontology is `ONTOLOGY_SUPPORTING`. The detector remains unfrozen. Only pure
 contracts and golden cases, with no runtime integration, are the next bounded
 implementation unit. GF-11/waiver/performance debt, GF-12A2 human evidence, and
 deployment/integration statuses are unchanged.
+
+## GF-12C1-R14 pure contract seam
+
+R14 implements the first R13 migration unit only: frozen, versioned,
+deterministically fingerprinted `IdentitySignature` and
+`SignedIdentityEvidence` contracts with explicit source observations,
+unknown/unresolved states, and independent signed channels. Golden cases cover
+G1-G11 and P1-P12 without claiming extraction or correction. No current runtime
+module imports the seam, so detector behavior and authority are unchanged. The
+detector remains unfrozen; R12 remains a quality failure; GF-11, its active
+waiver and open performance debt, GF-12A2 human evidence, and deferred
+deployment/integration remain unchanged.

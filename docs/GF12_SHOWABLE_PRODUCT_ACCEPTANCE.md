@@ -131,3 +131,11 @@ Accordingly only pure seam/contracts and golden cases are authorized next. The
 full-real detector remains unfrozen and must not be called demo-ready; synthetic
 showability, GF-11 debt, GF-12A2 human validation, and deferred deployment/
 integration statuses are unchanged.
+
+R14 adds the unused identity-signature/signed-evidence contract seam and its
+golden representation tests only. It does not extract evidence, integrate GF4,
+change scoring or support gates, run a real scan, or alter visible product
+authority. Consequently the R12 full-real freeze failure and unfrozen detector
+status are unchanged. The synthetic path remains showable; GF-11 performance
+debt, GF-12A2 human validation, and deployment/integration remain open or
+deferred exactly as before.

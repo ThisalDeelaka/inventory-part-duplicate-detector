@@ -944,3 +944,12 @@ safety, integrate GF4 in a bounded commit, and then repeat a fresh real G2-v2
 scan and freeze audit. The detector remains unfrozen. GF-11 remains in progress
 under its active waiver with open cold-full debt and an unmet 300-second target;
 GF-12A2 remains human-review-data-required; deployment/integration is deferred.
+
+GF-12C1-R14 completes only the pure contract-seam phase of the R13 plan. The
+unused engine-domain contracts preserve record-local source observations,
+explicit unknown/unresolved semantics, independent signed-evidence channels,
+and deterministic fingerprint material. No extractor or runtime call site is
+connected. The next permitted unit is deterministic per-record signature
+derivation behind the unused seam, still without GF4 behavior change. The
+detector remains unfrozen and all GF-11, GF-12A2, and deployment/integration
+constraints remain in force.
