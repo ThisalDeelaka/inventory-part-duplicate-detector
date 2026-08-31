@@ -1178,3 +1178,19 @@ variant gap obscured by a copied description. Therefore the classification is
 accuracy certification. GF-12A2 stays `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11
 stays `IN PROGRESS` with its waiver `ACTIVE`, the 100k cold-full debt `OPEN`,
 and the 300-second target not met. Deployment/integration stays deferred.
+
+## GF-12C1-R10 directional-side correction
+
+The bounded LEFT/RIGHT rule succeeds on fresh current-product scan 31. The R9
+shock pair becomes a protected conflict; all R7/R9 controls remain safe; zero
+accepted groups contain current cannot-links or discriminator contradictions;
+provider calls remain zero; and G2-v2 API/CSV/XLSX parity is exact at 203 groups
+and 429 members. No threshold, retrieval, GF5, review, export, schema,
+dependency, or frontend behavior changed.
+
+The repeated 47-group audit is A=4, B=13, C=28, D=1, E=1. The remaining D case
+is BUFFER01 versus MIRROR01 under copied `Seria/condition part` text, a distinct
+object-class/copied-description family. The R10 directional implementation is
+`VERIFIED` and commit-eligible; the overall demo freeze remains blocked by that
+distinct family. GF-12A2, GF-11 performance debt, and deployment/integration
+remain open.

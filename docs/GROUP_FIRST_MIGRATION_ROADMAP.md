@@ -913,3 +913,13 @@ separate left-side/right-side shock abbreviation family. The next work, if
 authorized, is limited to that proven directional-variant gap; the demo freeze
 must not be claimed yet. GF-11 performance debt and GF-12A2 human review remain
 open and deployment/integration remains deferred.
+
+GF-12C1-R10 verifies the bounded directional quality step. A shared-base
+LEFT/RIGHT qualifier safely separates the remaining R9 shock pair through
+existing GF4/GF5 authority and preserves every R7/R9 control. Scan 31 has zero
+protected internal contradictions, zero provider calls, and exact CSV/XLSX
+parity. The repeated semantic audit finds a separate BUFFER01/MIRROR01 copied-
+description false group, so the overall demo is not freeze-ready. R10A commits
+the independently verified directional implementation. Any next detector work
+is limited to that newly proven family. GF-11 and GF-12A2 remain open;
+deployment/integration remains deferred.

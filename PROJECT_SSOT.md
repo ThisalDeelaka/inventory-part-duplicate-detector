@@ -272,3 +272,20 @@ new contradiction, makes zero provider calls, and has exact API/CSV/XLSX parity.
 The result is `Q1_DEMO_QUALITY_PLAUSIBLE`; product-owner workbook inspection and
 GF-12A2 human-review validation remain required. GF-11 and its active waiver,
 open 100k cold-full debt, and unmet 300-second target remain unchanged.
+
+## GF-12C1-R10 directional-side status
+
+GF-12C1-R10's bounded directional implementation is `VERIFIED`. The bounded
+directional qualifier correctly promotes explicit LEFT-versus-RIGHT variants
+with a shared side-free component base through GF4. Fresh current-product scan
+31 safely separates the R9 shock pair, contains zero protected contradictions
+inside accepted groups, preserves all R7/R9 controls, makes zero provider
+calls, and has exact 203-group/429-member CSV/XLSX parity.
+
+The required 47-group semantic audit nevertheless finds one new distinct false
+group: BUFFER01 versus MIRROR01 under a copied description. It is not a
+directional-side family and was not changed in R10. The overall demo-freeze
+gate remains closed, while R10A authorizes committing the verified directional
+implementation. GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`; GF-11 remains
+`IN PROGRESS` under its `ACTIVE` waiver, the cold-full debt remains `OPEN`, the
+300-second target remains unmet, and deployment/integration remains deferred.

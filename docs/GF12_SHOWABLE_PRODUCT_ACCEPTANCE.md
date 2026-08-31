@@ -26,6 +26,8 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | R7 corrected real-output quality canary | `PASS` | Scan 29 removes all three false groups through protected GF4 contradictions, preserves F30/B38 controls, and has no surviving group with the new contradiction |
 | R9 bounded D1-D4 correction | `PASS` | Scan 30 safely separates all four R8 false-group families; R7 controls remain safe and no accepted group contains protected endpoints |
 | R9 repeated semantic freeze audit | `FAIL` | A distinct left-side/right-side shock abbreviation group remains under a copied description; classification is `R9_QUALITY_CORRECTION_PARTIAL_NEW_BLOCKER` |
+| R10 directional-side target | `PASS` | Scan 31 places the LEFT/RIGHT shock pair in a protected conflict; no accepted group contains a side contradiction |
+| R10 repeated semantic freeze audit | `FAIL` | The directional implementation is verified; a distinct BUFFER01/MIRROR01 copied-description false group still blocks overall freeze |
 | Reviewed Identity Export authority | `PASS` | Header-only before/Unsure; 3 member rows only after current confirmed review |
 | Failure boundary safe | `PASS` | Controlled synthetic failed scan is non-authoritative; final read/export return 409 |
 | Pair provider none | `PASS` | `LLM_DEMO_ENABLED=false`, `LLM_PROVIDER=none` |
@@ -92,3 +94,10 @@ the synthetic product remains showable and the real end-to-end path remains
 executable, but the fresh real result is not a frozen demo candidate. No Reason
 polish is authorized. GF-12A2 human validation, GF-11 performance debt, and
 deployment/integration remain open.
+
+R10 safely corrects the directional-side family without broad side inference or
+front/rear semantics. Fresh scan 31 remains operationally showable and export-
+consistent, but its repeated semantic audit identifies a separate buffer-versus-
+mirror false group. The real result is not a frozen demo candidate, but R10A
+authorizes committing the independently verified directional implementation.
+No Reason or presentation change is authorized.
