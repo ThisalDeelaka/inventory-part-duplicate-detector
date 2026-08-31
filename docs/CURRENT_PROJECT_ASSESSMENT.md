@@ -1290,3 +1290,15 @@ legitimate controls still lack trusted identity evidence, so no GF4 gate,
 runtime import, persistence, or detector semantic change is authorized. The
 detector remains unfrozen; R12, GF-11/waiver/performance debt, GF-12A2 human
 evidence, and deferred deployment/integration statuses are unchanged.
+
+## GF-12C1-R17 trusted identity coverage study
+
+R17 reconstructs the seven exact real controls and evaluates six offline trust
+strategies over the same 252 R12 accepted edges. Three controls lack semantic
+phrase/abbreviation representation; four have structured facts whose safe trust
+composition is unproven. The combined strategy covers all seven and avoids the
+four named R12 pairs but promotes 55 real edges, including 12 explicit numeric-
+variant risks. The outcome is `R17-G_NO_SAFE_GENERALIZATION_PROVEN`; no runtime
+source or detector semantic changed. R16 remains gate-not-ready, the detector
+remains unfrozen, and R12, GF-11/waiver/performance debt, GF-12A2 human evidence,
+and deferred deployment/integration statuses are unchanged.

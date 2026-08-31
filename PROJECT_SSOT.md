@@ -381,3 +381,20 @@ GF-11 remains `IN PROGRESS` under its `ACTIVE` waiver,
 `GF11-PERF-100K-COLD-FULL` remains `OPEN`, the 300-second target remains unmet,
 GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration
 remain deferred.
+
+## GF-12C1-R17 trusted identity coverage study status
+
+GF-12C1-R17 is `R17-G_NO_SAFE_GENERALIZATION_PROVEN`. Exact reconstruction of
+the seven R16 lexical-only controls shows three missing phrase/abbreviation
+representations and four existing structured facts without a proven safe trust
+composition. Six offline strategies were evaluated against exact controls and
+all 252 accepted R12 edges. The only combined strategy covering all seven and
+avoiding the four named R12 pairs still produced 12 unsafe numeric-variant
+promotions. No production representation, comparator, GF4, or detector change
+is authorized. Human-labelled identity evidence is required before semantic
+expansion. The detector remains unfrozen, R12 remains
+`DEMO_CANDIDATE_FREEZE_FAIL_QUALITY`, and the R16 gate remains not ready.
+GF-11 remains `IN PROGRESS` under its `ACTIVE` waiver,
+`GF11-PERF-100K-COLD-FULL` remains `OPEN`, the 300-second target remains unmet,
+GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration
+remain deferred.

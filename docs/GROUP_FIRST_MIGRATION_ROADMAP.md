@@ -972,3 +972,12 @@ mode. It must not make copied text or structural family prefixes authoritative
 and must not add a GF4 decision gate or runtime integration. The detector
 remains unfrozen; all GF-11, GF-12A2, and deployment/integration constraints
 remain in force.
+
+GF-12C1-R17 completes the trusted-identity coverage gap study without selecting
+a code correction. A combined phrase/stem/existing-fact strategy covers all
+seven controls and the four named R12 guards, but its wider accepted-edge audit
+contains unsafe numeric-variant promotions. The next required unit is an
+independently human-labelled identity/non-identity edge dataset covering these
+evidence families, followed by the same bounded offline counterfactual audit.
+No R15/R16 or GF4 implementation is authorized. The detector remains unfrozen;
+all GF-11, GF-12A2, and deployment/integration constraints remain in force.

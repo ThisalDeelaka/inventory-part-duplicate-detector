@@ -156,3 +156,11 @@ a quality fix and does not authorize a GF4 gate, a normal scan, or any visible
 product authority change. The full-real detector remains unfrozen and the R12
 freeze failure remains in force; GF-11 debt, GF-12A2 human validation, and
 deployment/integration remain open or deferred.
+
+R17 is an offline coverage study, not a detector correction. None of the six
+candidate trust rules proves safe across the exact controls and 252 accepted
+edges; the combined rule exposes explicit unsafe numeric-variant promotions.
+Consequently R16 remains gate-not-ready, no visible authority changes, and the
+full-real detector remains unfrozen with the R12 quality failure in force.
+Human-labelled evidence, GF-11 debt, and deployment/integration remain open or
+deferred.
