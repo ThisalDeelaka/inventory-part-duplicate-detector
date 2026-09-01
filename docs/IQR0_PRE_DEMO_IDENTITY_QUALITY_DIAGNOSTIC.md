@@ -1,12 +1,21 @@
 # IQR-0 Pre-Demo Identity Quality Diagnostic
 
+## IQR-1B disposition of the evidence finding
+
+The Head/Tail finding is corrected and verified by IQR-1B. A general
+source-aware functional/location facet now preserves the `head`/`tail`
+longitudinal-end disagreement and creates protected `CANNOT_LINK` evidence.
+Scan 33 no longer places Head Light and Tail Light in the same G2 or System XLSX
+group. The copied/generic-description trust finding remains a strict xfail.
+See `docs/IQR1B_FUNCTIONAL_LOCATION_IDENTITY_EVIDENCE_CORRECTION.md`.
+
 ## IQR-1A disposition of the discovery finding
 
 The site-boundary finding is now corrected and verified for the current-product
 Group-First path by IQR-1A. Scan 33 produces all 21 Bicycle relationships as
 bounded `REVIEW_SUPPORT` evidence and sends the seven records to one deferred
-GF5 work unit. Legacy scan modes remain unchanged. Head/Tail and copied/generic
-text findings remain open. See
+GF5 work unit. Legacy scan modes remain unchanged. Head/Tail was subsequently
+corrected by IQR-1B; copied/generic text remains open. See
 `docs/IQR1A_CROSS_SITE_DISCOVERY_BOUNDARY_CORRECTION.md`.
 
 ## Classification

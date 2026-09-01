@@ -1,11 +1,20 @@
 # Group-first identity migration roadmap
 
+## IQR-1B completion overlay
+
+Functional/location identity evidence is `CORRECTED` through a bounded,
+source-aware facet and protected GF4 contradiction. IQR-1A proposal counts and
+all 21 Bicycle Review edges are preserved; Bicycle remains deferred.
+Copied/generic-description trust remains open. Return to architect review to
+choose narrowly between Bicycle resolver-disposition analysis and blinded R18;
+do not begin confidence, LLM advisory, XLSX vNext, deployment, or GF11 work.
+
 ## IQR-1A completion overlay
 
 Cross-site physical-identity discovery is `CORRECTED` for current-product
 Group-First scans with bounded identity anchors; legacy semantics and retrieval
 budgets are preserved. The Bicycle discovery blocker is
-`REMOVED_AT_DISCOVERY_LAYER`. Execute IQR-1B only next for the general
+`REMOVED_AT_DISCOVERY_LAYER`. IQR-1B subsequently corrected the general
 functional/location evidence seam. R18, confidence, LLM advisory, XLSX vNext,
 deployment, and GF11 remain out of scope.
 

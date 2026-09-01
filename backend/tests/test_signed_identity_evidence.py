@@ -211,4 +211,4 @@ def test_m12_same_identity_and_attribute_difference_do_not_auto_contradict():
     )
     assert SignedEvidenceChannel.IDENTITY_SUPPORT in channels(evidence)
     assert SignedEvidenceChannel.IDENTITY_CONTRADICTION not in channels(evidence)
-    assert SIGNED_IDENTITY_EVIDENCE_COMPARISON_VERSION == "signed-identity-comparison-v1"
+    assert SIGNED_IDENTITY_EVIDENCE_COMPARISON_VERSION == "signed-identity-comparison-v2"

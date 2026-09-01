@@ -25,7 +25,7 @@ from app.services.canonical_record_service import (
 
 
 IDENTITY_EVIDENCE_CONTRACT_VERSION = "identity-evidence-edge-v1"
-IDENTITY_EVIDENCE_EVALUATOR_VERSION = "canonical-identity-evaluator-v5"
+IDENTITY_EVIDENCE_EVALUATOR_VERSION = "canonical-identity-evaluator-v6"
 _COMPONENT_FIELDS = (
     "description_similarity",
     "tfidf_score",

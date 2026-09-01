@@ -88,22 +88,20 @@ def test_iqr0_future_contract_site_alone_cannot_block_identity_discovery():
     assert _allowed_pair(left, right, current_product_mode)
 
 
-def test_iqr0_characterizes_head_tail_as_unresolved_not_typed_identity_role():
+def test_iqr0_head_tail_now_has_typed_identity_role_with_unresolved_context():
     head = signature("AB-LIGHT", "LED Head Light", "head")
     tail = signature("AB-TAIL LIGHT", "LED Tail Light", "tail")
 
-    assert not head.assembly_component_role_observations
-    assert not head.variant_observations
-    assert not tail.assembly_component_role_observations
-    assert not tail.variant_observations
-    assert "head" in {item.normalized_value for item in head.unresolved_observations}
-    assert "tail" in {item.normalized_value for item in tail.unresolved_observations}
+    assert {item.normalized_value for item in head.assembly_component_role_observations} == {
+        "head"
+    }
+    assert {item.normalized_value for item in tail.assembly_component_role_observations} == {
+        "tail"
+    }
+    assert any(item.sources for item in head.assembly_component_role_observations)
+    assert any(item.sources for item in tail.assembly_component_role_observations)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="IQR-0: general functional/location-role extraction does not expose Head/Tail",
-)
 def test_iqr0_future_contract_head_tail_distinction_reaches_typed_evidence():
     head = signature("AB-LIGHT", "LED Head Light", "head")
     tail = signature("AB-TAIL LIGHT", "LED Tail Light", "tail")
@@ -116,8 +114,8 @@ def test_iqr0_future_contract_head_tail_distinction_reaches_typed_evidence():
         for item in tail.assembly_component_role_observations + tail.variant_observations
     }
 
-    assert "head" in head_values
-    assert "tail" in tail_values
+    assert head_values == {"head"}
+    assert tail_values == {"tail"}
 
 
 @pytest.mark.xfail(

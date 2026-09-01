@@ -257,5 +257,5 @@ def test_r10_25_to_r10_28_provenance_scope_and_hard_coding_guards():
     conflict = json.loads(edge.protected_conflicts_json)[-1]
     assert conflict["provenance"] == "EXPLICIT_TWO_SIDED_DIRECTIONAL_VARIANT"
     technical = json.loads(edge.technical_evidence_json)["identity_discriminator"]
-    assert technical["version"] == "identity-discriminator-v4"
+    assert technical["version"] == "identity-discriminator-v5"
     assert technical["record_1"]["side_provenance"] == "EXPLICIT_PART_NUMBER_SIDE"

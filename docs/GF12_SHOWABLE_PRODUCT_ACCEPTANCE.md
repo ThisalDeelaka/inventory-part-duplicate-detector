@@ -1,12 +1,21 @@
 # GF-12C1 showable product acceptance checklist
 
+## IQR-1B bounded acceptance
+
+`IQR1B_FUNCTIONAL_LOCATION_EVIDENCE_VERIFIED`: Head Light versus Tail Light now
+produces source-proven protected `CANNOT_LINK` evidence and cannot appear in one
+G2 or System XLSX group. IQR-1A's 1,124 proposals, 21 cross-site Bicycle Review
+edges, and deferred Bicycle disposition remain unchanged. Workflow evidence is
+preserved, but external demonstration remains blocked by the sole remaining
+copied/generic-description trust xfail and pending architect review.
+
 ## IQR-1A bounded acceptance
 
 `IQR1A_CROSS_SITE_DISCOVERY_VERIFIED`: the Bicycle recall blocker is removed at
 the discovery layer without forcing group membership, changing legacy scan
 semantics, or increasing retrieval budgets. The saved showable-product workflow
-remains preserved. External demonstration is not authorized because the
-Head/Tail typed-evidence blocker remains open.
+remains preserved. IQR-1B subsequently corrected Head/Tail typed evidence;
+external demonstration remains unauthorized pending the remaining quality work.
 
 ## IQR-0 external-demo readiness correction
 

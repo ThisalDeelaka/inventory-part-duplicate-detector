@@ -12,11 +12,16 @@ import re
 from dataclasses import dataclass
 
 from app.engine.generic_description_guard import is_generic_description
+from app.engine.functional_location_facet import (
+    FunctionalLocationFacet,
+    extract_functional_location_facets,
+    find_functional_location_conflicts,
+)
 from app.engine.normalizer import normalize_description
 from app.engine.uom_relationship import UomRelationship, classify_uom_relationship
 
 
-IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v4"
+IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v5"
 
 _OBJECT_CLASS_PATTERNS = {
     "buffer": (r"\bbuffers?\b",),
@@ -85,6 +90,8 @@ class RecordDiscriminatorEvidence:
     description_side_matches: tuple[str, ...]
     part_number_side_base: str
     description_side_base: str
+    part_number_functional_location_facets: tuple[FunctionalLocationFacet, ...]
+    description_functional_location_facets: tuple[FunctionalLocationFacet, ...]
 
 
 @dataclass(frozen=True)
@@ -200,6 +207,12 @@ def extract_record_discriminators(part_no, description) -> RecordDiscriminatorEv
     resolved_side, side_provenance = _resolved_side(
         part_sides, description_sides
     )
+    part_functional_location = extract_functional_location_facets(
+        part_no, source_family="PART_NUMBER"
+    )
+    description_functional_location = extract_functional_location_facets(
+        description, source_family="DESCRIPTION"
+    )
     return RecordDiscriminatorEvidence(
         part_number_classes=part_classes,
         description_classes=description_classes,
@@ -216,6 +229,8 @@ def extract_record_discriminators(part_no, description) -> RecordDiscriminatorEv
         description_side_matches=description_side_matches,
         part_number_side_base=part_side_base,
         description_side_base=description_side_base,
+        part_number_functional_location_facets=part_functional_location,
+        description_functional_location_facets=description_functional_location,
     )
 
 
@@ -398,6 +413,31 @@ def evaluate_identity_discriminators(
             "provenance": "EXPLICIT_TWO_SIDED_DIRECTIONAL_VARIANT",
         })
 
+    functional_conflicts = find_functional_location_conflicts(
+        (
+            first.part_number_functional_location_facets
+            + first.description_functional_location_facets
+        ),
+        (
+            second.part_number_functional_location_facets
+            + second.description_functional_location_facets
+        ),
+    )
+    for conflict in functional_conflicts:
+        conflicts.append({
+            "group": "FUNCTIONAL_LOCATION_IDENTITY",
+            "label": "functional/location identity role",
+            "values_a": list(conflict.values_1),
+            "values_b": list(conflict.values_2),
+            "axis": conflict.axis,
+            "shared_construct": conflict.shared_construct,
+            "provenance": "EXPLICIT_TWO_SIDED_FUNCTIONAL_LOCATION_FACET",
+            "source_fields_a": list(conflict.source_families_1),
+            "source_fields_b": list(conflict.source_families_2),
+            "matched_normalized_evidence_a": list(conflict.matched_evidence_1),
+            "matched_normalized_evidence_b": list(conflict.matched_evidence_2),
+        })
+
     if (
         first.resolved_object_class == second.resolved_object_class == "tyre"
         and len(first.tyre_variants) == len(second.tyre_variants) == 1
@@ -412,6 +452,19 @@ def evaluate_identity_discriminators(
         })
 
     def payload(item: RecordDiscriminatorEvidence) -> dict:
+        def facets(values):
+            return [
+                {
+                    "axis": facet.axis,
+                    "value": facet.value,
+                    "shared_construct": facet.shared_construct,
+                    "source_family": facet.source_family,
+                    "matched_evidence": facet.matched_evidence,
+                    "provenance_code": facet.provenance_code,
+                }
+                for facet in values
+            ]
+
         return {
             "part_number_classes": list(item.part_number_classes),
             "description_classes": list(item.description_classes),
@@ -428,6 +481,12 @@ def evaluate_identity_discriminators(
             "description_side_matches": list(item.description_side_matches),
             "part_number_side_base": item.part_number_side_base,
             "description_side_base": item.description_side_base,
+            "part_number_functional_location_facets": facets(
+                item.part_number_functional_location_facets
+            ),
+            "description_functional_location_facets": facets(
+                item.description_functional_location_facets
+            ),
         }
 
     return IdentityDiscriminatorResult(

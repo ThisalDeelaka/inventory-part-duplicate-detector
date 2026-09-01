@@ -247,8 +247,8 @@ def test_r11_27_provenance_is_deterministic_complete_and_orientation_stable():
     technical = json.loads(runs[0].technical_evidence_json)[
         "identity_discriminator"
     ]
-    assert technical["version"] == "identity-discriminator-v4"
-    assert runs[0].evaluation_algorithm_version == "canonical-identity-evaluator-v5"
+    assert technical["version"] == "identity-discriminator-v5"
+    assert runs[0].evaluation_algorithm_version == "canonical-identity-evaluator-v6"
 
 
 def test_r11_28_to_r11_32_provider_input_authority_and_secret_scope_guards():

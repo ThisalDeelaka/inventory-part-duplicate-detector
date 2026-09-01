@@ -1,5 +1,15 @@
 # Current project assessment
 
+## IQR-1B verified
+
+The general functional/location evidence seam is corrected. Scan 33 preserves
+1,124 proposals and all 21 cross-site Bicycle `REVIEW_SUPPORT` edges while Head
+Light versus Tail Light now yields protected `CANNOT_LINK` evidence and no
+shared G2/XLSX system group. Engine Head and existing contradiction controls
+remain passing. The Bicycle family remains deferred; copied/generic-description
+trust is the sole strict xfail. External demo readiness remains blocked pending
+architect review of the Bicycle-disposition versus blinded-R18 next step.
+
 ## IQR-1A verified
 
 The current Group-First product path no longer uses site as an independent hard
@@ -7,7 +17,7 @@ physical-identity discovery boundary. Bounded Scan-33 acceptance generated all
 21 Bicycle relationships as Review evidence and reached GF5 without changing
 the three accepted groups, three review groups, or three conflicts. The seven
 Bicycle records are truthfully deferred rather than forced together. Head/Tail
-typed evidence remains open; external demo readiness is still blocked.
+typed evidence was subsequently corrected by IQR-1B; external demo readiness is still blocked.
 
 ## IQR-0 pre-demo quality diagnosis
 

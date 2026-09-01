@@ -18,7 +18,7 @@ from app.engine.identity_signature import (
 )
 
 
-SIGNED_IDENTITY_EVIDENCE_COMPARISON_VERSION = "signed-identity-comparison-v1"
+SIGNED_IDENTITY_EVIDENCE_COMPARISON_VERSION = "signed-identity-comparison-v2"
 
 
 class ShadowEvidenceBucket(str, Enum):
@@ -152,6 +152,35 @@ def derive_signed_identity_evidence(
                         left_item, right_item,
                         observed_fact="recognized but non-trusted semantic text overlaps",
                         reason_code="SHADOW_NON_TRUSTED_RECOGNIZED_OVERLAP",
+                    ))
+
+    left_functional = defaultdict(list)
+    right_functional = defaultdict(list)
+    for target, signature in ((left_functional, left), (right_functional, right)):
+        for item in signature.assembly_component_role_observations:
+            if item.semantic_key.startswith("functional_location::"):
+                target[item.semantic_key].append(item)
+    for semantic_key in sorted(set(left_functional) & set(right_functional)):
+        for left_item in left_functional[semantic_key]:
+            for right_item in right_functional[semantic_key]:
+                if (
+                    left_item.normalized_value != right_item.normalized_value
+                    and {left_item.normalized_value, right_item.normalized_value}
+                    == {"head", "tail"}
+                    and _trusted(left_item)
+                    and _trusted(right_item)
+                ):
+                    facts.append(_fact(
+                        SignedEvidenceChannel.IDENTITY_CONTRADICTION,
+                        left_item,
+                        right_item,
+                        observed_fact=(
+                            "trusted mutually exclusive functional/location roles "
+                            "differ on a shared construct"
+                        ),
+                        reason_code=(
+                            "SHADOW_FUNCTIONAL_LOCATION_IDENTITY_INCOMPATIBILITY"
+                        ),
                     ))
 
     left_objects = [

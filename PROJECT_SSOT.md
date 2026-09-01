@@ -1,5 +1,18 @@
 # Group-first inventory identity project SSOT
 
+## IQR-1B functional/location evidence correction
+
+`IQR1B_FUNCTIONAL_LOCATION_EVIDENCE_VERIFIED`: a bounded, source-aware
+functional-location facet now turns the proven Head Light / Tail Light
+disagreement into protected `CANNOT_LINK` evidence without affecting Engine
+Head aliases or IQR-1A retrieval. Scan 33 remains at 1,124 proposals and 21
+cross-site Bicycle relationships; all 21 remain `REVIEW_SUPPORT` and deferred.
+Copied/generic-description trust is the sole remaining strict quality xfail, so
+external demo readiness remains `BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`. Return to
+architect review; do not begin the Bicycle-disposition or R18 option
+automatically. See
+`docs/IQR1B_FUNCTIONAL_LOCATION_IDENTITY_EVIDENCE_CORRECTION.md`.
+
 ## IQR-1A cross-site discovery correction
 
 `IQR1A_CROSS_SITE_DISCOVERY_VERIFIED`: current-product Group-First physical
@@ -7,7 +20,7 @@ identity discovery is now cross-site capable through bounded exact-description
 or part-family anchors, while legacy scan modes remain unchanged. Scan 33 now
 produces all 21 Bicycle evidence edges and sends the seven records to one
 deferred GF5 work unit; no identity status was forced. The Head/Tail
-identity-evidence blocker remains open, so external demo readiness remains
+identity-evidence blocker was subsequently corrected by IQR-1B, but external demo readiness remains
 `BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`. See
 `docs/IQR1A_CROSS_SITE_DISCOVERY_BOUNDARY_CORRECTION.md`.
 

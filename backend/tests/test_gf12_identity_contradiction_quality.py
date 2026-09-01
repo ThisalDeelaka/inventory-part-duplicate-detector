@@ -244,7 +244,7 @@ def test_gf4_provenance_and_fingerprint_are_orientation_stable_and_repeatable():
     reverse = evaluated(right, left)
     assert runs[0] == runs[1] == runs[2] == reverse
     technical = json.loads(runs[0].technical_evidence_json)
-    assert technical["identity_discriminator"]["version"] == "identity-discriminator-v4"
+    assert technical["identity_discriminator"]["version"] == "identity-discriminator-v5"
     assert json.loads(runs[0].protected_conflicts_json)[0]["provenance"] == (
         "EXPLICIT_TWO_SIDED_OBJECT_CLASS"
     )
@@ -267,8 +267,11 @@ def test_no_demo_specific_hard_coding_and_only_bounded_production_files_changed(
     ).stdout.splitlines()
     assert set(changed) <= {
         "backend/app/api/routes_identity_groups.py",
-        "backend/app/engine/identity_discriminator.py",
-        "backend/app/engine/identity_evidence_evaluator.py",
+            "backend/app/engine/identity_discriminator.py",
+            "backend/app/engine/identity_evidence_evaluator.py",
+            "backend/app/engine/functional_location_facet.py",
+            "backend/app/engine/identity_signature_derivation.py",
+            "backend/app/engine/signed_identity_evidence.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/services/hybrid_retrieval.py",
         "backend/app/services/scan_runner.py",

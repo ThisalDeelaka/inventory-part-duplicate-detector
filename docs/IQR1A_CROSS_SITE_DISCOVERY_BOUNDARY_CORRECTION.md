@@ -1,5 +1,13 @@
 # IQR-1A Cross-Site Discovery Boundary Correction
 
+## IQR-1B preservation result
+
+IQR-1B preserved this result exactly at the discovery/evidence boundary: Scan
+33 still has 1,124 proposals, 21 cross-site proposals, and all 21 Bicycle
+relationships reach GF5 as `REVIEW_SUPPORT`; the family remains deferred.
+IQR-1B independently corrected Head/Tail functional/location evidence. See
+`docs/IQR1B_FUNCTIONAL_LOCATION_IDENTITY_EVIDENCE_CORRECTION.md`.
+
 ## Classification
 
 `IQR1A_CROSS_SITE_DISCOVERY_VERIFIED`

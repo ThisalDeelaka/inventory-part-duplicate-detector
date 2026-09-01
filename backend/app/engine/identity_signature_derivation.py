@@ -29,7 +29,7 @@ from app.engine.normalizer import (
 from app.engine.variant_extractor import extract_variant_attributes
 
 
-IDENTITY_SIGNATURE_DERIVATION_VERSION = "identity-signature-derivation-v1"
+IDENTITY_SIGNATURE_DERIVATION_VERSION = "identity-signature-derivation-v2"
 MAX_UNRESOLVED_OBSERVATIONS_PER_SOURCE = 4
 MAX_UNRESOLVED_TOKEN_LENGTH = 32
 
@@ -212,6 +212,9 @@ def derive_identity_signature(record, *, record_reference: str | None = None) ->
             sides = discriminator.part_number_sides
             side_matches = discriminator.part_number_side_matches
             side_base = discriminator.part_number_side_base
+            functional_location_facets = (
+                discriminator.part_number_functional_location_facets
+            )
         else:
             discriminator = extract_record_discriminators("", raw_value)
             classes = discriminator.description_classes
@@ -219,6 +222,9 @@ def derive_identity_signature(record, *, record_reference: str | None = None) ->
             sides = discriminator.description_sides
             side_matches = discriminator.description_side_matches
             side_base = discriminator.description_side_base
+            functional_location_facets = (
+                discriminator.description_functional_location_facets
+            )
 
         for object_class in classes:
             evidence = tuple(class_matches) or (object_class,)
@@ -264,6 +270,26 @@ def derive_identity_signature(record, *, record_reference: str | None = None) ->
                 "BOUNDED_DIRECTIONAL_COMPONENT_BASE_RECOGNIZED",
             )
             recognized_tokens_by_source[source_field].update(side_base.split())
+
+        for facet in functional_location_facets:
+            source = _source_observation(
+                source_field,
+                (facet.matched_evidence, facet.shared_construct),
+                generic=generic,
+                description_master_match=description_master_match,
+                purpose=f"{facet.provenance_code}_MATCH",
+            )
+            _add_observation(
+                grouped,
+                IdentitySemanticCategory.ASSEMBLY_COMPONENT_ROLE,
+                f"functional_location::{facet.axis}::{facet.shared_construct}",
+                facet.value,
+                source,
+                "BOUNDED_FUNCTIONAL_LOCATION_FACET_RECOGNIZED",
+            )
+            recognized_tokens_by_source[source_field].update(
+                normalize_description(facet.matched_evidence).split()
+            )
 
         for tyre_variant in discriminator.tyre_variants:
             source = _source_observation(
