@@ -19,6 +19,7 @@ import {
   exportSuccessFeedback,
   summarizeReviewedExportAvailability,
 } from '../utils/identityExportUi'
+import { scanStatusLabel } from '../utils/productJourneyUi'
 
 const memberReference = member => member.stable_record_reference || member.record_ref_key
 
@@ -169,10 +170,29 @@ function PairDiagnostics({ scanId, onClose }) {
   </>
 }
 
+function ScanUnavailable() {
+  return <section className="panel unavailable-result" role="alert">
+    <p className="eyebrow">Result unavailable</p><h1>Scan not available</h1>
+    <p>This scan ID does not identify a result that can be opened. It was not replaced with another scan.</p>
+    <div className="actions">
+      <Link className="button" to="/">Return to Dashboard</Link>
+      <Link className="button secondary" to="/">View recent scans</Link>
+      <Link className="button secondary" to="/new-scan">Start a new scan</Link>
+    </div>
+  </section>
+}
+
 export default function ScanResults() {
   const { id } = useParams()
+  const parsedId = Number(id)
+  if (!Number.isInteger(parsedId) || parsedId <= 0) return <ScanUnavailable />
+  return <ValidScanResults id={String(parsedId)} />
+}
+
+function ValidScanResults({ id }) {
   const exports = useMemo(() => identityReadExportTargets(id), [id])
   const [scan, setScan] = useState(null)
+  const [scanError, setScanError] = useState(false)
   const [summary, setSummary] = useState(null)
   const [summaryError, setSummaryError] = useState(null)
   const [groupResult, setGroupResult] = useState(null)
@@ -215,9 +235,9 @@ export default function ScanResults() {
   }, [id])
 
   useEffect(() => {
-    setScan(null); setSummary(null); setSummaryError(null); setGroupResult(null)
+    setScan(null); setScanError(false); setSummary(null); setSummaryError(null); setGroupResult(null)
     setGroupError(null); setOutcomes(null); setDetails({}); setView('groups'); setPage(0)
-    api.get(`/api/scans/${id}`).then(setScan).catch(error => setSummaryError(identityReadErrorState(error.status, error.message)))
+    api.get(`/api/scans/${id}`).then(setScan).catch(() => setScanError(true))
     api.getIdentityReadSummary(id).then(setSummary).catch(error => setSummaryError(identityReadErrorState(error.status, error.message)))
   }, [id])
 
@@ -276,11 +296,13 @@ export default function ScanResults() {
     }
   }
 
+  if (scanError) return <ScanUnavailable />
+
   return <>
     <header><div><p className="eyebrow">Scan results</p><h1>{scan?.scan_name || 'Loading scan…'}</h1>
-      <p>{scan && `${scan.total_records} records scanned · threshold ${scan.threshold} · ${scan.scan_mode}`}</p></div>
+      <p>{scan && `Scan ${scan.id} · ${scanStatusLabel(scan.status)} · ${scan.total_records} records · review threshold ${scan.threshold}`}</p></div>
       <LlmStatus />
-      <div className="actions"><Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link></div>
+      <div className="actions"><Link className="button secondary" to="/">Dashboard</Link><Link className="button secondary" to="/new-scan">New Scan</Link><Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link></div>
     </header>
 
     <ExportAuthorityPanel

@@ -1,5 +1,15 @@
 # Product Recovery CEO User-Journey Audit
 
+## PRM-4 completion addendum
+
+PRM-4 is VERIFIED. The audited navigation and processing-confidence blockers are
+addressed through authoritative Latest/Recent history, normal historical reopen,
+explicit invalid-route recovery, fresh-validation gating, request-active elapsed
+guidance, duplicate-submit prevention, and safe failure copy. The synchronous
+execution model and detector/review/export authorities remain unchanged. PRM-1
+through PRM-3 remain verified. PRM-5 CEO-path rehearsal and showable-product
+freeze are now the smallest next task.
+
 ## PRM-3 completion addendum
 
 PRM-3 is VERIFIED. The audited export-authority blocker is addressed with

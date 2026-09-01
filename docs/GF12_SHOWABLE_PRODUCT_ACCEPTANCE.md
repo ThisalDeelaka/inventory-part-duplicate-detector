@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## PRM-4 addendum
+
+PRM-4 is VERIFIED for normal product navigation and scan confidence. Latest and
+Recent history reopen persisted results without hard-coded IDs; New Scan requires
+current successful validation, prevents duplicate submission, and truthfully
+shows only synchronous request-active and elapsed state. Invalid routes and
+ordinary failures have actionable recovery. PRM-1 through PRM-3 remain intact.
+PRM-5 rehearsal/freeze is next; GF-12A2 remains incomplete.
+
 ## PRM-3 addendum
 
 PRM-3 is VERIFIED for the showable export path. System CSV/XLSX actions are

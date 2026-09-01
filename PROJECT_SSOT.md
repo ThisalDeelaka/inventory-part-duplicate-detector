@@ -6,6 +6,14 @@ This document is the authoritative source for product requirements, non-negotiab
 
 ### Immediate priority: Product Recovery Milestone
 
+PRM-4 is VERIFIED: Dashboard exposes authoritative Latest and Recent scan
+history, historical results reopen through normal routes, current validation is
+required before submission, and synchronous processing shows truthful active and
+elapsed guidance with safe recovery. No fake progress, execution-model change,
+detector change, or authority change was introduced. PRM-1 through PRM-3 remain
+VERIFIED. PRM-5 rehearsal and showable-product freeze are next. See
+`docs/PRODUCT_RECOVERY_PRM4_NAVIGATION_PROGRESS_RECOVERY.md`.
+
 PRM-3 is VERIFIED: System Group Export is explicitly presented as analytical
 machine-generated suggestions, while Reviewed Identity Export is explicitly
 presented as current human-confirmed operational authority. Zero-affirmative,

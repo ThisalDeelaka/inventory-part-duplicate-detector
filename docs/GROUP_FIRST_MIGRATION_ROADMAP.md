@@ -2,6 +2,13 @@
 
 ## Immediate sequencing overlay: Product Recovery Milestone
 
+PRM-4 is VERIFIED. Normal navigation now discovers and reopens historical scans;
+validation freshness, synchronous request-active/elapsed guidance,
+duplicate-submit prevention, exact completion routing, and recovery copy are
+truthful without execution or authority changes. PRM-1 through PRM-3 remain
+verified. Proceed only to PRM-5 rehearsal and showable-product freeze; detector
+semantic work remains paused.
+
 PRM-3 is VERIFIED. The product now separates System suggestions from Reviewed
 decisions, blocks misleading zero-confirmed reviewed downloads, and states
 partial and chain-head authority without altering any export or review contract.

@@ -1,5 +1,16 @@
 # Current project assessment
 
+## PRM-4 product-recovery status
+
+PRM-4 is VERIFIED. The existing scan-list API now powers Latest and Recent scan
+navigation; historical and invalid result paths are explicit; successful current
+validation gates Run Scan; and the unchanged synchronous request has elapsed,
+request-active, duplicate-submit, completion-routing, and safe recovery UX.
+PRM-1 through PRM-3 remain verified and PRM-5 is next. R18 execution and
+deployment remain deferred, GF-12A2 remains incomplete, GF-11 remains in
+progress under its active waiver with `GF11-PERF-100K-COLD-FULL` open, and the
+R12 detector freeze gap remains.
+
 ## PRM-3 product-recovery status
 
 PRM-3 is VERIFIED. Scan results now distinguish analytical System Group Export
