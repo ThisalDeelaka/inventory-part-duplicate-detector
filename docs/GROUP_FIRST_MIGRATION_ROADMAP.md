@@ -1,5 +1,21 @@
 # Group-first identity migration roadmap
 
+## Immediate sequencing overlay: Product Recovery Milestone
+
+PRM-0 establishes the immediate priority as a five-task, user-visible Product
+Recovery Milestone, starting with plain-language presentation of existing
+persisted group evidence. This overlay does not reorder or erase GF history and
+does not authorize detector work. Normalization, retrieval, GF2-GF6, identity
+signatures, signed evidence, thresholds, statuses, membership, providers,
+schema, migrations, and dependencies remain frozen for the milestone.
+
+R14-R18 remain future identity-engine R&D; R18 human-label execution is
+deferred. GF-11 remains in progress with its active waiver and open cold-full
+debt. R12 still leaves the detector technically unfrozen from the full-real
+quality perspective. Deployment remains post-product-proof work. The finite
+tasks, non-goals, and PASS gates are recorded in
+`PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`.
+
 ## Purpose and constraints
 
 This roadmap turns the approved group-first ADR and domain contracts into bounded implementation phases. It is planning documentation only.

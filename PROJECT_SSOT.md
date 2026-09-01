@@ -4,6 +4,23 @@
 
 This document is the authoritative source for product requirements, non-negotiable invariants, and the approved target direction for this repository.
 
+### Immediate priority: Product Recovery Milestone
+
+PRM-0 completed the CEO/first-time-user journey audit. The immediate priority is
+the finite Product Recovery Milestone defined in
+`docs/PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`, beginning with PRM-1's
+plain-language presentation of already-persisted group evidence. Detector
+semantics are paused for this milestone: no normalization, retrieval, GF2-GF6,
+signature, signed-evidence, threshold, status, or membership change is
+authorized by PRM-0.
+
+R14-R18 remain valid historical/future identity-engine research. R18 is only
+`HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`; label
+execution is deferred. The R12 full-real quality failure still leaves the
+detector technically unfrozen. GF-11 remains in progress under its active
+waiver with the cold-full debt open, and deployment remains deferred until
+after product proof.
+
 The repository authority order is:
 
 1. `PROJECT_SSOT.md` — authoritative product requirements, invariants, and target direction.

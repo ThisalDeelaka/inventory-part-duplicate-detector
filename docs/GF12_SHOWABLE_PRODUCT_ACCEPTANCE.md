@@ -1,5 +1,22 @@
 # GF-12C1 showable product acceptance checklist
 
+## Product-recovery continuation
+
+The earlier bounded synthetic showability result remains valid, but PRM-0 now
+governs the immediate CEO/first-time-user recovery work. The audited product
+path is technically complete through intake, current-product group reads,
+append-only review, reviewed identity sets, and separate system/reviewed
+exports. It is not yet presentation-complete: group detail lacks a concise
+plain-language explanation of already-persisted evidence, review/export labels
+need first-time-user clarity, and a full-real live scan is not a safe demo step.
+
+The honest demo uses a pre-completed authoritative full scan plus an optional
+small synthetic live scan. Detector semantics are paused. R18 human-label
+execution and deployment remain deferred; GF-11 stays open under its active
+waiver; and R12 continues to leave the full-real detector technically unfrozen.
+The five bounded recovery tasks and exact PRM-1 next step are in
+`PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`.
+
 Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 `EXTERNAL_EVIDENCE_REQUIRED`.
 

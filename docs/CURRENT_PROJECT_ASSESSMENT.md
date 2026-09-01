@@ -4,6 +4,24 @@
 
 This document describes the observed repository state. It is not a requirements or architecture authority and never overrides `PROJECT_SSOT.md` or the approved group-first architecture package.
 
+## Immediate product-recovery status
+
+PRM-0 audited the actual React/FastAPI human-in-the-loop path and classified it
+`PRM0_PRODUCT_RECOVERY_AUDIT_COMPLETE`. CSV intake, explicit
+`current_product` selection, group-first identity reads, group detail/evidence,
+all five group-review intents, append-only correction history, reviewed identity
+sets, and authority-selected CSV/XLSX exports are implemented. Focused evidence
+is 62 passing backend product/API/export tests and 94 passing frontend journey
+tests, with provider calls zero.
+
+The smallest missing user-visible slice is not a detector change: normal group
+detail exposes counts and advanced raw evidence but lacks a concise,
+group-specific plain-language explanation. PRM-1 is the immediate priority.
+Further semantic detector work is paused; R18 label execution and deployment
+are deferred. R12 still leaves the full-real detector technically unfrozen,
+and GF-11 remains in progress under its active waiver with open cold-full debt.
+See `docs/PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`.
+
 ## Assessed baseline
 
 - Baseline HEAD before the GF-12C1-R12 evidence commit: `73e3e382f5275ed3c00582ba3ab130a978ca34f7`.
