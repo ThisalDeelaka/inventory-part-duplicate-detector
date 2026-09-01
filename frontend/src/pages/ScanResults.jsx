@@ -73,7 +73,6 @@ function AdvisoryEligibility({ scanId, detail }) {
 }
 
 function GroupDetail({ scanId, detail }) {
-  const [reviewVersion, setReviewVersion] = useState(0)
   return <div className="group-detail">
     <section><h3>All identity-set members</h3>
       <p><b>Projection-safe identity:</b> <code>{detail.versioned_group_key}</code></p>
@@ -81,7 +80,7 @@ function GroupDetail({ scanId, detail }) {
     </section>
     <SystemExplanation explanation={detail.system_explanation} />
     <EvidenceSummary detail={detail} />
-    <GroupReviewPanel key={reviewVersion} scanId={scanId} detail={detail} onSaved={() => setReviewVersion(value => value + 1)} />
+    <GroupReviewPanel scanId={scanId} detail={detail} />
     <AdvisoryEligibility scanId={scanId} detail={detail} />
   </div>
 }

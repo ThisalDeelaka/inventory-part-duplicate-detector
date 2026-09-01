@@ -1,5 +1,16 @@
 # Current project assessment
 
+## PRM-2 product-recovery status
+
+PRM-2 is VERIFIED. The frontend now presents the unchanged authoritative review
+actions as Confirm, Reject, and Defer, preserves advanced multi-member choices,
+and makes saved current versus previous decisions and their outcomes explicit.
+Concurrency, validation, and network feedback are truthful; review-flow mojibake
+is corrected. PRM-1 remains verified and PRM-3 is next. Review/detector/export
+semantics are unchanged. R18 execution and deployment remain deferred, GF-12A2
+remains incomplete, GF-11 remains in progress under its active waiver with
+`GF11-PERF-100K-COLD-FULL` open, and the R12 detector freeze gap remains.
+
 ## PRM-1 product-recovery status
 
 PRM-1 is VERIFIED. The additive identity read model turns persisted group,

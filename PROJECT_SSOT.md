@@ -6,6 +6,13 @@ This document is the authoritative source for product requirements, non-negotiab
 
 ### Immediate priority: Product Recovery Milestone
 
+PRM-2 is VERIFIED: the unchanged review enums now appear as unmistakable Confirm,
+Reject, and Defer decisions with truthful consequences, multi-member guidance,
+saved current-state outcomes, append-only Previous decision history, and explicit
+409/422/network feedback. PRM-1 remains VERIFIED; System explanation and Human
+decision remain separate. PRM-3 export-authority distinction is next. See
+`docs/PRODUCT_RECOVERY_PRM2_REVIEW_ACTION_CLARITY.md`.
+
 PRM-1 is VERIFIED: current-product group list/detail, conflict, and deferred read
 paths expose bounded plain-language explanations derived only from persisted
 authoritative evidence. System explanations remain hypotheses, Human decision is

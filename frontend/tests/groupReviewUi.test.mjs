@@ -9,6 +9,7 @@ import {
   identityGroupReviewTargets,
   relationshipCounts,
   reviewPreview,
+  reviewSaveErrorState,
   staleReviewHandling,
 } from '../src/utils/identityGroupReviewUi.js'
 
@@ -121,8 +122,9 @@ test('edit review uses the exact current event as supersession token', () => {
 test('409 reloads and never automatically resubmits', () => {
   assert.deepEqual(staleReviewHandling(409), {
     reload: true, resubmit: false,
-    message: 'Another review became current. The latest review was reloaded; review your choices before saving again.',
+    message: 'Decision not saved because another review became current. The latest decision was reloaded; check it before trying again.',
   })
+  assert.equal(reviewSaveErrorState(409).resubmit, false)
 })
 
 test('review payload cannot mutate system status, members, exports, or projection', () => {
@@ -146,7 +148,7 @@ test('review UI exposes keyboard-native labeled controls and append-only history
   assert.match(source, /<fieldset>/)
   assert.match(source, /type="checkbox"/)
   assert.match(source, /aria-label=/)
-  assert.match(source, /Current.*Superseded/s)
+  assert.match(source, /Current decision.*Previous decision/s)
   assert.match(source, /supersedes_review_event_id|currentReviewEventId/)
 })
 

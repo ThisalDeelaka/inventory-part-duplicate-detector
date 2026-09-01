@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## PRM-2 addendum
+
+PRM-2 is VERIFIED for the showable review path. A first-time user now sees explicit
+Confirm as same item, Reject duplicate hypothesis, and Defer decision actions,
+their consequences, and a separate Human decision region showing the current
+authoritative result and previous decisions. Multi-member workflows and
+409/422/network recovery remain truthful. No GF-12 detector, review-authority,
+reviewed-set, or export semantics changed. PRM-3 is next.
+
 ## PRM-1 addendum
 
 PRM-1 is VERIFIED for the showable current-product path: group previews and

@@ -1,5 +1,14 @@
 # Product Recovery CEO User-Journey Audit
 
+## PRM-2 completion addendum
+
+PRM-2 is VERIFIED. The audited human-review clarity blocker is addressed with
+plain Confirm / Reject / Defer choices, pre-save consequences, explicit saved
+Human decision outcomes, Change decision wording, and visibly distinct Current
+and Previous history. Review-flow mojibake and ambiguous error feedback are fixed
+without changing append-only authority or reviewed-set semantics. PRM-1 remains
+verified. PRM-3 export-authority distinction is now the smallest next task.
+
 ## PRM-1 completion addendum
 
 PRM-1 is VERIFIED. The audited count/raw-JSON comprehension blocker is addressed

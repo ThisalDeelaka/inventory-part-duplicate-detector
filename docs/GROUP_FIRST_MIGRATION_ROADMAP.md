@@ -2,6 +2,12 @@
 
 ## Immediate sequencing overlay: Product Recovery Milestone
 
+PRM-2 is VERIFIED. Human review now uses clear Confirm / Reject / Defer vocabulary,
+accurate advanced multi-member guidance, explicit current/previous saved-state
+presentation, and safe concurrency/error recovery without changing review
+authority. PRM-1 remains verified. Proceed only to PRM-3 export-authority clarity
+and feedback; export semantics remain unchanged until then.
+
 PRM-1 is VERIFIED. Persisted authoritative evidence now drives concise System
 explanations in current-product group list/detail and conflict/deferred views,
 with Human decision and advanced evidence kept separate. No detector or export

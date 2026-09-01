@@ -1,23 +1,97 @@
 export const GROUP_REVIEW_DECISIONS = [
-  ['CONFIRM_ALL_AS_ONE', 'Confirm all as one item'],
-  ['CONFIRM_SELECTED', 'Confirm selected as one item'],
-  ['SPLIT_PARTITIONS', 'Split into identity sets'],
-  ['KEEP_ALL_SEPARATE', 'Keep all separate'],
-  ['UNSURE', 'Unsure â€” keep for later review'],
+  ['CONFIRM_ALL_AS_ONE', 'Confirm as same item'],
+  ['CONFIRM_SELECTED', 'Confirm selected records as same item'],
+  ['SPLIT_PARTITIONS', 'Split into separate identity sets'],
+  ['KEEP_ALL_SEPARATE', 'Reject duplicate hypothesis'],
+  ['UNSURE', 'Defer decision'],
 ]
 
 const REVIEW_LABELS = {
-  CONFIRM_ALL_AS_ONE: 'Reviewed â€” all confirmed as one',
-  CONFIRM_SELECTED: 'Reviewed â€” selected members confirmed',
-  SPLIT_PARTITIONS: 'Reviewed â€” split',
-  KEEP_ALL_SEPARATE: 'Reviewed â€” kept separate',
-  UNSURE: 'Reviewed â€” unsure',
+  CONFIRM_ALL_AS_ONE: 'Reviewed — all confirmed as one identity',
+  CONFIRM_SELECTED: 'Reviewed — selected records confirmed as one identity',
+  SPLIT_PARTITIONS: 'Reviewed — split into identity sets',
+  KEEP_ALL_SEPARATE: 'Reviewed — rejected and kept separate',
+  UNSURE: 'Reviewed — deferred / unsure',
+}
+
+const DECISION_PRESENTATION = {
+  CONFIRM_ALL_AS_ONE: {
+    label: 'Confirm as same item',
+    secondary: 'Confirm all records as the same underlying inventory item.',
+    consequence: 'Creates one human-confirmed reviewed identity set.',
+  },
+  CONFIRM_SELECTED: {
+    label: 'Confirm selected records as same item',
+    secondary: 'Confirm only the selected records together; unselected records remain unresolved.',
+    consequence: 'Creates one reviewed identity set containing only the selected records.',
+  },
+  SPLIT_PARTITIONS: {
+    label: 'Split into separate identity sets',
+    secondary: 'Assign every record to exactly one reviewed identity set.',
+    consequence: 'Creates the reviewed identity sets shown below and keeps those sets separate.',
+  },
+  KEEP_ALL_SEPARATE: {
+    label: 'Reject duplicate hypothesis',
+    secondary: 'Keep these records separate.',
+    consequence: 'No reviewed duplicate set is created.',
+  },
+  UNSURE: {
+    label: 'Defer decision',
+    secondary: 'Not enough information / review later.',
+    consequence: 'Leaves the group unresolved for later review.',
+  },
+}
+
+export function reviewDecisionPresentation(decisionType, memberCount = 0) {
+  const presentation = DECISION_PRESENTATION[decisionType]
+  if (!presentation) return {
+    label: 'Choose Confirm, Reject, or Defer',
+    secondary: 'Select the human decision that matches your review.',
+    consequence: 'No decision is saved until you submit the form.',
+  }
+  if (decisionType === 'CONFIRM_ALL_AS_ONE' && Number(memberCount) > 2) {
+    return { ...presentation, label: 'Confirm all as same item' }
+  }
+  return presentation
+}
+
+export function reviewDecisionOutcome(review, memberCount = 0) {
+  if (!review) return {
+    title: 'No human decision saved',
+    effect: 'Confirm, Reject, or Defer after reviewing the system hypothesis and record details.',
+  }
+  const partitions = review.partitions || []
+  if (review.decision_type === 'CONFIRM_ALL_AS_ONE') return {
+    title: 'Confirmed as one identity',
+    effect: `One reviewed identity set contains all ${Number(memberCount) || partitions[0]?.length || 0} records.`,
+  }
+  if (review.decision_type === 'CONFIRM_SELECTED') {
+    const selected = partitions[0]?.length || 0
+    const unresolved = Math.max(0, Number(memberCount || 0) - selected)
+    return {
+      title: 'Selected records confirmed as one identity',
+      effect: `One reviewed identity set contains ${selected} selected records; ${unresolved} records remain unresolved.`,
+    }
+  }
+  if (review.decision_type === 'SPLIT_PARTITIONS') return {
+    title: 'Split into identity sets',
+    effect: `${partitions.length} reviewed identity sets were recorded; every member belongs to exactly one set.`,
+  }
+  if (review.decision_type === 'KEEP_ALL_SEPARATE') return {
+    title: 'Rejected — keep separate',
+    effect: 'No reviewed duplicate set was created; the records remain separate.',
+  }
+  if (review.decision_type === 'UNSURE') return {
+    title: 'Deferred',
+    effect: 'No reviewed duplicate set was created; the group remains unresolved for later review.',
+  }
+  return { title: 'Unknown saved decision', effect: 'Review history contains a decision this interface cannot describe.' }
 }
 
 export function groupReviewLabel(state) {
   if (!state?.reviewed) return 'Not reviewed'
   return REVIEW_LABELS[state.current_decision_type]
-    || `Reviewed â€” unknown decision (${String(state.current_decision_type || 'unspecified')})`
+    || 'Reviewed — unknown decision'
 }
 
 function positive(value, name) {
@@ -149,8 +223,25 @@ export function versionedReviewPreview(input) {
   }
 }
 
+export function reviewSaveErrorState(status) {
+  if (Number(status) === 409) return {
+    reload: true,
+    resubmit: false,
+    message: 'Decision not saved because another review became current. The latest decision was reloaded; check it before trying again.',
+  }
+  if (Number(status) === 422) return {
+    reload: false,
+    resubmit: false,
+    message: 'Decision not saved. Check the selected records, identity sets, and reviewer details, then try again.',
+  }
+  return {
+    reload: false,
+    resubmit: false,
+    message: 'Decision not saved because the review service could not be reached. Check your connection and try again.',
+  }
+}
+
 export function staleReviewHandling(status) {
-  return Number(status) === 409
-    ? { reload: true, resubmit: false, message: 'Another review became current. The latest review was reloaded; review your choices before saving again.' }
-    : { reload: false, resubmit: false, message: '' }
+  const state = reviewSaveErrorState(status)
+  return Number(status) === 409 ? state : { reload: false, resubmit: false, message: '' }
 }
