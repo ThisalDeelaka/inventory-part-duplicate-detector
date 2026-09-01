@@ -1,5 +1,16 @@
 # Group-first inventory identity project SSOT
 
+## IQR-0 pre-demo identity-quality recovery
+
+PRM-5 remains historical `WORKFLOW_AND_PRESENTATION_VERIFIED`, but external demo
+readiness is now `BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`. The frozen showable-product
+baseline is `PRESERVED`; pre-demo identity-quality recovery is `ACTIVE`; the
+post-proof roadmap is `DEFERRED`. Read-only Scan-33 tracing proves a multilayer
+defect: site is a hard pre-evidence discovery boundary for the Bicycle family,
+while Head/Tail functional/location meaning is not extracted into typed identity
+evidence. No runtime correction is part of IQR-0. See
+`docs/IQR0_PRE_DEMO_IDENTITY_QUALITY_DIAGNOSTIC.md`.
+
 ## PRM-5 showable-product freeze
 
 Product Recovery Milestone is `COMPLETE` and the showable human-in-the-loop

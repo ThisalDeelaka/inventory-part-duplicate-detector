@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## IQR-0 external-demo readiness correction
+
+PRM-5 workflow/presentation verification remains valid, but external demo
+readiness is `BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`. The saved showable-product
+baseline is preserved. Scan 33 proves a site-boundary Bicycle recall defect and
+a separate Head/Tail typed-evidence defect; IQR-0 changes no runtime semantics.
+Pre-demo identity-quality recovery is active and the post-proof roadmap remains
+deferred.
+
 ## PRM-5 freeze addendum
 
 PRM-5 rehearsed and froze the showable human-in-the-loop product baseline. Saved

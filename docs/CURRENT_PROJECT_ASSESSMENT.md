@@ -1,5 +1,15 @@
 # Current project assessment
 
+## IQR-0 pre-demo quality diagnosis
+
+External demonstration is blocked by identity-output quality, not by workflow
+readiness. Scan 33 proves `IQR0_MULTILAYER_DEFECT`: all 21 known Bicycle-family
+pairs are rejected by the `SAME_SITE_DUPLICATE` site gate before discovery
+evidence, while the same-site Head/Tail pair reaches Review because its
+functional/location distinction remains unresolved lexical text. PRM-5 history
+and its baseline remain preserved. Pre-demo quality recovery is active;
+post-proof, confidence, LLM, and XLSX-vNext work remain deferred.
+
 ## PRM-5 final Product Recovery status
 
 PRM-5 is `PRM5_SHOWABLE_PRODUCT_FROZEN`: Product Recovery is `COMPLETE`, the

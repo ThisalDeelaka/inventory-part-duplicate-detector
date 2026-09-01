@@ -1,5 +1,14 @@
 # PRM-5 Demo Rehearsal and Showable-Product Freeze
 
+## IQR-0 readiness correction
+
+This document remains historical evidence that the workflow and presentation
+path were verified. It no longer authorizes an external CEO/client demo: later
+Scan-33 review found identity-output quality blockers. External demo readiness is
+`BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`; the baseline is `PRESERVED`; pre-demo
+quality recovery is `ACTIVE`; post-proof work is `DEFERRED`. See
+`docs/IQR0_PRE_DEMO_IDENTITY_QUALITY_DIAGNOSTIC.md`.
+
 ## Decision
 
 `PRM5_SHOWABLE_PRODUCT_FROZEN`

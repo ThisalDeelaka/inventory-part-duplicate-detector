@@ -1,5 +1,14 @@
 # Group-first identity migration roadmap
 
+## IQR-0 pre-demo recovery overlay
+
+Do not proceed directly from PRM-5 to external demonstration or post-proof work.
+IQR-0 proves separate discovery and identity-evidence defects on Scan 33. The
+next task is the smallest general correction of the site-independent discovery
+seam and typed role/location/copied-text evidence seam, followed by bounded
+Scan-33 acceptance. No confidence, LLM advisory, or XLSX-vNext implementation is
+authorized before that correction and later R18/R18-G measurement.
+
 ## PRM-5 freeze overlay
 
 The finite Product Recovery Milestone is `COMPLETE` and the showable product is
