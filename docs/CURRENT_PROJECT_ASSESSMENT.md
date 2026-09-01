@@ -1,5 +1,18 @@
 # Current project assessment
 
+## PRM-5 final Product Recovery status
+
+PRM-5 is `PRM5_SHOWABLE_PRODUCT_FROZEN`: Product Recovery is `COMPLETE`, the
+showable human-in-the-loop baseline is `FROZEN`, and the immediate next action is
+demo/presentation only. Saved scan 31 supplies the verified 5,327-record
+Group-First/G2_V2 primary path through normal history; the existing 17-row
+synthetic fixture supplies the optional bounded live path. No detector, review,
+export, schema, migration, dependency, or provider behavior changed. Identity
+semantics are paused; R18 labels and deployment are deferred until their separate
+post-proof tracks. GF11 remains in progress under its active waiver with
+`GF11-PERF-100K-COLD-FULL` open, GF12A2 human execution is incomplete, and R12
+autonomous-quality freeze still failed.
+
 ## PRM-4 product-recovery status
 
 PRM-4 is VERIFIED. The existing scan-list API now powers Latest and Recent scan

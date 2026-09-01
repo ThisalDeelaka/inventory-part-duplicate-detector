@@ -1,5 +1,20 @@
 # Group-first inventory identity project SSOT
 
+## PRM-5 showable-product freeze
+
+Product Recovery Milestone is `COMPLETE` and the showable human-in-the-loop
+product/demo baseline is `FROZEN` at PRM-5. The verified presentation path uses
+saved current-product scan 31 (5,327 records, Group-First primary, G2_V2) through
+normal Dashboard/history navigation, with a bounded optional 17-row synthetic
+live path. System explanations, append-only Human decisions, and separate System
+versus Reviewed exports remain truthful; provider calls are 0. Immediate next
+action is demo/presentation only. Identity-engine semantics are `PAUSED`, R18
+human labels are `DEFERRED`, and deployment is `DEFERRED UNTIL PRODUCT PROOF`.
+GF11 remains `IN PROGRESS` under its `ACTIVE` waiver,
+`GF11-PERF-100K-COLD-FULL` remains `OPEN`, GF12A2 human-label execution remains
+incomplete, and the R12 autonomous-quality freeze failure remains in force. See
+`docs/PRODUCT_RECOVERY_PRM5_DEMO_REHEARSAL_AND_FREEZE.md`.
+
 ## Status and authority
 
 This document is the authoritative source for product requirements, non-negotiable invariants, and the approved target direction for this repository.

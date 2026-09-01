@@ -1,5 +1,16 @@
 # GF-12C1 showable product acceptance checklist
 
+## PRM-5 freeze addendum
+
+PRM-5 rehearsed and froze the showable human-in-the-loop product baseline. Saved
+scan 31 is the verified normal-history full-result path: 5,327 records,
+`group_first_primary`, `G2_V2`, completed and visible-product-ready, with provider
+calls 0. The existing 17-row synthetic fixture remains the optional live path.
+PRM-1 through PRM-4 remain verified; no scripted-path presentation blocker
+remains. This is not an autonomous-quality or production-deployment acceptance:
+R12 failure, incomplete GF12A2 human execution, GF11/waiver/performance debt, and
+deferred deployment all remain unchanged.
+
 ## PRM-4 addendum
 
 PRM-4 is VERIFIED for normal product navigation and scan confidence. Latest and

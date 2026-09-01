@@ -1,5 +1,16 @@
 # Group-first identity migration roadmap
 
+## PRM-5 freeze overlay
+
+The finite Product Recovery Milestone is `COMPLETE` and the showable product is
+`FROZEN`. Use the PRM-5 runbook and presenter script for demo/presentation only;
+do not resume product or detector changes before the demo absent a reproduced
+scripted-path blocker. Identity semantics are paused and R18 human labels remain
+deferred. GF11 is still `IN PROGRESS` under its `ACTIVE` waiver,
+`GF11-PERF-100K-COLD-FULL` stays `OPEN`, GF12A2 human execution remains
+incomplete, R12 autonomous-quality freeze remains failed, and deployment remains
+deferred until product proof.
+
 ## Immediate sequencing overlay: Product Recovery Milestone
 
 PRM-4 is VERIFIED. Normal navigation now discovers and reopens historical scans;

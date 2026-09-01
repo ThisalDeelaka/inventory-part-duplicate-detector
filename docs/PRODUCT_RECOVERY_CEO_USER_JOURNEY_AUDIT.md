@@ -1,5 +1,16 @@
 # Product Recovery CEO User-Journey Audit
 
+## PRM-5 completion and freeze addendum
+
+PRM-5 is `PRM5_SHOWABLE_PRODUCT_FROZEN`. The CEO journey now forms one coherent
+path: Dashboard/history, optional bounded New Scan, authoritative saved full
+result, plain-language explanation, separate append-only Human decision,
+authority-separated exports, and recoverable close. Product Recovery is
+`COMPLETE`; the showable product is `FROZEN`; immediate next action is
+demo/presentation only. Identity semantics are paused, R18 labels are deferred,
+and deployment is deferred until product proof. Existing GF11, GF12A2, and R12
+limitations remain explicit and unchanged.
+
 ## PRM-4 completion addendum
 
 PRM-4 is VERIFIED. The audited navigation and processing-confidence blockers are
