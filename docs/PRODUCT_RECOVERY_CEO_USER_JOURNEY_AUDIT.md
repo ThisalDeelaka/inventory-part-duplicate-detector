@@ -1,5 +1,15 @@
 # Product Recovery CEO User-Journey Audit
 
+## PRM-1 completion addendum
+
+PRM-1 is VERIFIED. The audited count/raw-JSON comprehension blocker is addressed
+by a bounded persisted-evidence explanation mapper and prominent list/detail UI.
+Conflict and deferred outcomes use distinct non-duplicate language; human review
+is still displayed separately and remains authoritative; advanced evidence is
+retained. Detector and export semantics are unchanged. PRM-2 is now the smallest
+next task: make Confirm / Reject / Defer unmistakable and polish saved-review
+interaction without changing authority.
+
 ## Decision
 
 Classification: `PRM0_PRODUCT_RECOVERY_AUDIT_COMPLETE`

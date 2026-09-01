@@ -1,5 +1,16 @@
 # Current project assessment
 
+## PRM-1 product-recovery status
+
+PRM-1 is VERIFIED. The additive identity read model turns persisted group,
+conflict, and deferred evidence into bounded plain-language System explanations in
+list and detail views. Human decisions remain separately authoritative; advanced
+evidence remains available; detector, persistence, review, provider, and export
+semantics did not change. PRM-2 is next. R18 human-label execution and deployment
+remain deferred; GF-12A2 remains incomplete; GF-11 remains in progress under its
+active waiver with `GF11-PERF-100K-COLD-FULL` open; the detector remains unfrozen
+from the R12 quality perspective.
+
 ## Document role
 
 This document describes the observed repository state. It is not a requirements or architecture authority and never overrides `PROJECT_SSOT.md` or the approved group-first architecture package.

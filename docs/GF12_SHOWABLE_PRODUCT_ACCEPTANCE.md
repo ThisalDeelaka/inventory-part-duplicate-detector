@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## PRM-1 addendum
+
+PRM-1 is VERIFIED for the showable current-product path: group previews and
+detail, conflict, and deferred views provide deterministic plain-language
+explanations from persisted evidence before advanced evidence. The UI keeps
+system hypotheses separate from authoritative human decisions. This improves
+comprehension only; it does not change GF-12 detector, review, export, or
+graduation status. PRM-2 is the next bounded product-recovery task.
+
 ## Product-recovery continuation
 
 The earlier bounded synthetic showability result remains valid, but PRM-0 now

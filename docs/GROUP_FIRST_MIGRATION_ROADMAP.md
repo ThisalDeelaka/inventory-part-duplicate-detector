@@ -2,6 +2,12 @@
 
 ## Immediate sequencing overlay: Product Recovery Milestone
 
+PRM-1 is VERIFIED. Persisted authoritative evidence now drives concise System
+explanations in current-product group list/detail and conflict/deferred views,
+with Human decision and advanced evidence kept separate. No detector or export
+semantics changed. Proceed only to PRM-2 review-action clarity and saved-review
+polish; PRM-3 export work remains deferred.
+
 PRM-0 establishes the immediate priority as a five-task, user-visible Product
 Recovery Milestone, starting with plain-language presentation of existing
 persisted group evidence. This overlay does not reorder or erase GF history and

@@ -60,6 +60,11 @@ from app.services.identity_read_xlsx_export_service import (
     authority_selected_system_groups_to_xlsx,
 )
 from app.identity_read.fingerprints import canonical_value
+from app.identity_read.explanations import (
+    explain_deferred_identity_work,
+    explain_identity_conflict,
+    explain_identity_group,
+)
 from app.identity_read.key_codec import (
     InvalidVersionedIdentityGroupKey,
     parse_versioned_identity_group_key,
@@ -132,6 +137,7 @@ def _read_group(group, *, detail=False, review_state=None):
         "bridge_risk_summary": canonical_value(group.bridge_risk_summary),
         "genericity_risk_summary": canonical_value(group.genericity_risk_summary),
         "missing_evidence_summary": canonical_value(group.missing_evidence_summary),
+        "system_explanation": canonical_value(explain_identity_group(group)),
         "member_preview": [canonical_value(item) for item in group.members[:3]],
         "review_state": review_state or {"reviewed": False},
     }
@@ -225,8 +231,20 @@ def authoritative_identity_outcomes(scan_id: int, db: Session = Depends(get_db))
     )
     return {
         "projection": _read_projection(snapshot),
-        "conflicts": [canonical_value(item) for item in snapshot.conflicts],
-        "deferred_work_units": [canonical_value(item) for item in snapshot.deferred_work_units],
+        "conflicts": [
+            {
+                **canonical_value(item),
+                "system_explanation": canonical_value(explain_identity_conflict(item)),
+            }
+            for item in snapshot.conflicts
+        ],
+        "deferred_work_units": [
+            {
+                **canonical_value(item),
+                "system_explanation": canonical_value(explain_deferred_identity_work(item)),
+            }
+            for item in snapshot.deferred_work_units
+        ],
         "unassigned_records": [canonical_value(item) for item in snapshot.unassigned_records],
     }
 

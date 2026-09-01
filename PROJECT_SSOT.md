@@ -6,6 +6,14 @@ This document is the authoritative source for product requirements, non-negotiab
 
 ### Immediate priority: Product Recovery Milestone
 
+PRM-1 is VERIFIED: current-product group list/detail, conflict, and deferred read
+paths expose bounded plain-language explanations derived only from persisted
+authoritative evidence. System explanations remain hypotheses, Human decision is
+separate, advanced evidence remains available, and detector/export semantics are
+unchanged. PRM-2 is next: make Confirm / Reject / Defer unmistakable and polish
+saved-review interaction without authority changes. See
+`docs/PRODUCT_RECOVERY_PRM1_GROUP_EXPLANATIONS.md`.
+
 PRM-0 completed the CEO/first-time-user journey audit. The immediate priority is
 the finite Product Recovery Milestone defined in
 `docs/PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`, beginning with PRM-1's

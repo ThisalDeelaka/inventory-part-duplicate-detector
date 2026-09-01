@@ -447,6 +447,8 @@ def test_demo24_only_bounded_xlsx_export_production_files_change():
         "backend/app/engine/identity_evidence_evaluator.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
+        "backend/app/identity_read/explanations.py",
+        "backend/app/schemas/identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
         "backend/app/services/identity_read_xlsx_export_service.py",
         "backend/app/services/scan_runner.py",

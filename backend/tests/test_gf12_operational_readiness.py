@@ -427,6 +427,8 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
         "backend/app/engine/identity_evidence_evaluator.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
+        "backend/app/identity_read/explanations.py",
+        "backend/app/schemas/identity_groups.py",
         "backend/app/services/identity_read_export_service.py",
         "backend/app/services/identity_read_xlsx_export_service.py",
         "backend/app/services/scan_runner.py",
@@ -445,6 +447,7 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
     assert (
         "authority_selected_system_groups_to_xlsx" in diff
         or "evaluate_identity_discriminators" in diff
+        or "system_explanation" in diff
     )
     assert "generate_candidate_pairs" not in diff
     assert "score_candidate" not in diff

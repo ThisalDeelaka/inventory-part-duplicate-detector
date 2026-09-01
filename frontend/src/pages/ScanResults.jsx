@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import GroupReviewPanel from '../components/GroupReviewPanel'
 import LlmStatus from '../components/LlmStatus'
+import SystemExplanation from '../components/SystemExplanation'
 import {
   groupStatusLabel,
   identityReadErrorState,
@@ -78,6 +79,7 @@ function GroupDetail({ scanId, detail }) {
       <p><b>Projection-safe identity:</b> <code>{detail.versioned_group_key}</code></p>
       <MemberTable members={detail.members || []} />
     </section>
+    <SystemExplanation explanation={detail.system_explanation} />
     <EvidenceSummary detail={detail} />
     <GroupReviewPanel key={reviewVersion} scanId={scanId} detail={detail} onSaved={() => setReviewVersion(value => value + 1)} />
     <AdvisoryEligibility scanId={scanId} detail={detail} />
@@ -97,6 +99,7 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
         <small>{group.group_size} records · {validationCoverageLabel(group.validation_coverage)}</small>
       </div><span className={`badge group-status ${group.group_status}`}>{groupStatusLabel(group.group_status)}</span></div>
       <p><b>Validation:</b> {validationModeLabel(group.validation_mode)}</p>
+      <SystemExplanation explanation={group.system_explanation} compact />
       <p><b>Human review:</b> {groupReviewLabel(group.review_state)}</p>
       <div className="member-preview" aria-label={`${group.group_size}-record identity-set preview`}>
         {(group.member_preview || []).map(member => <span key={member.stable_record_reference}><b>{member.part_no}</b> — {member.description}<small>{member.contract || 'No site / contract'} · {member.uom || 'No UOM'}</small></span>)}
@@ -122,11 +125,11 @@ function OutcomeView({ outcomes }) {
   return <div className="outcome-sections">
     <section><h2>Identity conflicts ({conflicts.length})</h2>
       {!conflicts.length ? <p className="empty">No authoritative conflicts.</p> : conflicts.map(item =>
-        <article className="group-card diagnostic-card" key={item.conflict_reference}><h3>{item.conflict_type}</h3><p>{item.summary}</p><small>{item.involved_record_references.length} affected records</small></article>)}
+        <article className="group-card diagnostic-card" key={item.conflict_reference}><SystemExplanation explanation={item.system_explanation} heading="Why the system kept these records separate" /><small>{item.involved_record_references.length} affected records</small></article>)}
     </section>
     <section><h2>Deferred / unresolved work ({deferred.length})</h2>
       {!deferred.length ? <p className="empty">No deferred identity work.</p> : deferred.map(item =>
-        <article className="group-card" key={item.deferred_reference}><h3>{item.reason}</h3><p>{item.unfinished_evidence_summary}</p><small>{item.record_references.length} records remain unresolved; this is not a unique, rejected, or conflicting classification.</small></article>)}
+        <article className="group-card" key={item.deferred_reference}><SystemExplanation explanation={item.system_explanation} heading="Why this identity work is deferred" /><small>{item.record_references.length} records remain unresolved; this is not a unique, rejected, or conflicting classification.</small></article>)}
     </section>
     <section><h2>Not safely assigned ({unassigned.length})</h2><p>These records were not safely assigned to an accepted identity set. They are not confirmed unique.</p></section>
   </div>

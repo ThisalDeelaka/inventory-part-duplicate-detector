@@ -184,6 +184,15 @@ class IdentityReadValidationCoverageResponse(BaseModel):
     proposal_evidence_count: int
 
 
+class SystemExplanationResponse(BaseModel):
+    headline: str
+    summary: str
+    supporting_points: list[str] = Field(max_length=3)
+    caution_points: list[str] = Field(max_length=2)
+    review_guidance: str
+    evidence_basis: list[str]
+
+
 class IdentityReadGroupResponse(BaseModel):
     versioned_group_key: str
     group_reference: str
@@ -198,6 +207,7 @@ class IdentityReadGroupResponse(BaseModel):
     bridge_risk_summary: dict[str, Any] | None = None
     genericity_risk_summary: dict[str, Any] | None = None
     missing_evidence_summary: dict[str, Any] | None = None
+    system_explanation: SystemExplanationResponse
     member_preview: list[dict[str, Any]] = Field(default_factory=list, max_length=3)
     review_state: GroupReviewStateResponse = Field(default_factory=GroupReviewStateResponse)
 

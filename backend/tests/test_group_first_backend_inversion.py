@@ -344,6 +344,7 @@ def test_authoritative_api_exposes_v2_conflict_without_legacy_coercion(db, clien
     assert body["projection"]["projection_contract"] == "G2_V2"
     assert body["conflicts"] and body["deferred_work_units"] == []
     assert "conflict_type" in body["conflicts"][0]
+    assert body["conflicts"][0]["system_explanation"]["headline"].startswith("Conflict")
 
 
 def test_progressive_v2_detail_api_preserves_two_of_three_without_synthetic_edge(
@@ -373,6 +374,12 @@ def test_progressive_v2_detail_api_preserves_two_of_three_without_synthetic_edge
     assert body["validation_coverage"]["possible_internal_pair_count"] == 3
     assert body["validation_coverage"]["missing_nonrequired_pair_count"] == 1
     assert len(body["internal_evidence"]) == 2
+    assert body["system_explanation"]["headline"] == "Possible duplicate identity - human review required"
+    assert "2 of 2 evaluated relationships" in body["system_explanation"]["summary"]
+    assert any(
+        "1 non-required relationship was not evaluated" in point
+        for point in body["system_explanation"]["caution_points"]
+    )
 
 
 def test_v2_outcomes_api_preserves_conflict_deferred_and_unassigned_types(
@@ -397,3 +404,5 @@ def test_v2_outcomes_api_preserves_conflict_deferred_and_unassigned_types(
     assert len(body["conflicts"]) == len(body["deferred_work_units"]) == 1
     assert len(body["unassigned_records"]) == 1
     assert "reason" in body["deferred_work_units"][0]
+    assert body["conflicts"][0]["system_explanation"]["caution_points"]
+    assert body["deferred_work_units"][0]["system_explanation"]["headline"].startswith("Resolution deferred")
