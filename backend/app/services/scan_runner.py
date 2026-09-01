@@ -60,6 +60,7 @@ from app.orchestration.contracts import (
     ScanOrchestrationMode,
     ScanStage,
     ScanStageExecutionStatus,
+    identity_discovery_scan_mode_for_orchestration,
 )
 from app.orchestration.pair_path_deprecation import (
     build_post_gf9_orchestration_plan,
@@ -120,6 +121,9 @@ class ScanRunner:
         ))
         policy = post_gf9_orchestration_policy(
             mode, shadow_comparison_enabled=shadow_enabled
+        )
+        identity_discovery_scan_mode = identity_discovery_scan_mode_for_orchestration(
+            policy.mode, scan_mode
         )
         plan = build_post_gf9_orchestration_plan(policy)
         write_policy = pair_path_write_policy(
@@ -204,7 +208,7 @@ class ScanRunner:
                 scan_id=scan.id,
                 catalog_records=catalog_result.records,
                 configuration=self.configuration,
-                scan_mode=scan_mode,
+                scan_mode=identity_discovery_scan_mode,
                 selected_fields=selected_fields,
             )
             discovery_run_id = discovery_run.discovery_run_id
@@ -284,9 +288,12 @@ class ScanRunner:
                     cache=SqlAlchemyEmbeddingVectorCache(self.db),
                 ).retrieve(
                     retrieval_input,
-                    scan_mode,
+                    identity_discovery_scan_mode,
                     standard_candidate_pairs,
                     evaluation_features=evaluation_features_by_ref,
+                    cross_site_identity_discovery=(
+                        policy.mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY
+                    ),
                 )
                 added = 0
                 added_with_uom_difference = 0
@@ -297,7 +304,7 @@ class ScanRunner:
                     left = engine_records[retrieved.left_record_id]
                     right = engine_records[retrieved.right_record_id]
                     result = score_candidate(
-                        left, right, selected_fields, scan_mode,
+                        left, right, selected_fields, identity_discovery_scan_mode,
                         allow_uom_mapping_review=True,
                         features_a=evaluation_features(left),
                         features_b=evaluation_features(right),
@@ -400,7 +407,7 @@ class ScanRunner:
                 scan_id=scan.id,
                 discovery_run_id=discovery_run_id,
                 context=DeterministicIdentityContext(
-                    scan_mode=scan_mode,
+                    scan_mode=identity_discovery_scan_mode,
                     selected_fields=tuple(selected_fields),
                 ),
             )

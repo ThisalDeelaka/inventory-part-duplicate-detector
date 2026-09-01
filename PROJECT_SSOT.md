@@ -1,5 +1,16 @@
 # Group-first inventory identity project SSOT
 
+## IQR-1A cross-site discovery correction
+
+`IQR1A_CROSS_SITE_DISCOVERY_VERIFIED`: current-product Group-First physical
+identity discovery is now cross-site capable through bounded exact-description
+or part-family anchors, while legacy scan modes remain unchanged. Scan 33 now
+produces all 21 Bicycle evidence edges and sends the seven records to one
+deferred GF5 work unit; no identity status was forced. The Head/Tail
+identity-evidence blocker remains open, so external demo readiness remains
+`BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`. See
+`docs/IQR1A_CROSS_SITE_DISCOVERY_BOUNDARY_CORRECTION.md`.
+
 ## IQR-0 pre-demo identity-quality recovery
 
 PRM-5 remains historical `WORKFLOW_AND_PRESENTATION_VERIFIED`, but external demo

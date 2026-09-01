@@ -433,6 +433,7 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
         "backend/app/services/identity_read_xlsx_export_service.py",
         "backend/app/services/scan_runner.py",
         "backend/app/services/scan_service.py",
+        "backend/app/services/hybrid_retrieval.py",
     }
     assert set(production) <= allowed
     if not production:
@@ -448,6 +449,7 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
         "authority_selected_system_groups_to_xlsx" in diff
         or "evaluate_identity_discriminators" in diff
         or "system_explanation" in diff
+        or "cross_site_identity_discovery" in diff
     )
     assert "generate_candidate_pairs" not in diff
     assert "score_candidate" not in diff

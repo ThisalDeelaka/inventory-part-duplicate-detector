@@ -682,6 +682,7 @@ class HybridCandidateRetriever:
         scan_mode: str,
         excluded_pairs: set | None = None,
         evaluation_features: dict[str, CandidateEvaluationFeatures] | None = None,
+        cross_site_identity_discovery: bool = False,
     ) -> HybridRetrievalResult:
         started = time.perf_counter()
         records = [row.to_dict() for _, row in df.reset_index(drop=True).iterrows()]
@@ -715,7 +716,11 @@ class HybridCandidateRetriever:
         allowed_pair_calls = 0
         feature_reuse_hits = 0
 
-        def eligible(left: int, right: int) -> tuple[int, int] | None:
+        cross_site_anchor_channels = {"EXACT_DESCRIPTION", "PART_NUMBER_FAMILY"}
+
+        def eligible(
+            left: int, right: int, channel: str | None = None,
+        ) -> tuple[int, int] | None:
             nonlocal eligibility_calls, allowed_pair_calls, feature_reuse_hits
             eligibility_calls += 1
             if left == right:
@@ -732,6 +737,15 @@ class HybridCandidateRetriever:
                 features[first], features[second],
             ):
                 return None
+            if (
+                cross_site_identity_discovery
+                and features[first].site_context
+                and features[second].site_context
+                and features[first].site_context != features[second].site_context
+                and channel not in cross_site_anchor_channels
+                and (first, second) not in evidence
+            ):
+                return None
             return first, second
 
         def add_channel(
@@ -742,7 +756,7 @@ class HybridCandidateRetriever:
             raw_score: float = 0.0,
             reciprocal: bool = False,
         ) -> None:
-            pair = eligible(left, right)
+            pair = eligible(left, right, channel)
             if pair is None:
                 return
             row = evidence.setdefault(pair, {
@@ -772,7 +786,7 @@ class HybridCandidateRetriever:
             bounded = sorted(set(indexes))[:50]
             for position, left in enumerate(bounded):
                 for right in bounded[position + 1:]:
-                    pair = eligible(left, right)
+                    pair = eligible(left, right, "EXACT_DESCRIPTION")
                     if pair:
                         exact_proposals[pair] = max(
                             exact_proposals.get(pair, 0.0),
@@ -792,7 +806,7 @@ class HybridCandidateRetriever:
             bounded = sorted(set(indexes))[:50]
             for position, left in enumerate(bounded):
                 for right in bounded[position + 1:]:
-                    pair = eligible(left, right)
+                    pair = eligible(left, right, "PART_NUMBER_FAMILY")
                     if pair:
                         family_proposals[pair] = max(family_proposals.get(pair, 0.0), len(key))
         for rank, (pair, quality) in enumerate(
@@ -884,7 +898,7 @@ class HybridCandidateRetriever:
             bounded = sorted(set(indexes))[:50]
             for position, left in enumerate(bounded):
                 for right in bounded[position + 1:]:
-                    pair = eligible(left, right)
+                    pair = eligible(left, right, "TECHNICAL_IDENTITY")
                     if pair:
                         technical_proposals[pair] += 1
         for rank, (pair, quality) in enumerate(

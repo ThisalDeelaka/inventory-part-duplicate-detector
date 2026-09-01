@@ -13,6 +13,9 @@ from app.engine.identity_evidence_evaluator import (
 )
 from app.engine.identity_signature_derivation import derive_identity_signature
 from app.engine.identity_edge import IdentityEdgeClass
+from app.orchestration.contracts import (
+    identity_discovery_scan_mode_for_orchestration,
+)
 from app.services.canonical_record_service import CanonicalScanRecord
 from app.services.hybrid_retrieval import _allowed_pair
 
@@ -65,7 +68,7 @@ def signature(part_no, description, reference):
     )
 
 
-def test_iqr0_characterizes_site_as_current_pre_evidence_hard_boundary():
+def test_iqr0_characterizes_site_as_legacy_pre_evidence_hard_boundary():
     left = engine_record("AB-BICYCLE", "Bicycle", "AB-SA")
     right = engine_record("SD-BICYCLE", "Bicycle", "SD-SA")
 
@@ -73,15 +76,16 @@ def test_iqr0_characterizes_site_as_current_pre_evidence_hard_boundary():
     assert _allowed_pair(left, right, "DISCOVERY")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="IQR-0: current-product physical-identity discovery still rejects site mismatch",
-)
 def test_iqr0_future_contract_site_alone_cannot_block_identity_discovery():
     left = engine_record("AB-BICYCLE", "Bicycle", "AB-SA")
     right = engine_record("SD-BICYCLE", "Bicycle", "SD-SA")
 
-    assert _allowed_pair(left, right, "SAME_SITE_DUPLICATE")
+    current_product_mode = identity_discovery_scan_mode_for_orchestration(
+        "group_first_primary", "SAME_SITE_DUPLICATE"
+    )
+
+    assert current_product_mode == "DISCOVERY"
+    assert _allowed_pair(left, right, current_product_mode)
 
 
 def test_iqr0_characterizes_head_tail_as_unresolved_not_typed_identity_role():

@@ -30,6 +30,23 @@ def orchestration_mode_for_product_authority(
     return ScanOrchestrationMode.LEGACY_PRIMARY
 
 
+def identity_discovery_scan_mode_for_orchestration(
+    mode: ScanOrchestrationMode | str,
+    requested_scan_mode: str,
+) -> str:
+    """Keep physical-identity discovery site-neutral for current-product scans.
+
+    The requested scan mode remains the persisted product scope. Historical
+    legacy-primary scans retain that mode, while the Group-First authority uses
+    DISCOVERY for GF-2 through GF-4 so site context cannot independently reject
+    a physical-identity relationship before evidence is evaluated.
+    """
+    mode = ScanOrchestrationMode(mode)
+    if mode == ScanOrchestrationMode.GROUP_FIRST_PRIMARY:
+        return "DISCOVERY"
+    return requested_scan_mode
+
+
 class PrimaryIdentityPipeline(str, Enum):
     LEGACY_PAIR_G1 = "LEGACY_PAIR_G1"
     GROUP_FIRST_GF1_GF6 = "GROUP_FIRST_GF1_GF6"

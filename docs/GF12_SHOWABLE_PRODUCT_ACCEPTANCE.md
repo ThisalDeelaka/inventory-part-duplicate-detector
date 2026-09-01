@@ -1,5 +1,13 @@
 # GF-12C1 showable product acceptance checklist
 
+## IQR-1A bounded acceptance
+
+`IQR1A_CROSS_SITE_DISCOVERY_VERIFIED`: the Bicycle recall blocker is removed at
+the discovery layer without forcing group membership, changing legacy scan
+semantics, or increasing retrieval budgets. The saved showable-product workflow
+remains preserved. External demonstration is not authorized because the
+Head/Tail typed-evidence blocker remains open.
+
 ## IQR-0 external-demo readiness correction
 
 PRM-5 workflow/presentation verification remains valid, but external demo

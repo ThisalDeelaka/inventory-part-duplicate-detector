@@ -1,5 +1,14 @@
 # Current project assessment
 
+## IQR-1A verified
+
+The current Group-First product path no longer uses site as an independent hard
+physical-identity discovery boundary. Bounded Scan-33 acceptance generated all
+21 Bicycle relationships as Review evidence and reached GF5 without changing
+the three accepted groups, three review groups, or three conflicts. The seven
+Bicycle records are truthfully deferred rather than forced together. Head/Tail
+typed evidence remains open; external demo readiness is still blocked.
+
 ## IQR-0 pre-demo quality diagnosis
 
 External demonstration is blocked by identity-output quality, not by workflow

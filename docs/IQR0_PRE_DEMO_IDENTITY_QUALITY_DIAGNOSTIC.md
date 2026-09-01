@@ -1,5 +1,14 @@
 # IQR-0 Pre-Demo Identity Quality Diagnostic
 
+## IQR-1A disposition of the discovery finding
+
+The site-boundary finding is now corrected and verified for the current-product
+Group-First path by IQR-1A. Scan 33 produces all 21 Bicycle relationships as
+bounded `REVIEW_SUPPORT` evidence and sends the seven records to one deferred
+GF5 work unit. Legacy scan modes remain unchanged. Head/Tail and copied/generic
+text findings remain open. See
+`docs/IQR1A_CROSS_SITE_DISCOVERY_BOUNDARY_CORRECTION.md`.
+
 ## Classification
 
 `IQR0_MULTILAYER_DEFECT`

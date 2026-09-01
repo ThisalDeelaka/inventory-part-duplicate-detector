@@ -1,5 +1,14 @@
 # Group-first identity migration roadmap
 
+## IQR-1A completion overlay
+
+Cross-site physical-identity discovery is `CORRECTED` for current-product
+Group-First scans with bounded identity anchors; legacy semantics and retrieval
+budgets are preserved. The Bicycle discovery blocker is
+`REMOVED_AT_DISCOVERY_LAYER`. Execute IQR-1B only next for the general
+functional/location evidence seam. R18, confidence, LLM advisory, XLSX vNext,
+deployment, and GF11 remain out of scope.
+
 ## IQR-0 pre-demo recovery overlay
 
 Do not proceed directly from PRM-5 to external demonstration or post-proof work.

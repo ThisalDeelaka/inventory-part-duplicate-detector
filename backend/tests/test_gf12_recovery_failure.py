@@ -572,6 +572,7 @@ def test_rf26_only_bounded_xlsx_export_production_change():
         "backend/app/services/identity_read_xlsx_export_service.py",
         "backend/app/services/scan_runner.py",
         "backend/app/services/scan_service.py",
+        "backend/app/services/hybrid_retrieval.py",
     }
     assert set(production) <= allowed
     if production:
@@ -586,6 +587,7 @@ def test_rf26_only_bounded_xlsx_export_production_change():
             "authority_selected_system_groups_to_xlsx" in diff
             or "evaluate_identity_discriminators" in diff
             or "system_explanation" in diff
+            or "cross_site_identity_discovery" in diff
         )
         for forbidden in ("generate_candidate_pairs", "score_candidate"):
             assert forbidden not in diff
