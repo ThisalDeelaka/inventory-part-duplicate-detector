@@ -103,3 +103,14 @@ non-synthetic validation dataset.
 GF-11 remains IN PROGRESS, its bounded performance waiver remains ACTIVE,
 `GF11-PERF-100K-COLD-FULL` remains OPEN, and the unchanged 300-second target
 remains unmet.
+
+## R18 pair-review extension
+
+R18 received explicit authorization for the protected real dataset and
+prepared a separate pair-label package required by the R17 architecture gate.
+It preserves this document's group-first pilot conventions and does not
+reinterpret the earlier unexecuted group-partition pilot. The R18 package uses
+independent Reviewer A/B copies, neutral identifiers, allowlisted source
+fields, a private mapping, and empty adjudication. Its status is
+`HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`; zero human
+labels or metrics exist.

@@ -37,7 +37,7 @@ This document describes the observed repository state. It is not a requirements 
 
 The current system classification is hybrid/transitional. The STAGE-1B deterministic/group product smoke test passed, and a normal scan currently generates G2 groups. The discovery and decision core remains pair-first, while group APIs, UI, exports, review, and advisory boundaries project or consume group results.
 
-The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D remains insufficient/not graduated after GF-11D-RERUN3: the official post-CACHE1 100k run timed out during retrieval fusion/materialization at 300.009 seconds, while the single extended run completed the full pipeline with 324.468-second DISCOVERY, corrected/persisted GF5, and GF6. GF-11D-CHAR-PRE, GF-11D-CHAR1, GF-11D-GF5-PRE, GF-11D-GF5-FIX, and GF-11D-CACHE1 are verified. CACHE1 replaced per-row cache-save round trips with deterministic bounded prefetch and executemany persistence while preserving exact cache/transaction semantics; the RERUN3 fresh 100k cache save used 79 lookup SELECTs and 71 batched inserts in 7.137 seconds. CHAR_VECTOR is now the largest measured DISCOVERY stage at 128.777 seconds. The `<=300.000000 s` target remains unmet and bounded debt `GF11-PERF-100K-COLD-FULL` is OPEN under an ACTIVE supervising architect / product-owner waiver. GF-12 is STARTED; GF-12A1 is VERIFIED, GF-12A2 human-review protocol/tooling is VERIFIED with `HUMAN_REVIEW_DATASET_REQUIRED`, GF-12B1 and GF-12B2 are VERIFIED, and GF-12B3 is VERIFIED with evidence-based operational gaps retained. No human pilot, labels, human-quality metrics, final production-quality signoff, or GF-12 graduation exists.
+The group-first architecture is approved and its product-read graduation is complete. GF-0 through GF-10 are verified and complete: GF-10A froze policy/dependency contracts, GF-10B-PRE enabled truthful G2-v2 audit persistence, and GF-10B deprecates pair-path writes for explicit group-first scans. Legacy numeric group routes remain v1-only compatibility endpoints while normal frontend, review, advisory eligibility, and authoritative exports use persisted per-scan authority and projection-safe keys. GF-11 is IN PROGRESS: GF-11A, GF-11B, GF-11C-PRE, and GF-11C are verified. GF-11D remains insufficient/not graduated after GF-11D-RERUN3: the official post-CACHE1 100k run timed out during retrieval fusion/materialization at 300.009 seconds, while the single extended run completed the full pipeline with 324.468-second DISCOVERY, corrected/persisted GF5, and GF6. GF-11D-CHAR-PRE, GF-11D-CHAR1, GF-11D-GF5-PRE, GF-11D-GF5-FIX, and GF-11D-CACHE1 are verified. CACHE1 replaced per-row cache-save round trips with deterministic bounded prefetch and executemany persistence while preserving exact cache/transaction semantics; the RERUN3 fresh 100k cache save used 79 lookup SELECTs and 71 batched inserts in 7.137 seconds. CHAR_VECTOR is now the largest measured DISCOVERY stage at 128.777 seconds. The `<=300.000000 s` target remains unmet and bounded debt `GF11-PERF-100K-COLD-FULL` is OPEN under an ACTIVE supervising architect / product-owner waiver. GF-12 is STARTED; GF-12A1 is VERIFIED, GF-12A2 human-review protocol/tooling is VERIFIED with `HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`, GF-12B1 and GF-12B2 are VERIFIED, and GF-12B3 is VERIFIED with evidence-based operational gaps retained. No completed human labels, human-quality metrics, final production-quality signoff, or GF-12 graduation exists.
 
 ## GF-1 canonical scan-record catalog
 
@@ -1302,3 +1302,18 @@ variant risks. The outcome is `R17-G_NO_SAFE_GENERALIZATION_PROVEN`; no runtime
 source or detector semantic changed. R16 remains gate-not-ready, the detector
 remains unfrozen, and R12, GF-11/waiver/performance debt, GF-12A2 human evidence,
 and deferred deployment/integration statuses are unchanged.
+
+## GF-12A2-R18 blinded human identity-label dataset
+
+R18 prepares, but does not label, a human identity dataset. The authoritative
+persisted scan-31 population contains 20,395 candidate edges across strong,
+review, cannot-link, and non-groupable outcomes; the 300-pair evaluation panel
+is deterministically stratified across those outcomes and R16 shadow buckets.
+A separate 20-pair diagnostic panel contains all seven R17 controls and H1-H13;
+four overlaps are represented once, yielding 316 neutral reviewer rows.
+Separate Reviewer A/B files reconcile exactly, label fields are empty, and no
+detector result leaks into the reviewer view. GF-12A2 is
+`HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`; human labels
+and quality metrics remain absent. Production semantics and all R12/R16/R17,
+GF-11, waiver, performance-debt, detector-freeze, and deployment boundaries
+remain unchanged.

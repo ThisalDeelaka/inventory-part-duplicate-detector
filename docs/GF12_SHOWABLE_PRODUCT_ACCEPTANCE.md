@@ -41,7 +41,7 @@ Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
 | Presenter script | `PASS` | `docs/GF12_DEMO_PRESENTER_SCRIPT.md` |
 | Cross-site duplicate in selected fixture | `NOT_APPLICABLE` | `NOT_AVAILABLE_IN_CURRENT_DEMO_FIXTURE` |
 | Deployment/IAM/tenancy/storage/integration | `DEFERRED_POST_DEMO` | Product-owner sequencing decision; not marked complete |
-| Representative human-quality validation | `EXTERNAL_EVIDENCE_REQUIRED` | GF-12A2 `HUMAN_REVIEW_DATASET_REQUIRED` |
+| Representative human-quality validation | `PENDING_HUMAN_EXECUTION` | GF-12A2 dataset prepared by R18; zero labels completed |
 | GF-11 300-second debt | `EXTERNAL_EVIDENCE_REQUIRED` | Waiver active, debt open, target not met |
 
 ## Milestone wording
@@ -164,3 +164,12 @@ Consequently R16 remains gate-not-ready, no visible authority changes, and the
 full-real detector remains unfrozen with the R12 quality failure in force.
 Human-labelled evidence, GF-11 debt, and deployment/integration remain open or
 deferred.
+
+R18 creates the missing blinded human-review package but does not create human
+quality evidence. Its 316 unique rows combine a deliberately enriched 20-pair
+diagnostic panel with a deterministic 300-pair sample from the full persisted
+candidate-edge population. Reviewer A/B content is identical and blinded, and
+all answer fields remain empty. GF-12A2 is therefore
+`HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`; showable
+product acceptance, detector freeze, R12 quality failure, R16/R17 constraints,
+GF-11 debt, and deferred deployment/integration are unchanged.

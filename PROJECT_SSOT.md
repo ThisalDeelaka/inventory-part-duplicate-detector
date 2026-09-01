@@ -130,7 +130,7 @@ The waiver does not relax correctness, determinism, cannot-link enforcement, mem
 
 GF-12 is STARTED. GF-12A1 is VERIFIED: the group-first production-validation contract and corrected canonical offline quality baseline are established using `group-first-scale-corpus-v1`, `group-first-scale-truth-v2`, and evaluation contract `gf12-group-quality-v1`.
 
-GF-12A2 human-review protocol/tooling is VERIFIED. No explicitly authorized representative non-synthetic validation dataset exists in the repository, so the blinded pilot is NOT EXECUTED, human labels and metrics are absent, and the state is `HUMAN_REVIEW_DATASET_REQUIRED`.
+GF-12A2 human-review protocol/tooling is VERIFIED and R18 has prepared an explicitly authorized blinded real candidate-edge package. Its state is `HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`; human labels and metrics remain absent, so no human-quality signoff is claimed.
 
 GF-12B1 is VERIFIED as a bounded privacy/security/data-boundary baseline. Provider-none isolation, synthetic-secret non-disclosure, offline truth/human-label separation, export/review allowlists, controlled input failure, and record-independent artifact paths pass PS1-PS24 with zero provider calls. Current retention/deletion policy gaps remain explicitly `UNSPECIFIED`.
 
@@ -398,3 +398,16 @@ GF-11 remains `IN PROGRESS` under its `ACTIVE` waiver,
 `GF11-PERF-100K-COLD-FULL` remains `OPEN`, the 300-second target remains unmet,
 GF-12A2 remains `HUMAN_REVIEW_DATASET_REQUIRED`, and deployment/integration
 remain deferred.
+
+## GF-12A2-R18 blinded human identity-label dataset status
+
+R18 is `R18_HUMAN_REVIEW_DATASET_PREPARED`. Explicit task authorization and
+the persisted scan-31 GF2/GF4 population support a deterministic 20-pair
+diagnostic panel and 300-pair evaluation panel without a fresh scan or
+accepted-edge-only selection. Separate blinded Reviewer A/B workbooks, a
+private mapping, empty adjudication template, and manifest were generated in
+an ignored local artifact path. Human labels completed are 0. GF-12A2 is now
+`HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`, not VERIFIED,
+COMPLETE, or ground truth. No production semantic or authority changed. The
+detector, R12, R16, R17, GF-11, performance waiver/debt, and deployment states
+remain unchanged.

@@ -638,11 +638,11 @@ One-million-record distributed execution and external provider optimization.
 Implementation status: STARTED. GF-12A1 is VERIFIED: the group-first validation
 contract and corrected canonical offline quality baseline are established with
 corpus v1, truth v2, deterministic evaluation, and zero safety/provider
-violations. GF-12A2 human-review protocol/tooling is VERIFIED, but no explicitly
-authorized representative non-synthetic validation dataset exists in the
-repository. Its blinded pilot is NOT EXECUTED and the state is
-`HUMAN_REVIEW_DATASET_REQUIRED`. Human-reviewed production-quality validation
-and final graduation remain pending.
+violations. GF-12A2 human-review protocol/tooling is VERIFIED and R18 has
+prepared an explicitly authorized blinded real candidate-edge package. Its
+state is `HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`;
+human-reviewed production-quality validation and final graduation remain
+pending.
 
 GF-12B1 privacy/security/data-boundary baseline is VERIFIED. PS1-PS24 confirm
 provider-none and offline-evaluator isolation, synthetic-secret non-disclosure,
@@ -981,3 +981,13 @@ independently human-labelled identity/non-identity edge dataset covering these
 evidence families, followed by the same bounded offline counterfactual audit.
 No R15/R16 or GF4 implementation is authorized. The detector remains unfrozen;
 all GF-11, GF-12A2, and deployment/integration constraints remain in force.
+
+GF-12A2-R18 prepares the independently reviewable evidence package required by
+R17. A 20-pair diagnostic panel and deterministic 300-pair evaluation sample
+are drawn from a persisted 20,395-edge real candidate population, not accepted
+groups alone. Reviewer A/B copies are blinded and empty; adjudication and later
+counterfactual evaluation remain separate future work. GF-12A2 advances only
+to `HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`. No
+detector semantics are authorized until completed independent labels are
+imported and evaluated; all GF-11 and deployment/integration constraints remain
+in force.
