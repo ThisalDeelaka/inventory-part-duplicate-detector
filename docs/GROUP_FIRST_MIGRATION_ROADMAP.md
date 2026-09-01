@@ -2,6 +2,13 @@
 
 ## Immediate sequencing overlay: Product Recovery Milestone
 
+PRM-3 is VERIFIED. The product now separates System suggestions from Reviewed
+decisions, blocks misleading zero-confirmed reviewed downloads, and states
+partial and chain-head authority without altering any export or review contract.
+PRM-1 and PRM-2 remain verified. Proceed only to PRM-4 navigation,
+scan-history, progress-confidence, and recovery-guidance work; detector semantics
+remain paused.
+
 PRM-2 is VERIFIED. Human review now uses clear Confirm / Reject / Defer vocabulary,
 accurate advanced multi-member guidance, explicit current/previous saved-state
 presentation, and safe concurrency/error recovery without changing review

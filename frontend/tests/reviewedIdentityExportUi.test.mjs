@@ -13,16 +13,20 @@ import { scanExportTargets } from '../src/utils/llmUi.js'
 const resultsSource = readFileSync(
   new URL('../src/pages/ScanResults.jsx', import.meta.url), 'utf8'
 )
+const exportPanelSource = readFileSync(
+  new URL('../src/components/ExportAuthorityPanel.jsx', import.meta.url), 'utf8'
+)
 
 
 test('canonical reviewed identity export has a distinct authority-selected route, label, and filename', () => {
   assert.deepEqual(identityReadExportTargets(21).reviewedIdentities, {
     path: '/api/scans/21/identity-read/reviewed-identities/export.csv',
-    filename: 'scan-21-reviewed-identities.csv',
+    filename: 'scan-21-reviewed-identity-sets.csv',
   })
-  assert.match(resultsSource, />Export Reviewed Identities</)
-  assert.match(resultsSource, />Export CSV</)
-  assert.match(resultsSource, />Export Excel</)
+  assert.match(exportPanelSource, /Reviewed Identity Export/)
+  assert.match(exportPanelSource, /Export confirmed duplicate sets \(CSV\)/)
+  assert.match(exportPanelSource, /Export system suggestions as CSV/)
+  assert.match(exportPanelSource, /Export system suggestions as Excel/)
 })
 
 test('reviewed export targets an exact selected projection when available', () => {
@@ -53,11 +57,12 @@ test('existing pair export controls remain independent', () => {
 })
 
 test('reviewed export remains explicit while backend readiness fails closed', () => {
-  assert.match(resultsSource, /Export Reviewed Identities/)
+  assert.match(exportPanelSource, /reviewedDisabled/)
+  assert.match(exportPanelSource, /Reload reviewed export availability/)
   assert.match(resultsSource, /identityReadErrorState/)
 })
 
 test('unknown export failures render through a safe alert', () => {
-  assert.match(resultsSource, /setExportError\(error\.message/)
-  assert.match(resultsSource, /role="alert">Identity export failed:/)
+  assert.match(resultsSource, /exportFailureFeedback\(kind, error\.status\)/)
+  assert.match(exportPanelSource, /role=\{feedback\.kind === 'error' \? 'alert' : 'status'\}/)
 })

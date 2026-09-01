@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
+import ExportAuthorityPanel from '../components/ExportAuthorityPanel'
 import GroupReviewPanel from '../components/GroupReviewPanel'
 import LlmStatus from '../components/LlmStatus'
 import SystemExplanation from '../components/SystemExplanation'
@@ -13,6 +14,11 @@ import {
   validationModeLabel,
 } from '../utils/identityGroupUi'
 import { groupReviewLabel } from '../utils/identityGroupReviewUi'
+import {
+  exportFailureFeedback,
+  exportSuccessFeedback,
+  summarizeReviewedExportAvailability,
+} from '../utils/identityExportUi'
 
 const memberReference = member => member.stable_record_reference || member.record_ref_key
 
@@ -72,7 +78,7 @@ function AdvisoryEligibility({ scanId, detail }) {
   </section>
 }
 
-function GroupDetail({ scanId, detail }) {
+function GroupDetail({ scanId, detail, onReviewSaved }) {
   return <div className="group-detail">
     <section><h3>All identity-set members</h3>
       <p><b>Projection-safe identity:</b> <code>{detail.versioned_group_key}</code></p>
@@ -80,12 +86,12 @@ function GroupDetail({ scanId, detail }) {
     </section>
     <SystemExplanation explanation={detail.system_explanation} />
     <EvidenceSummary detail={detail} />
-    <GroupReviewPanel scanId={scanId} detail={detail} />
+    <GroupReviewPanel scanId={scanId} detail={detail} onSaved={onReviewSaved} />
     <AdvisoryEligibility scanId={scanId} detail={detail} />
   </div>
 }
 
-function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, toggleDetail }) {
+function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, toggleDetail, onReviewSaved }) {
   if (!result) return <p className="empty">Loading authoritative identity groups…</p>
   if (!result.items.length) return <p className="empty">This ready authoritative snapshot contains zero potential duplicate groups.</p>
   return <div className="groups">{result.items.map(group => {
@@ -110,7 +116,7 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
       </button>
       {expanded && <div>{loadingKey === key && <p>Loading identity-set detail…</p>}
         {detailError?.id === key && <p className="error" role="alert">{detailError.message}</p>}
-        {detail && <GroupDetail scanId={scanId} detail={detail} />}
+        {detail && <GroupDetail scanId={scanId} detail={detail} onReviewSaved={onReviewSaved} />}
       </div>}
     </article>
   })}</div>
@@ -180,8 +186,33 @@ export default function ScanResults() {
   const [minimumSize, setMinimumSize] = useState('')
   const [maximumSize, setMaximumSize] = useState('')
   const [page, setPage] = useState(0)
-  const [exportError, setExportError] = useState('')
+  const [reviewedExportState, setReviewedExportState] = useState({ status: 'loading' })
+  const [exportBusyKind, setExportBusyKind] = useState('')
+  const [exportFeedback, setExportFeedback] = useState(null)
   const pageLimit = 25
+
+  const refreshReviewedExportState = useCallback(async () => {
+    setReviewedExportState({ status: 'loading' })
+    try {
+      const items = []
+      let offset = 0
+      let total = 0
+      do {
+        const result = await api.getIdentityReadGroups(id, { limit: 100, offset })
+        total = result.total
+        items.push(...result.items)
+        offset += result.items.length
+        if (!result.items.length) break
+      } while (offset < total)
+      const state = summarizeReviewedExportAvailability(items, total)
+      setReviewedExportState(state)
+      return state
+    } catch {
+      const state = { status: 'error' }
+      setReviewedExportState(state)
+      return state
+    }
+  }, [id])
 
   useEffect(() => {
     setScan(null); setSummary(null); setSummaryError(null); setGroupResult(null)
@@ -189,6 +220,8 @@ export default function ScanResults() {
     api.get(`/api/scans/${id}`).then(setScan).catch(error => setSummaryError(identityReadErrorState(error.status, error.message)))
     api.getIdentityReadSummary(id).then(setSummary).catch(error => setSummaryError(identityReadErrorState(error.status, error.message)))
   }, [id])
+
+  useEffect(() => { refreshReviewedExportState() }, [refreshReviewedExportState])
 
   useEffect(() => {
     setGroupResult(null); setGroupError(null)
@@ -221,25 +254,45 @@ export default function ScanResults() {
     } finally { setDetailLoading(null) }
   }
 
-  const download = async target => {
-    setExportError('')
-    try { await api.download(target.path, target.filename) }
-    catch (error) { setExportError(error.message || 'Identity export failed.') }
+  const download = async (kind, target) => {
+    setExportFeedback(null)
+    if (kind === 'reviewed' && (
+      reviewedExportState.status !== 'ready' || !reviewedExportState.has_confirmed_sets
+    )) {
+      setExportFeedback({
+        kind: 'empty',
+        message: 'No confirmed duplicate sets are available yet. Review and confirm groups before exporting operational results.',
+      })
+      return
+    }
+    setExportBusyKind(kind)
+    try {
+      await api.download(target.path, target.filename)
+      setExportFeedback({ kind: 'success', message: exportSuccessFeedback(kind) })
+    } catch (error) {
+      setExportFeedback({ kind: 'error', message: exportFailureFeedback(kind, error.status) })
+    } finally {
+      setExportBusyKind('')
+    }
   }
 
   return <>
     <header><div><p className="eyebrow">Scan results</p><h1>{scan?.scan_name || 'Loading scan…'}</h1>
       <p>{scan && `${scan.total_records} records scanned · threshold ${scan.threshold} · ${scan.scan_mode}`}</p></div>
       <LlmStatus />
-      <div className="actions"><Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link>
-        <button type="button" onClick={() => download(exports.systemGroups)}>Export CSV</button>
-        <button type="button" onClick={() => download(exports.systemGroupsExcel)}>Export Excel</button>
-        <button type="button" onClick={() => download(exports.reviewedIdentities)}>Export Reviewed Identities</button>
-        {!!summary?.conflict_count && <button type="button" className="secondary" onClick={() => download(exports.conflicts)}>Export Conflicts</button>}
-        {!!summary?.deferred_count && <button type="button" className="secondary" onClick={() => download(exports.deferred)}>Export Deferred</button>}
-      </div><small className="export-note">Authority-selected exports are member-shaped and make no AI provider call.</small>
+      <div className="actions"><Link className="button secondary" to={`/scans/${id}/warnings`}>Warnings ({scan?.warnings_count ?? 0})</Link></div>
     </header>
-    {exportError && <div className="error" role="alert">Identity export failed: {exportError}</div>}
+
+    <ExportAuthorityPanel
+      targets={exports}
+      reviewedState={reviewedExportState}
+      conflictCount={summary?.conflict_count || 0}
+      deferredCount={summary?.deferred_count || 0}
+      busyKind={exportBusyKind}
+      feedback={exportFeedback}
+      onDownload={download}
+      onRefreshReviewedState={refreshReviewedExportState}
+    />
 
     <section className="panel identity-summary" aria-labelledby="identity-summary-heading">
       <div className="group-head"><div><p className="eyebrow">Identity-set summary</p><h2 id="identity-summary-heading">Potential duplicate identities</h2></div>
@@ -269,7 +322,7 @@ export default function ScanResults() {
       <label>Maximum group size<input type="number" min="2" value={maximumSize} onChange={event => { setMaximumSize(event.target.value); setPage(0) }} /></label>
     </section>
       {groupError ? <div className="error" role="alert"><b>{groupError.title}</b><p>{groupError.message}</p></div> :
-        <section className="panel" role="tabpanel" aria-label="Authoritative identity groups"><IdentityGroups scanId={id} result={groupResult} detailByKey={details} loadingKey={detailLoading} detailError={detailError} toggleDetail={toggleDetail} />
+        <section className="panel" role="tabpanel" aria-label="Authoritative identity groups"><IdentityGroups scanId={id} result={groupResult} detailByKey={details} loadingKey={detailLoading} detailError={detailError} toggleDetail={toggleDetail} onReviewSaved={refreshReviewedExportState} />
           {groupResult?.total > pageLimit && <nav className="pagination" aria-label="Identity group pages"><button type="button" className="secondary" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><span>Page {page + 1} of {Math.ceil(groupResult.total / pageLimit)}</span><button type="button" className="secondary" disabled={(page + 1) * pageLimit >= groupResult.total} onClick={() => setPage(value => value + 1)}>Next</button></nav>}
         </section>}
     </>}

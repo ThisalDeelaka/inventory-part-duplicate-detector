@@ -16,6 +16,7 @@ import {
 
 const page = readFileSync(new URL('../src/pages/ScanResults.jsx', import.meta.url), 'utf8')
 const panel = readFileSync(new URL('../src/components/GroupReviewPanel.jsx', import.meta.url), 'utf8')
+const exportPanel = readFileSync(new URL('../src/components/ExportAuthorityPanel.jsx', import.meta.url), 'utf8')
 const client = readFileSync(new URL('../src/api/client.js', import.meta.url), 'utf8')
 const opaqueKey = 'igk1.eyJwcm9qZWN0aW9uX2NvbnRyYWN0IjoiRzJfVjIifQ'
 const members = [1, 2, 3].map(index => ({
@@ -109,14 +110,15 @@ test('F14 pair diagnostics are demoted under Advanced and have no review control
 
 test('F15 product export controls use only canonical authority-selected endpoints', () => {
   assert.deepEqual(identityReadExportTargets(21), {
-    systemGroups: { path: '/api/scans/21/identity-read/system-groups/export.csv', filename: 'scan-21-system-groups.csv' },
-    systemGroupsExcel: { path: '/api/scans/21/identity-read/system-groups/export.xlsx', filename: 'scan-21-system-groups.xlsx' },
-    reviewedIdentities: { path: '/api/scans/21/identity-read/reviewed-identities/export.csv', filename: 'scan-21-reviewed-identities.csv' },
+    systemGroups: { path: '/api/scans/21/identity-read/system-groups/export.csv', filename: 'scan-21-system-group-suggestions.csv' },
+    systemGroupsExcel: { path: '/api/scans/21/identity-read/system-groups/export.xlsx', filename: 'scan-21-system-group-suggestions.xlsx' },
+    reviewedIdentities: { path: '/api/scans/21/identity-read/reviewed-identities/export.csv', filename: 'scan-21-reviewed-identity-sets.csv' },
     conflicts: { path: '/api/scans/21/identity-read/conflicts/export.csv', filename: 'scan-21-identity-conflicts.csv' },
     deferred: { path: '/api/scans/21/identity-read/deferred/export.csv', filename: 'scan-21-deferred-identity-work.csv' },
   })
-  assert.match(page, />Export CSV</)
-  assert.match(page, />Export Excel</)
+  assert.match(exportPanel, /Export system suggestions as CSV/)
+  assert.match(exportPanel, /Export system suggestions as Excel/)
+  assert.match(exportPanel, /Export confirmed duplicate sets \(CSV\)/)
 })
 
 test('F16 valid zero-group rendering is distinct from not-ready rendering', () => {

@@ -1,5 +1,16 @@
 # Product Recovery CEO User-Journey Audit
 
+## PRM-3 completion addendum
+
+PRM-3 is VERIFIED. The audited export-authority blocker is addressed with
+separate System suggestions and Reviewed decisions sections, truthful
+zero-confirmed and partial-review guidance, current chain-head supersession
+wording, distinct filenames, and accessible success/error feedback. Export row
+membership, review authority, and detector semantics remain unchanged. PRM-1
+and PRM-2 remain verified. PRM-4 navigation, scan-history discoverability,
+processing/progress confidence, and recovery guidance are now the smallest next
+task.
+
 ## PRM-2 completion addendum
 
 PRM-2 is VERIFIED. The audited human-review clarity blocker is addressed with

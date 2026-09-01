@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## PRM-3 addendum
+
+PRM-3 is VERIFIED for the showable export path. System CSV/XLSX actions are
+clearly analytical machine suggestions; Reviewed CSV is clearly current
+human-confirmed operational authority. The UI handles zero-confirmed and
+partial-review states, chain-head supersession, loading, success, and errors
+without changing backend export membership or review authority. PRM-1 and PRM-2
+remain verified. PRM-4 is next; GF-12A2 remains incomplete.
+
 ## PRM-2 addendum
 
 PRM-2 is VERIFIED for the showable review path. A first-time user now sees explicit

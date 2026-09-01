@@ -6,6 +6,14 @@ This document is the authoritative source for product requirements, non-negotiab
 
 ### Immediate priority: Product Recovery Milestone
 
+PRM-3 is VERIFIED: System Group Export is explicitly presented as analytical
+machine-generated suggestions, while Reviewed Identity Export is explicitly
+presented as current human-confirmed operational authority. Zero-affirmative,
+partial-review, supersession, loading, success, and failure states are truthful;
+routes, file shapes, row membership, review authority, and detector semantics
+are unchanged. PRM-1 and PRM-2 remain VERIFIED. PRM-4 is next. See
+`docs/PRODUCT_RECOVERY_PRM3_EXPORT_AUTHORITY_CLARITY.md`.
+
 PRM-2 is VERIFIED: the unchanged review enums now appear as unmistakable Confirm,
 Reject, and Defer decisions with truthful consequences, multi-member guidance,
 saved current-state outcomes, append-only Previous decision history, and explicit

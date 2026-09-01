@@ -101,15 +101,15 @@ export function identityReadExportTargets(scanId) {
   return {
     systemGroups: {
       path: `${base}/system-groups/export.csv`,
-      filename: `scan-${id}-system-groups.csv`,
+      filename: `scan-${id}-system-group-suggestions.csv`,
     },
     systemGroupsExcel: {
       path: `${base}/system-groups/export.xlsx`,
-      filename: `scan-${id}-system-groups.xlsx`,
+      filename: `scan-${id}-system-group-suggestions.xlsx`,
     },
     reviewedIdentities: {
       path: `${base}/reviewed-identities/export.csv`,
-      filename: `scan-${id}-reviewed-identities.csv`,
+      filename: `scan-${id}-reviewed-identity-sets.csv`,
     },
     conflicts: {
       path: `${base}/conflicts/export.csv`,

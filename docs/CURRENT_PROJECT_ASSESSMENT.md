@@ -1,5 +1,16 @@
 # Current project assessment
 
+## PRM-3 product-recovery status
+
+PRM-3 is VERIFIED. Scan results now distinguish analytical System Group Export
+from operationally authoritative Reviewed Identity Export before download, and
+truthfully handle zero-confirmed, partial-review, supersession, success, and
+failure states. Backend/API and export membership semantics did not change.
+PRM-1 and PRM-2 remain verified; PRM-4 is next. R18 human execution and
+deployment remain deferred, GF-12A2 remains incomplete, GF-11 remains in
+progress under its active waiver with `GF11-PERF-100K-COLD-FULL` open, and the
+R12 detector quality freeze gap remains.
+
 ## PRM-2 product-recovery status
 
 PRM-2 is VERIFIED. The frontend now presents the unchanged authoritative review
