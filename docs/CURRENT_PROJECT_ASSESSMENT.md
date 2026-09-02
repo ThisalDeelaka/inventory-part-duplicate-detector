@@ -1,5 +1,15 @@
 # Current project assessment
 
+## IQR-1C audited
+
+The Bicycle disposition is `IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`. Its 21/21
+complete Review edges are generic-only, so the documented GF5 cohesion guard
+rejects a seven-member group before partition selection. The later deferred
+ambiguity is a consequence, not missing validation or an implicit Strong-edge
+requirement. No runtime correction is justified. External demo readiness
+remains blocked by copied/generic-description trust; blinded R18 human-label
+execution is next but was not begun.
+
 ## IQR-1B verified
 
 The general functional/location evidence seam is corrected. Scan 33 preserves

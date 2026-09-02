@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## IQR-1C bounded acceptance
+
+`IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`: the complete 21-edge Bicycle evidence
+shape was traced through GF5. The full family is rejected by the deliberate
+three-or-more-member generic-only cohesion guard, not incomplete validation,
+budget exhaustion, or a Strong-edge prerequisite. No runtime behavior changed.
+External demonstration remains blocked by copied/generic-description trust;
+blinded R18 human-label execution is the next separate task.
+
 ## IQR-1B bounded acceptance
 
 `IQR1B_FUNCTIONAL_LOCATION_EVIDENCE_VERIFIED`: Head Light versus Tail Light now

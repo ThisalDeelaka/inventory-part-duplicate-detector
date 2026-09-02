@@ -1,5 +1,14 @@
 # Group-first identity migration roadmap
 
+## IQR-1C completion overlay
+
+The Bicycle family is correctly deferred under the current generic-only
+cohesion safety contract: complete Review evidence does not become independent
+identity evidence merely by repetition. IQR-1C made no runtime change and
+recommends `NO_RUNTIME_CHANGE`. Proceed next only to blinded R18 human-label
+execution; copied/generic-description trust remains open. Confidence, LLM
+advisory, XLSX vNext, deployment, and GF11 remain out of scope.
+
 ## IQR-1B completion overlay
 
 Functional/location identity evidence is `CORRECTED` through a bounded,

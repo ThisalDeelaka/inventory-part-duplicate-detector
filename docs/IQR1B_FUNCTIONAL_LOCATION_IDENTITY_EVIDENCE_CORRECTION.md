@@ -1,5 +1,14 @@
 # IQR-1B Functional/Location Identity-Evidence Correction
 
+## IQR-1C continuation
+
+The subsequent diagnostic classified the unchanged Bicycle outcome as
+`IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`. All 21 Review edges are complete but
+generic-only, so the documented GF5 cohesion guard rejects the seven-member
+candidate before partition selection. No runtime correction is justified;
+blinded R18 human-label execution is next. See
+`IQR1C_BICYCLE_RESOLVER_DISPOSITION_AUDIT.md`.
+
 ## Classification and baseline
 
 `IQR1B_FUNCTIONAL_LOCATION_EVIDENCE_VERIFIED`

@@ -1,5 +1,19 @@
 # Group-first inventory identity project SSOT
 
+## IQR-1C Bicycle resolver-disposition audit
+
+`IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`: all 21 Bicycle relationships reach GF5
+as complete `REVIEW_SUPPORT`, but all are derived from the same generic
+description. The deliberate GF5 rule that three-or-more-member generic-only
+Review connectivity is not sufficient identity cohesion rejects the full
+family before partition selection; equal pair partitions then remain deferred.
+No missing evidence, budget failure, cannot-link, or implicit one-Strong-edge
+requirement caused the disposition. Runtime behavior is unchanged and the
+recommendation is `NO_RUNTIME_CHANGE`. External demo readiness remains
+`BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`; next is blinded R18 human-label execution,
+not an automatic resolver correction. See
+`docs/IQR1C_BICYCLE_RESOLVER_DISPOSITION_AUDIT.md`.
+
 ## IQR-1B functional/location evidence correction
 
 `IQR1B_FUNCTIONAL_LOCATION_EVIDENCE_VERIFIED`: a bounded, source-aware
