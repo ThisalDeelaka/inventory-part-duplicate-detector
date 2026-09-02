@@ -1,5 +1,14 @@
 # Current project assessment
 
+## R18A awaiting independent human labels
+
+The prepared 316-pair Reviewer A/B package passed blinding and integrity audit.
+Both workbooks still contain zero human labels. Reviewer instructions,
+fail-closed submission validation, and disagreement-only adjudication packaging
+are ready without production runtime changes. R18A is
+`R18A_AWAITING_HUMAN_LABELS`; external demo readiness remains blocked and R18B
+cannot begin before final human reference labels exist.
+
 ## IQR-1C audited
 
 The Bicycle disposition is `IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`. Its 21/21

@@ -1,5 +1,14 @@
 # Group-first identity migration roadmap
 
+## R18A execution overlay
+
+R18A Stage A is `R18A_AWAITING_HUMAN_LABELS`. The existing 316-pair package is
+validly blinded and the offline validation/adjudication infrastructure is
+ready, but Reviewer A and Reviewer B remain 0/316. Collect their labels
+independently; do not start R18B, tune generic trust, or begin confidence, LLM,
+XLSX-vNext, deployment, or GF11 work. `GF5-PARTITION-OBJECTIVE-GOVERNANCE` is
+OPEN, non-causal to Bicycle, and authorizes no runtime change.
+
 ## IQR-1C completion overlay
 
 The Bicycle family is correctly deferred under the current generic-only

@@ -1,5 +1,15 @@
 # Group-first inventory identity project SSOT
 
+## R18A blinded human-label execution
+
+`R18A_AWAITING_HUMAN_LABELS`: the existing 316-pair Reviewer A/B package is
+blinding-valid and unchanged, human labels remain 0, and deterministic offline
+submission validation plus disagreement-only adjudication packaging are ready.
+Codex did not create labels. External demo readiness remains
+`BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`; no detector behavior changed. Two actual
+humans must now complete the independent workbooks before Stage B. See
+`docs/R18A_BLINDED_HUMAN_LABEL_EXECUTION.md`.
+
 ## IQR-1C Bicycle resolver-disposition audit
 
 `IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`: all 21 Bicycle relationships reach GF5
