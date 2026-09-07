@@ -1,5 +1,17 @@
 # Group-first inventory identity project SSOT
 
+## R18B-R1 recovered expert evaluation
+
+`R18B_GENERIC_TRUST_TOO_WEAK`: forensic recovery proved the Senior submission
+retained all 316 pair IDs, all 5,688 original visible source cells, and literal
+valid judgments. The frozen 300-pair Evaluation panel contains ten Strong-on-
+DIFFERENT and 51 Review-on-DIFFERENT outcomes; broad lexical-only evidence is
+materially too permissive, while the exact generic guard remains cautious and
+must not be weakened. Runtime behavior is unchanged. Next is an architect-
+reviewed R18C evidence-backed generic-trust correction with a new untouched
+holdout required for later quality claims. See
+`docs/R18B_DETERMINISTIC_IDENTITY_QUALITY_EVALUATION.md`.
+
 ## R18B primary-reference blocker
 
 `R18B_PRIMARY_EXPERT_REFERENCE_INVALID`: Reviewer A's returned workbook no

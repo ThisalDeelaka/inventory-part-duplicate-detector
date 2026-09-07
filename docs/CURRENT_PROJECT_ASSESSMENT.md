@@ -1,5 +1,15 @@
 # Current project assessment
 
+## R18B-R1 expert evaluation complete
+
+The primary Senior reference was recovered and frozen without modifying the
+submission. On 300 stratified Evaluation pairs, the 3-by-4 matrix records 10
+Strong-on-DIFFERENT, 51 Review-on-DIFFERENT, two cannot-link-on-SAME, and one
+non-groupable-on-SAME outcome. Broad lexical/copied-text support is classified
+`R18B_GENERIC_TRUST_TOO_WEAK`; the exact generic guard itself remains cautious.
+Reviewer B is a degraded one-class secondary signal only. No detector change
+was made; external demo readiness remains blocked pending architect review.
+
 ## R18B blocked by invalid primary submission
 
 R18B is `R18B_PRIMARY_EXPERT_REFERENCE_INVALID`. Reviewer A's returned workbook

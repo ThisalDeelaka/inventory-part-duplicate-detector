@@ -1,5 +1,16 @@
 # Group-first identity migration roadmap
 
+## R18B-R1 completion overlay
+
+The recovered single-Senior diagnostic reference proves a general broad
+lexical/copied-text trust weakness without proving that the exact generic guard
+is too strict. R18B is `R18B_GENERIC_TRUST_TOO_WEAK`; runtime remains unchanged.
+The next separately reviewed task is
+`R18C_EVIDENCE_BACKED_GENERIC_TRUST_CORRECTION`. Any labels used to choose that
+change become development evidence, so post-change quality claims require a new
+untouched holdout. Do not begin confidence, LLM, XLSX-vNext, deployment, or
+GF11 work.
+
 ## R18B blocker overlay
 
 R18B stopped as `R18B_PRIMARY_EXPERT_REFERENCE_INVALID` before evaluation. Do

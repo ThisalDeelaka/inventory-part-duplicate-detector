@@ -1,5 +1,16 @@
 # R18A Blinded Human Label Execution
 
+## R18B-R1 recovery continuation
+
+The initial R18B structural blocker was resolved through authorized forensic
+recovery, not by editing the submission. All 316 pair IDs and 5,688 visible
+source cells matched the byte-identical original template; inserted formulas
+were isolated outside every authoritative logical field. The Senior reference
+is frozen under a single-expert diagnostic claim limit, Reviewer B remains
+secondary-only, and R18B completed without detector changes. See
+`R18B_PRIMARY_EXPERT_REFERENCE_RECOVERY.md` and
+`R18B_DETERMINISTIC_IDENTITY_QUALITY_EVALUATION.md`.
+
 ## R18B continuation blocker
 
 The returned primary Reviewer A workbook did not preserve this Stage-A

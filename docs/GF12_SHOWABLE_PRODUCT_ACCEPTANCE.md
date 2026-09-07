@@ -1,5 +1,14 @@
 # GF-12C1 showable product acceptance checklist
 
+## R18B-R1 deterministic quality evidence
+
+The Senior reference is recovered and frozen under an explicit single-expert
+claim limit. The 300-pair stratified evaluation classifies broad lexical/copied-
+text trust as too weak, while preserving the exact generic guard. This is
+diagnostic engineering evidence, not production accuracy or demo graduation.
+No runtime behavior changed; external demonstration remains blocked pending
+architect review and the separately authorized R18C decision.
+
 ## R18B quality-evaluation blocker
 
 `R18B_PRIMARY_EXPERT_REFERENCE_INVALID`: the primary expert workbook fails the
