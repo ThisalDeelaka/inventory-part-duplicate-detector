@@ -1,5 +1,15 @@
 # Current project assessment
 
+## R18G-A awaiting Senior group review
+
+R18G-A prepared 48 blinded DEVELOPMENT and 16 independent SEALED HOLDOUT group
+hypotheses from current post-R18C evidence. The package contains 170 member
+rows, includes the seven-record Bicycle case and three bounded partition-policy
+challengers, and passed all blinding/reconciliation gates with zero labels and
+zero provider calls. Runtime, Review status, and GF5 are unchanged. The only
+next action is the governed Senior handoff; group-quality evaluation is not yet
+authorized.
+
 ## R18D assessment complete
 
 R18D is `R18D_GF5_PARTITION_POLICY_CONFOUNDED`. The post-R18C development

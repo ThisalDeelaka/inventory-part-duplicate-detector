@@ -1,5 +1,14 @@
 # Group-first identity migration roadmap
 
+## R18G-A preparation overlay
+
+R18G-A is `R18G_AWAITING_GROUP_HUMAN_REVIEW`. The deterministic package contains
+48 DEVELOPMENT and 16 SEALED HOLDOUT whole-group hypotheses, including Bicycle
+and three current-vs-ADR partition challengers. Human labels are still zero.
+Return DEVELOPMENT to engineering first and keep completed holdout labels
+sealed outside the repository. Confidence, LLM advisory, XLSX vNext, and
+external demo graduation remain not started.
+
 ## R18D assessment overlay
 
 R18D is `R18D_GF5_PARTITION_POLICY_CONFOUNDED`. Review burden is measured, not

@@ -1,5 +1,15 @@
 # Group-first inventory identity project SSOT
 
+## R18G-A group human evidence prepared
+
+`R18G_AWAITING_GROUP_HUMAN_REVIEW`: two independent blinded workbooks now hold
+48 DEVELOPMENT and 16 SEALED HOLDOUT whole-group hypotheses from current
+post-R18C evidence. The development set includes the seven-record Bicycle
+family and three partition-policy challengers. Labels remain zero, the sealed
+labels remain invisible, provider calls are 0, and runtime/GF5 behavior is
+unchanged. Follow `docs/R18G_GROUP_HUMAN_REVIEW_INSTRUCTIONS.md`; do not begin
+evaluation, confidence, LLM, XLSX vNext, or external demo work.
+
 ## R18D Review-support burden assessment
 
 `R18D_GF5_PARTITION_POLICY_CONFOUNDED`: the post-R18C development panel has

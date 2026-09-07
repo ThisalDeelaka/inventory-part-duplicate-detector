@@ -1,5 +1,13 @@
 # GF-12C1 showable product acceptance checklist
 
+## R18G-A group-evidence preparation
+
+`R18G_AWAITING_GROUP_HUMAN_REVIEW`: 48 DEVELOPMENT and 16 SEALED HOLDOUT blinded
+whole-group cases are prepared, with zero human labels and zero provider calls.
+The package includes Bicycle and bounded GF5/ADR partition challengers without
+revealing their source. This is evidence preparation, not product-quality or
+external-demo acceptance; runtime and the showable product remain unchanged.
+
 ## R18D Review-burden assessment
 
 `R18D_GF5_PARTITION_POLICY_CONFOUNDED`: remaining Review support was measured

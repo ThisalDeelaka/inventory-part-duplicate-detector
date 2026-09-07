@@ -187,3 +187,10 @@ to yield safely removable client groups; and group evidence is the main
 remaining uncertainty.
 
 `NEXT = R18G_GROUP_LEVEL_HUMAN_EVIDENCE`
+
+## R18G-A follow-up
+
+R18G-A subsequently prepared the governed group-level package and is
+`R18G_AWAITING_GROUP_HUMAN_REVIEW`: 48 DEVELOPMENT and 16 SEALED HOLDOUT
+hypotheses, zero labels, and zero provider calls. R18D's classification remains
+unchanged, and no Review suppression or GF5 objective change was authorized.
