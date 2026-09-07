@@ -1,5 +1,13 @@
 # GF-12C1 showable product acceptance checklist
 
+## R18B quality-evaluation blocker
+
+`R18B_PRIMARY_EXPERT_REFERENCE_INVALID`: the primary expert workbook fails the
+frozen R18 blinded-schema and no-formula gates. No deterministic quality result
+or generic-trust conclusion exists, Reviewer B was not promoted to authority,
+and external demonstration remains blocked by identity-output quality. Runtime
+behavior is unchanged.
+
 ## IQR-1C bounded acceptance
 
 `IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`: the complete 21-edge Bicycle evidence

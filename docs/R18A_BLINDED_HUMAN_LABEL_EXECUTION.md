@@ -1,5 +1,15 @@
 # R18A Blinded Human Label Execution
 
+## R18B continuation blocker
+
+The returned primary Reviewer A workbook did not preserve this Stage-A
+contract: its header shifted to row 2, two formula columns were inserted, and
+the used range expanded to the worksheet maximum. R18B therefore classified
+the primary expert reference as invalid and stopped without interpreting
+labels or substituting Reviewer B. A new submission from the unchanged blinded
+template is required. See
+`R18B_DETERMINISTIC_IDENTITY_QUALITY_EVALUATION.md`.
+
 ## Classification and baseline
 
 `R18A_AWAITING_HUMAN_LABELS`

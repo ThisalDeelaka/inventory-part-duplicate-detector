@@ -1,5 +1,14 @@
 # Current project assessment
 
+## R18B blocked by invalid primary submission
+
+R18B is `R18B_PRIMARY_EXPERT_REFERENCE_INVALID`. Reviewer A's returned workbook
+fails the exact blinded schema and no-formula gates, so no primary reference,
+quality matrix, generic-trust measurement, or evaluation artifact was created.
+Reviewer B remains secondary-only and was not substituted. The current generic
+guard is retained pending a structurally valid Reviewer A resubmission; external
+demo readiness remains blocked.
+
 ## R18A awaiting independent human labels
 
 The prepared 316-pair Reviewer A/B package passed blinding and integrity audit.

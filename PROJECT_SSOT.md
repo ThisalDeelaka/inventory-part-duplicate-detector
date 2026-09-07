@@ -1,5 +1,15 @@
 # Group-first inventory identity project SSOT
 
+## R18B primary-reference blocker
+
+`R18B_PRIMARY_EXPERT_REFERENCE_INVALID`: Reviewer A's returned workbook no
+longer matches the immutable blinded schema (shifted header, two inserted
+formula columns, and an expanded worksheet range). R18B stopped before labels,
+private evidence, or metrics were joined; Reviewer B was not substituted.
+Runtime behavior and generic trust remain unchanged. Retain the current generic
+guard and obtain a structurally valid Reviewer A resubmission before rerunning
+R18B. See `docs/R18B_DETERMINISTIC_IDENTITY_QUALITY_EVALUATION.md`.
+
 ## R18A blinded human-label execution
 
 `R18A_AWAITING_HUMAN_LABELS`: the existing 316-pair Reviewer A/B package is

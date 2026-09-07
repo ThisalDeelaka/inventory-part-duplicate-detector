@@ -1,5 +1,13 @@
 # Group-first identity migration roadmap
 
+## R18B blocker overlay
+
+R18B stopped as `R18B_PRIMARY_EXPERT_REFERENCE_INVALID` before evaluation. Do
+not substitute Reviewer B, calculate metrics, tune generic trust, or start R18C.
+Retain the current generic guard and request a Reviewer A workbook based on the
+unchanged 23-column blinded template; then rerun R18B. Confidence, LLM,
+XLSX-vNext, deployment, and GF11 remain out of scope.
+
 ## R18A execution overlay
 
 R18A Stage A is `R18A_AWAITING_HUMAN_LABELS`. The existing 316-pair package is
