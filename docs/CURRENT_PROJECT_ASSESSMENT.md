@@ -1,5 +1,15 @@
 # Current project assessment
 
+## R18D assessment complete
+
+R18D is `R18D_GF5_PARTITION_POLICY_CONFOUNDED`. The post-R18C development
+matrix contains 115 Review edges: 99 native and 16 R18C-demoted. Persisted
+group tracing places 80 in deferred families, 10 in conflict context, 23 inside
+accepted groups, and two in other partition/bridge context. Every bounded
+suppression candidate collides with SAME controls, and GF5's negative Review
+term prevents a safe partition-level benefit claim. Runtime and client output
+remain unchanged. Next is separately authorized group-level human evidence.
+
 ## R18C verified
 
 The current GF4 evaluator uses deterministic `LexicalTrustAssessment` v1 to
@@ -10,7 +20,7 @@ and cannot-link behavior. Scan 33 remains at 1,124 proposals, 21 cross-site
 proposals, two accepted Review groups, four conflicts, and three deferred work
 units with provider calls zero. These are development/regression results, not
 independent accuracy. A new untouched holdout is required for quality claims.
-Next is the separately authorized `R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`.
+R18D has now completed the separate assessment without modifying Review status.
 
 ## R18B-R1 expert evaluation complete
 

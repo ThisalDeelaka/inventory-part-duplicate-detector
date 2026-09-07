@@ -140,9 +140,8 @@ suite passed 1,764 tests with 15 skipped, zero xfails, and one existing unknown
 pytest-configuration-option warning. Frontend tests were not required because
 no frontend source changed.
 
-Review noise remains substantial: R18B had 35/107 expert-DIFFERENT lexical-only
-rows at Review. Group confidence, LLM advisory, and XLSX-vNext were not started.
-External demo quality graduation remains blocked pending the next quality
-review.
-
-`NEXT = R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`
+R18D subsequently measured 115 post-R18C Review rows (99 native and 16 R18C
+demotions) without modifying runtime. Candidate suppression patterns collide
+with SAME controls, and the unresolved GF5 partition objective confounds a safe
+group-output conclusion. See
+`docs/R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT.md`.

@@ -1,14 +1,23 @@
 # Group-first identity migration roadmap
 
+## R18D assessment overlay
+
+R18D is `R18D_GF5_PARTITION_POLICY_CONFOUNDED`. Review burden is measured, not
+modified: 115 post-R18C development Review edges split into 99 native and 16
+demoted. Candidate suppression patterns harm SAME controls, generic suppression
+would erase Bicycle evidence, and the unresolved GF5 partition objective blocks
+a causal group-output claim. Do not begin R18E. The next separately authorized
+step is `R18G_GROUP_LEVEL_HUMAN_EVIDENCE`; confidence, LLM, and XLSX vNext remain
+not started.
+
 ## R18C completion overlay
 
 R18C is `R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`. The current GF4 path
 now persists a versioned lexical trust assessment and can only demote unsafe
 Strong evidence to Review. Exact generic and cannot-link rules are unchanged.
 R18 is now development/diagnostic evidence; production-quality claims require a
-new untouched holdout. The next bounded task is
-`R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`. Group confidence, LLM advisory, and
-XLSX-vNext remain not started.
+new untouched holdout. R18D subsequently completed as assessment-only work.
+Group confidence, LLM advisory, and XLSX-vNext remain not started.
 
 ## R18B-R1 completion overlay
 

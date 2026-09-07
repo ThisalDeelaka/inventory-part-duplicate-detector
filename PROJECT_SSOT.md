@@ -1,5 +1,16 @@
 # Group-first inventory identity project SSOT
 
+## R18D Review-support burden assessment
+
+`R18D_GF5_PARTITION_POLICY_CONFOUNDED`: the post-R18C development panel has
+115 Review edges (99 native, 16 intentional R18C demotions). Most traced Review
+edges contribute deferred/conflict context rather than accepted groups, while
+all bounded suppression patterns collide with SAME controls. GF5 still penalizes
+Review in its partition objective, contrary to the architecture ordering, so no
+Review suppression or client-output benefit is authorized. Runtime is unchanged,
+provider calls are 0, and new group-level human evidence is required. See
+`docs/R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT.md`.
+
 ## R18C lexical Strong-support trust correction
 
 `R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`: a versioned, deterministic
@@ -10,8 +21,8 @@ lexical Strong-on-DIFFERENT falls from 9 to 2; both HIGH-confidence cases are
 removed, while all 32 SAME controls remain supported. The exact generic guard,
 cannot-links, 21 Bicycle relationships, Head/Tail safety, retrieval, frontend,
 exports, and provider-none boundary are preserved. R18 is development evidence,
-not an independent post-change test. Next is
-`R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`; do not begin it automatically. See
+not an independent post-change test. R18D subsequently measured the remaining
+Review burden without changing it. See
 `docs/R18C_EVIDENCE_BACKED_LEXICAL_STRONG_TRUST_CORRECTION.md`.
 
 ## R18B-R1 recovered expert evaluation

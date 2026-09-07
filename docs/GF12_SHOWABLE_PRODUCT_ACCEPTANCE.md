@@ -1,5 +1,15 @@
 # GF-12C1 showable product acceptance checklist
 
+## R18D Review-burden assessment
+
+`R18D_GF5_PARTITION_POLICY_CONFOUNDED`: remaining Review support was measured
+without changing the showable product. No safe suppression rule was found;
+tested patterns harm SAME controls, and generic suppression would remove all 21
+Bicycle Review edges. Persisted Scan 31 still supplies 89 Review groups and 190
+members to the analytical System XLSX, but R18D does not claim they are current
+post-R18C quality truth. External demonstration remains blocked pending
+architect review and new group-level human evidence.
+
 ## R18C quality correction
 
 `R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`: broad lexical-only Strong
