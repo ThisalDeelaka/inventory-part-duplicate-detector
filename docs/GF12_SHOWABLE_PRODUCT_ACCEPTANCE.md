@@ -1,5 +1,15 @@
 # GF-12C1 showable product acceptance checklist
 
+## R18C quality correction
+
+`R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`: broad lexical-only Strong
+support is now more cautious, with auditable Strong-to-Review reason codes. The
+existing synthetic showable-product shape remains four groups (one likely,
+three review), and bounded Scan 33 remains 1,124 proposals with all 21 Bicycle
+relationships reaching GF5 and Head/Tail protected. This preserves workflow
+showability but does not authorize external quality claims: R18 is development
+evidence and a new untouched holdout is required.
+
 ## R18B-R1 deterministic quality evidence
 
 The Senior reference is recovered and frozen under an explicit single-expert

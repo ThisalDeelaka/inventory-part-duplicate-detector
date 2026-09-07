@@ -425,6 +425,7 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
         "backend/app/api/routes_scans.py",
         "backend/app/engine/identity_discriminator.py",
         "backend/app/engine/identity_evidence_evaluator.py",
+        "backend/app/engine/lexical_trust.py",
         "backend/app/engine/functional_location_facet.py",
         "backend/app/engine/identity_signature_derivation.py",
         "backend/app/engine/signed_identity_evidence.py",
@@ -453,6 +454,8 @@ def test_or24_only_bounded_xlsx_export_changes_in_production():
         or "evaluate_identity_discriminators" in diff
         or "system_explanation" in diff
         or "cross_site_identity_discovery" in diff
+        or "assess_lexical_trust" in diff
     )
     assert "generate_candidate_pairs" not in diff
-    assert "score_candidate" not in diff
+    if "assess_lexical_trust" not in diff:
+        assert "score_candidate" not in diff

@@ -1,5 +1,15 @@
 # R18B Deterministic Identity-Quality Evaluation
 
+## R18C disposition
+
+R18C subsequently implemented and verified a monotonic lexical Strong-support
+trust gate. On this same development set, lexical Strong-on-DIFFERENT fell from
+9 to 2 and all 32 lexical Strong-on-SAME controls remained supported as Strong
+or Review. This is a development-set effect, not independent validation. The
+exact generic guard was preserved. See
+`R18C_EVIDENCE_BACKED_LEXICAL_STRONG_TRUST_CORRECTION.md`; future quality claims
+require a new untouched holdout.
+
 ## R18B-R1 recovery and completed evaluation
 
 `R18B_GENERIC_TRUST_TOO_WEAK`

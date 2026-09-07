@@ -118,10 +118,6 @@ def test_iqr0_future_contract_head_tail_distinction_reaches_typed_evidence():
     assert tail_values == {"tail"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="IQR-0: copied generic text can still independently create strong support",
-)
 def test_iqr0_future_contract_copied_generic_description_is_not_identity_proof():
     context = DeterministicIdentityContext(
         "SAME_SITE_DUPLICATE", ("CONTRACT", "UNIT_MEAS")

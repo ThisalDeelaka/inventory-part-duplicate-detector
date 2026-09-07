@@ -10,6 +10,7 @@ from app.engine.generic_description_guard import is_generic_description
 from app.engine.identity_edge import (
     IDENTITY_EDGE_CLASSIFIER_VERSION,
     IdentityEdgeClass,
+    IdentityEdgeClassification,
     classify_identity_edge,
 )
 from app.engine.identity_discriminator import (
@@ -17,6 +18,7 @@ from app.engine.identity_discriminator import (
     evaluate_identity_discriminators,
 )
 from app.engine.scoring import score_candidate
+from app.engine.lexical_trust import assess_lexical_trust
 from app.engine.uom_relationship import classify_uom_relationship
 from app.services.canonical_record_service import (
     CanonicalScanRecord,
@@ -25,7 +27,7 @@ from app.services.canonical_record_service import (
 
 
 IDENTITY_EVIDENCE_CONTRACT_VERSION = "identity-evidence-edge-v1"
-IDENTITY_EVIDENCE_EVALUATOR_VERSION = "canonical-identity-evaluator-v6"
+IDENTITY_EVIDENCE_EVALUATOR_VERSION = "canonical-identity-evaluator-v7"
 _COMPONENT_FIELDS = (
     "description_similarity",
     "tfidf_score",
@@ -94,9 +96,11 @@ def evaluate_canonical_identity_relationship(
     if record_1.record_id == record_2.record_id:
         raise ValueError("canonical identity evaluation cannot create a self edge")
     left, right = sorted((record_1, record_2), key=lambda item: item.record_id)
+    left_input = catalog_record_to_engine_input(left)
+    right_input = catalog_record_to_engine_input(right)
     result = score_candidate(
-        catalog_record_to_engine_input(left),
-        catalog_record_to_engine_input(right),
+        left_input,
+        right_input,
         sorted(set(context.selected_fields)),
         context.scan_mode,
         allow_uom_mapping_review=True,
@@ -110,6 +114,23 @@ def evaluate_canonical_identity_relationship(
     classification_input = dict(result)
     classification_input["critical_mismatches"] = protected_conflicts
     classification = classify_identity_edge(classification_input)
+    lexical_trust = None
+    if classification.edge_class == IdentityEdgeClass.STRONG_SUPPORT:
+        lexical_trust = assess_lexical_trust(
+            left_input,
+            right_input,
+            result,
+            record_reference_a=left.record_ref_key,
+            record_reference_b=right.record_ref_key,
+        )
+        if lexical_trust.requires_strong_downgrade:
+            classification = IdentityEdgeClassification(
+                IdentityEdgeClass.REVIEW_SUPPORT,
+                tuple(sorted(
+                    set(classification.reason_codes)
+                    | set(lexical_trust.risk_reasons)
+                )),
+            )
     component_scores = {
         field: float(result.get(field) or 0.0) for field in _COMPONENT_FIELDS
     }
@@ -131,6 +152,9 @@ def evaluate_canonical_identity_relationship(
         "normalized_part_no_1": result.get("normalized_part_no_a") or "",
         "normalized_part_no_2": result.get("normalized_part_no_b") or "",
         "identity_discriminator": discriminator.evidence_payload,
+        "lexical_trust_assessment": (
+            lexical_trust.payload() if lexical_trust is not None else None
+        ),
     }
     uom = classify_uom_relationship(left.uom, right.uom)
     uom_context = {

@@ -1,5 +1,15 @@
 # Group-first identity migration roadmap
 
+## R18C completion overlay
+
+R18C is `R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`. The current GF4 path
+now persists a versioned lexical trust assessment and can only demote unsafe
+Strong evidence to Review. Exact generic and cannot-link rules are unchanged.
+R18 is now development/diagnostic evidence; production-quality claims require a
+new untouched holdout. The next bounded task is
+`R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`. Group confidence, LLM advisory, and
+XLSX-vNext remain not started.
+
 ## R18B-R1 completion overlay
 
 The recovered single-Senior diagnostic reference proves a general broad

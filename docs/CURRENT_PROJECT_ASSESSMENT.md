@@ -1,5 +1,17 @@
 # Current project assessment
 
+## R18C verified
+
+The current GF4 evaluator uses deterministic `LexicalTrustAssessment` v1 to
+reduce unsafe description-dominant Strong support to Review without promotion.
+The R18 development set moved lexical Strong-on-DIFFERENT from 9 to 2, retained
+all 32 SAME examples as Strong or Review, and preserved all protected generic
+and cannot-link behavior. Scan 33 remains at 1,124 proposals, 21 cross-site
+proposals, two accepted Review groups, four conflicts, and three deferred work
+units with provider calls zero. These are development/regression results, not
+independent accuracy. A new untouched holdout is required for quality claims.
+Next is the separately authorized `R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`.
+
 ## R18B-R1 expert evaluation complete
 
 The primary Senior reference was recovered and frozen without modifying the

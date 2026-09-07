@@ -1,5 +1,19 @@
 # Group-first inventory identity project SSOT
 
+## R18C lexical Strong-support trust correction
+
+`R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`: a versioned, deterministic
+lexical-trust assessment now demotes description-dominant Strong support to
+Review when independent identity/part-number coherence is inadequate or a
+populated part-type field is incoherent. On the R18 development evidence,
+lexical Strong-on-DIFFERENT falls from 9 to 2; both HIGH-confidence cases are
+removed, while all 32 SAME controls remain supported. The exact generic guard,
+cannot-links, 21 Bicycle relationships, Head/Tail safety, retrieval, frontend,
+exports, and provider-none boundary are preserved. R18 is development evidence,
+not an independent post-change test. Next is
+`R18D_REVIEW_SUPPORT_BURDEN_ASSESSMENT`; do not begin it automatically. See
+`docs/R18C_EVIDENCE_BACKED_LEXICAL_STRONG_TRUST_CORRECTION.md`.
+
 ## R18B-R1 recovered expert evaluation
 
 `R18B_GENERIC_TRUST_TOO_WEAK`: forensic recovery proved the Senior submission
