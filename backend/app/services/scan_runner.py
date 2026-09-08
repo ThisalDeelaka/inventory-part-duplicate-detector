@@ -30,13 +30,14 @@ class ScanRunner:
         scan_mode: str = "SAME_SITE_DUPLICATE",
         strict_custom_fields: list[dict] | None = None,
         custom_fields_used: list[dict] | None = None,
+        part_type: str = "INVENTORY",
     ):
         scan_mode = normalize_scan_mode(scan_mode)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
 
-        scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode, custom_fields_used)
+        scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode, custom_fields_used, part_type)
         try:
             for warning in validation["warnings"]:
                 self.warnings.save(scan.id, warning)

@@ -10,6 +10,7 @@ import {
   nextValidationToken,
 } from '../utils/llmUi'
 import { customFieldCreatePayload, customFieldModeLabel, mergeCustomFields } from '../utils/customFieldUi'
+import { DEFAULT_PART_TYPE, PART_TYPE_OPTIONS, filterFieldsForPartType } from '../utils/partTypeUi'
 
 const FALLBACK_FIELDS = [
   { field: 'CONTRACT', display: 'Site' },
@@ -37,6 +38,7 @@ export default function NewScan() {
   const [customFields, setCustomFields] = useState([])
   const [customFieldDrafts, setCustomFieldDrafts] = useState({})
   const [customFieldState, setCustomFieldState] = useState({})
+  const [partType, setPartType] = useState(DEFAULT_PART_TYPE)
   const [selected, setSelected] = useState(['CONTRACT', 'UNIT_MEAS'])
   const [columnMapping, setColumnMapping] = useState({})
   const [file, setFile] = useState(null)
@@ -63,7 +65,13 @@ export default function NewScan() {
     refreshCustomFields()
   }, [])
 
-  const { mappingFields, checklistFields } = mergeCustomFields(builtInFields, customFields)
+  const { mappingFields, checklistFields } = mergeCustomFields(filterFieldsForPartType(builtInFields, partType), customFields)
+
+  const changePartType = nextPartType => {
+    setPartType(nextPartType)
+    const stillRelevant = new Set(filterFieldsForPartType(builtInFields, nextPartType).map(f => f.field))
+    setSelected(current => current.filter(field => stillRelevant.has(field) || customFields.some(c => c.field_key === field)))
+  }
 
   const form = (submittedFile = file) => {
     const f = new FormData()
@@ -74,11 +82,12 @@ export default function NewScan() {
     f.append('column_mapping', JSON.stringify(columnMapping))
     f.append('sensitive_mode', SENSITIVE_MODE)
     f.append('scan_mode', SCAN_MODE)
+    f.append('part_type', partType)
     return f
   }
 
   const validate = async () => {
-    if (!file) return setError('Choose a CSV file first.')
+    if (!file) return setError('Choose a CSV or XLSX file first.')
     const submittedFile = file
     const token = nextValidationToken(validationRequestId.current, fileGeneration.current)
     validationRequestId.current = token.requestId
@@ -104,7 +113,7 @@ export default function NewScan() {
   }
 
   const run = async () => {
-    if (!file) return setError('Choose a CSV file first.')
+    if (!file) return setError('Choose a CSV or XLSX file first.')
     setBusy('scan'); setError('')
     try {
       const r = await api.postForm('/api/scans/upload', form())
@@ -197,7 +206,12 @@ export default function NewScan() {
       <div className="two-col">
         <section className="panel form">
           <label>Scan name<input value={name} onChange={e => setName(e.target.value)} /></label>
-          <label>Inventory CSV<input type="file" accept=".csv,text/csv" onChange={event => selectFile(event.target.files[0] || null)} /></label>
+          <label>Part type
+            <select value={partType} onChange={event => changePartType(event.target.value)}>
+              {PART_TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+            </select>
+          </label>
+          <label>Parts export (CSV or XLSX)<input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event => selectFile(event.target.files[0] || null)} /></label>
           <div><label>Review strictness <b>{threshold}</b></label><input type="range" min="60" max={MAX_THRESHOLD} value={threshold} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
         </section>
         <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{checklistFields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{f.field}</small></span></label>)}</div></section>

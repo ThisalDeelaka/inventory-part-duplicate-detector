@@ -18,10 +18,11 @@ def run_scan(
     scan_mode: str = "SAME_SITE_DUPLICATE",
     strict_custom_fields: list[dict] | None = None,
     custom_fields_used: list[dict] | None = None,
+    part_type: str = "INVENTORY",
 ):
     return ScanRunner(db).run(
         df, scan_name, selected_fields, threshold, source_type, sensitive_mode, scan_mode,
-        strict_custom_fields, custom_fields_used,
+        strict_custom_fields, custom_fields_used, part_type,
     )
 
 

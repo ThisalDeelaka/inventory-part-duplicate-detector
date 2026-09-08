@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.core.config import Settings
 from app.db.models import LlmAdvisorySnapshot, utcnow
-from app.engine.column_semantics import normalize_scan_mode
+from app.engine.column_semantics import normalize_part_type, normalize_scan_mode
 from app.repositories.custom_field_repository import CustomFieldRepository
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
@@ -75,6 +75,7 @@ def scan_json(scan, privacy=None):
         "rejections_count": getattr(scan, "rejections_count", 0) or 0,
         "started_at": scan.started_at, "completed_at": scan.completed_at, "model_version": scan.model_version,
         "scan_mode": getattr(scan, "scan_mode", "SAME_SITE_DUPLICATE"),
+        "part_type": getattr(scan, "part_type", "INVENTORY"),
         "custom_fields_used": _json_attr(scan, "custom_fields_used", "[]"),
     }
     if privacy:
@@ -196,7 +197,7 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form("INVENTORY"), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
     if threshold < 0 or threshold > 90: raise HTTPException(400, "threshold must be between 0 and 90")
     custom_fields = _load_custom_fields(db)
     custom_field_keys = {field.field_key for field in custom_fields}
@@ -215,6 +216,7 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
             db, df, scan_name.strip() or "Inventory duplicate scan", resolved_selected_fields, threshold,
             sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode),
             strict_custom_fields=strict_custom_fields, custom_fields_used=custom_fields_used,
+            part_type=normalize_part_type(part_type),
         )
         try:
             schedule_automatic_triage(

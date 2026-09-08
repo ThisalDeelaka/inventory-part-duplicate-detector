@@ -140,6 +140,21 @@ def bounded_column_samples(
     }
 
 
+XLSX_EXTENSIONS = (".xlsx",)
+
+
+def _parse_upload_dataframe(filename: str | None, content: bytes) -> pd.DataFrame:
+    """Parse an uploaded CSV or XLSX file into a DataFrame, so both formats share the same downstream flow."""
+    is_xlsx = str(filename or "").strip().lower().endswith(XLSX_EXTENSIONS)
+    try:
+        if is_xlsx:
+            return pd.read_excel(io.BytesIO(content), dtype=str, engine="openpyxl")
+        return pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
+    except Exception as exc:
+        kind = "XLSX" if is_xlsx else "CSV"
+        raise HTTPException(400, f"Unable to parse {kind} file: {exc}") from exc
+
+
 async def read_csv_upload_with_metadata(
     file: UploadFile,
     column_mapping: dict[str, str] | None = None,
@@ -148,13 +163,10 @@ async def read_csv_upload_with_metadata(
 ) -> tuple[pd.DataFrame, dict]:
     content = await file.read()
     if not content:
-        raise HTTPException(400, "CSV file is empty")
+        raise HTTPException(400, "Uploaded file is empty")
     if len(content) > settings.max_upload_bytes:
-        raise HTTPException(413, f"CSV file exceeds the configured upload limit of {settings.max_upload_bytes} bytes")
-    try:
-        df = pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
-    except Exception as exc:
-        raise HTTPException(400, f"Unable to parse CSV: {exc}") from exc
+        raise HTTPException(413, f"Uploaded file exceeds the configured upload limit of {settings.max_upload_bytes} bytes")
+    df = _parse_upload_dataframe(file.filename, content)
     source_df = df
     custom_fields = custom_fields or []
     custom_field_keys = {field.field_key for field in custom_fields}
