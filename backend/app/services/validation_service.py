@@ -13,6 +13,7 @@ from app.core.constants import (
     REQUIRED_FIELDS,
 )
 from app.core.config import settings
+from app.repositories.custom_field_repository import CustomFieldRepository
 from app.services.privacy_service import detect_sensitive_patterns, file_sha256, security_transparency
 
 
@@ -37,7 +38,7 @@ def normalize_column_name(value: str) -> str:
     return re.sub(r"_+", "_", text).strip("_")
 
 
-def parse_column_mapping(value: str | None) -> dict[str, str]:
+def parse_column_mapping(value: str | None, custom_field_keys: set[str] | None = None) -> dict[str, str]:
     """Parse a canonical-field -> uploaded-column mapping supplied by the UI/API."""
     if not value:
         return {}
@@ -48,7 +49,7 @@ def parse_column_mapping(value: str | None) -> dict[str, str]:
     if not isinstance(parsed, dict):
         raise HTTPException(400, "column_mapping must be a JSON object")
 
-    allowed = {item["field"] for item in FIELD_DEFINITIONS}
+    allowed = {item["field"] for item in FIELD_DEFINITIONS} | set(custom_field_keys or [])
     result = {}
     for canonical, source in parsed.items():
         canonical_name = normalize_column_name(canonical)
@@ -60,9 +61,15 @@ def parse_column_mapping(value: str | None) -> dict[str, str]:
     return result
 
 
-def apply_column_mapping(df: pd.DataFrame, explicit_mapping: dict[str, str] | None = None) -> tuple[pd.DataFrame, dict]:
+def apply_column_mapping(
+    df: pd.DataFrame,
+    explicit_mapping: dict[str, str] | None = None,
+    custom_field_aliases: dict[str, str] | None = None,
+    custom_field_keys: set[str] | None = None,
+) -> tuple[pd.DataFrame, dict]:
     """Resolve uploaded headers to canonical fields, with explicit mappings winning."""
     explicit_mapping = explicit_mapping or {}
+    custom_field_aliases = custom_field_aliases or {}
     original_columns = [str(column) for column in df.columns]
     normalized_lookup: dict[str, list[str]] = {}
     for column in original_columns:
@@ -91,7 +98,7 @@ def apply_column_mapping(df: pd.DataFrame, explicit_mapping: dict[str, str] | No
     renamed = {}
     resolved = {}
     target_sources: dict[str, list[str]] = {}
-    canonical_fields = {item["field"] for item in FIELD_DEFINITIONS}
+    canonical_fields = {item["field"] for item in FIELD_DEFINITIONS} | set(custom_field_keys or [])
     for position, source in enumerate(original_columns, start=1):
         normalized = normalize_column_name(source)
         if source in explicit_sources:
@@ -153,18 +160,52 @@ def bounded_column_samples(
     }
 
 
-async def read_csv_upload_with_metadata(file: UploadFile, column_mapping: dict[str, str] | None = None) -> tuple[pd.DataFrame, dict]:
+XLSX_EXTENSIONS = (".xlsx",)
+
+
+def _parse_upload_dataframe(filename: str | None, content: bytes) -> pd.DataFrame:
+    """Parse an uploaded CSV or XLSX file into a DataFrame, so both formats share the same downstream flow."""
+    is_xlsx = str(filename or "").strip().lower().endswith(XLSX_EXTENSIONS)
+    try:
+        if is_xlsx:
+            return pd.read_excel(io.BytesIO(content), dtype=str, engine="openpyxl")
+        return pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
+    except Exception as exc:
+        kind = "XLSX" if is_xlsx else "CSV"
+        raise HTTPException(400, f"Unable to parse {kind} file: {exc}") from exc
+
+
+async def read_csv_upload_with_metadata(
+    file: UploadFile,
+    column_mapping: dict[str, str] | None = None,
+    custom_fields: list | None = None,
+    db=None,
+) -> tuple[pd.DataFrame, dict]:
     content = await file.read()
     if not content:
-        raise HTTPException(400, "CSV file is empty")
+        raise HTTPException(400, "Uploaded file is empty")
     if len(content) > settings.max_upload_bytes:
-        raise HTTPException(413, f"CSV file exceeds the configured upload limit of {settings.max_upload_bytes} bytes")
-    try:
-        df = pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
-    except Exception as exc:
-        raise HTTPException(400, f"Unable to parse CSV: {exc}") from exc
+        raise HTTPException(413, f"Uploaded file exceeds the configured upload limit of {settings.max_upload_bytes} bytes")
+    df = _parse_upload_dataframe(file.filename, content)
     source_df = df
-    df, column_metadata = apply_column_mapping(source_df, column_mapping)
+    custom_fields = custom_fields or []
+    custom_field_keys = {field.field_key for field in custom_fields}
+    custom_field_aliases = {}
+    for field in custom_fields:
+        for alias in json.loads(field.aliases or "[]"):
+            custom_field_aliases[alias] = field.field_key
+    df, column_metadata = apply_column_mapping(source_df, column_mapping, custom_field_aliases, custom_field_keys)
+    if db is not None and column_mapping:
+        field_by_key = {field.field_key: field for field in custom_fields}
+        repo = CustomFieldRepository(db)
+        for canonical, requested_source in column_mapping.items():
+            field = field_by_key.get(canonical)
+            if not field:
+                continue
+            normalized_source = normalize_column_name(requested_source)
+            known_aliases = set(json.loads(field.aliases or "[]"))
+            if normalized_source != field.field_key and normalized_source not in known_aliases:
+                repo.record_alias(field, normalized_source)
     if df.empty:
         raise HTTPException(400, "CSV contains no data rows")
     if len(df) > settings.max_csv_records:

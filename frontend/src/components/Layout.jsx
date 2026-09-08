@@ -8,11 +8,13 @@ export default function Layout() {
         <nav>
           <NavLink to="/">Dashboard</NavLink>
           <NavLink to="/new-scan">New Scan</NavLink>
-          <NavLink to="/load-test">Load Test</NavLink>
           <NavLink to="/data-security">Data Security</NavLink>
           <NavLink to="/future-ifs">Future IFS Integration</NavLink>
         </nav>
-        <div className="notice">AI-assisted candidate detection.<br />Human review is required.</div>
+        <div className="notice">
+          <span className="sebsa-mark">SEBSA</span>
+          AI-assisted candidate detection.<br />Human review is required.
+        </div>
       </aside>
       <main><Outlet /></main>
     </div>

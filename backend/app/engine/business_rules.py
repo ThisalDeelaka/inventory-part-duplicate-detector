@@ -1,3 +1,4 @@
+from app.core.constants import BUILT_IN_STRICT_FIELDS, CUSTOM_STRICT_SCORE_CAP
 from app.engine.column_semantics import clean_field_value, normalize_scan_mode
 
 
@@ -95,6 +96,12 @@ def evaluate_hard_business_rules(
                 "values_b": [contract_b],
             }],
         }
+
+    custom_rule = _strict_custom_field_rule(
+        record_a, record_b, BUILT_IN_STRICT_FIELDS + list(strict_custom_fields or [])
+    )
+    if custom_rule:
+        return custom_rule
 
     return {
         "blocked": False,

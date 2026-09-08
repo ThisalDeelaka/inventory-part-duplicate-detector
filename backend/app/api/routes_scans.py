@@ -96,6 +96,8 @@ def scan_json(scan, privacy=None, retrieval=None):
         "rejections_count": getattr(scan, "rejections_count", 0) or 0,
         "started_at": scan.started_at, "completed_at": scan.completed_at, "model_version": scan.model_version,
         "scan_mode": getattr(scan, "scan_mode", "SAME_SITE_DUPLICATE"),
+        "part_type": getattr(scan, "part_type", "INVENTORY"),
+        "custom_fields_used": _json_attr(scan, "custom_fields_used", "[]"),
     }
     if privacy:
         payload["privacy"] = privacy
@@ -214,10 +216,16 @@ def rejections(scan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/validate-only")
-async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True)):
-    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
+async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True), db: Session = Depends(get_db)):
+    custom_fields = _load_custom_fields(db)
+    custom_field_keys = {field.field_key for field in custom_fields}
+    df, metadata = await read_csv_upload_with_metadata(
+        file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+    )
     result = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples")})
+    _supporting, _strict, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
+    result["custom_fields_used"] = custom_fields_used
     for target, sources in metadata["column_mapping_conflicts"].items():
         result["warnings"].append({
             "warning_type": "AMBIGUOUS_COLUMN_MAPPING",
@@ -234,6 +242,10 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
     validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
+    supporting_keys, strict_custom_fields, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
+    for key in supporting_keys:
+        if key not in resolved_selected_fields:
+            resolved_selected_fields.append(key)
     try:
         scan, _ = run_scan(
             db, df, scan_name.strip() or "Inventory duplicate scan",

@@ -23,6 +23,8 @@ class DuplicateScan(Base):
     warnings_count = Column(Integer, default=0)
     rejections_count = Column(Integer, default=0)
     scan_mode = Column(String(60), default="SAME_SITE_DUPLICATE", nullable=False)
+    part_type = Column(String(20), default="INVENTORY", nullable=False)
+    custom_fields_used = Column(Text, default="[]", nullable=False)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at = Column(DateTime(timezone=True))
     model_version = Column(String(50), nullable=False)
