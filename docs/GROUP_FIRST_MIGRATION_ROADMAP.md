@@ -1,0 +1,1138 @@
+# Group-first identity migration roadmap
+
+## R18G-A preparation overlay
+
+R18G-A is `R18G_AWAITING_GROUP_HUMAN_REVIEW`. The deterministic package contains
+48 DEVELOPMENT and 16 SEALED HOLDOUT whole-group hypotheses, including Bicycle
+and three current-vs-ADR partition challengers. Human labels are still zero.
+Return DEVELOPMENT to engineering first and keep completed holdout labels
+sealed outside the repository. Confidence, LLM advisory, XLSX vNext, and
+external demo graduation remain not started.
+
+## R18D assessment overlay
+
+R18D is `R18D_GF5_PARTITION_POLICY_CONFOUNDED`. Review burden is measured, not
+modified: 115 post-R18C development Review edges split into 99 native and 16
+demoted. Candidate suppression patterns harm SAME controls, generic suppression
+would erase Bicycle evidence, and the unresolved GF5 partition objective blocks
+a causal group-output claim. Do not begin R18E. The next separately authorized
+step is `R18G_GROUP_LEVEL_HUMAN_EVIDENCE`; confidence, LLM, and XLSX vNext remain
+not started.
+
+## R18C completion overlay
+
+R18C is `R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`. The current GF4 path
+now persists a versioned lexical trust assessment and can only demote unsafe
+Strong evidence to Review. Exact generic and cannot-link rules are unchanged.
+R18 is now development/diagnostic evidence; production-quality claims require a
+new untouched holdout. R18D subsequently completed as assessment-only work.
+Group confidence, LLM advisory, and XLSX-vNext remain not started.
+
+## R18B-R1 completion overlay
+
+The recovered single-Senior diagnostic reference proves a general broad
+lexical/copied-text trust weakness without proving that the exact generic guard
+is too strict. R18B is `R18B_GENERIC_TRUST_TOO_WEAK`; runtime remains unchanged.
+The next separately reviewed task is
+`R18C_EVIDENCE_BACKED_GENERIC_TRUST_CORRECTION`. Any labels used to choose that
+change become development evidence, so post-change quality claims require a new
+untouched holdout. Do not begin confidence, LLM, XLSX-vNext, deployment, or
+GF11 work.
+
+## R18B blocker overlay
+
+R18B stopped as `R18B_PRIMARY_EXPERT_REFERENCE_INVALID` before evaluation. Do
+not substitute Reviewer B, calculate metrics, tune generic trust, or start R18C.
+Retain the current generic guard and request a Reviewer A workbook based on the
+unchanged 23-column blinded template; then rerun R18B. Confidence, LLM,
+XLSX-vNext, deployment, and GF11 remain out of scope.
+
+## R18A execution overlay
+
+R18A Stage A is `R18A_AWAITING_HUMAN_LABELS`. The existing 316-pair package is
+validly blinded and the offline validation/adjudication infrastructure is
+ready, but Reviewer A and Reviewer B remain 0/316. Collect their labels
+independently; do not start R18B, tune generic trust, or begin confidence, LLM,
+XLSX-vNext, deployment, or GF11 work. `GF5-PARTITION-OBJECTIVE-GOVERNANCE` is
+OPEN, non-causal to Bicycle, and authorizes no runtime change.
+
+## IQR-1C completion overlay
+
+The Bicycle family is correctly deferred under the current generic-only
+cohesion safety contract: complete Review evidence does not become independent
+identity evidence merely by repetition. IQR-1C made no runtime change and
+recommends `NO_RUNTIME_CHANGE`. Proceed next only to blinded R18 human-label
+execution; copied/generic-description trust remains open. Confidence, LLM
+advisory, XLSX vNext, deployment, and GF11 remain out of scope.
+
+## IQR-1B completion overlay
+
+Functional/location identity evidence is `CORRECTED` through a bounded,
+source-aware facet and protected GF4 contradiction. IQR-1A proposal counts and
+all 21 Bicycle Review edges are preserved; Bicycle remains deferred.
+Copied/generic-description trust remains open. Return to architect review to
+choose narrowly between Bicycle resolver-disposition analysis and blinded R18;
+do not begin confidence, LLM advisory, XLSX vNext, deployment, or GF11 work.
+
+## IQR-1A completion overlay
+
+Cross-site physical-identity discovery is `CORRECTED` for current-product
+Group-First scans with bounded identity anchors; legacy semantics and retrieval
+budgets are preserved. The Bicycle discovery blocker is
+`REMOVED_AT_DISCOVERY_LAYER`. IQR-1B subsequently corrected the general
+functional/location evidence seam. R18, confidence, LLM advisory, XLSX vNext,
+deployment, and GF11 remain out of scope.
+
+## IQR-0 pre-demo recovery overlay
+
+Do not proceed directly from PRM-5 to external demonstration or post-proof work.
+IQR-0 proves separate discovery and identity-evidence defects on Scan 33. The
+next task is the smallest general correction of the site-independent discovery
+seam and typed role/location/copied-text evidence seam, followed by bounded
+Scan-33 acceptance. No confidence, LLM advisory, or XLSX-vNext implementation is
+authorized before that correction and later R18/R18-G measurement.
+
+## PRM-5 freeze overlay
+
+The finite Product Recovery Milestone is `COMPLETE` and the showable product is
+`FROZEN`. Use the PRM-5 runbook and presenter script for demo/presentation only;
+do not resume product or detector changes before the demo absent a reproduced
+scripted-path blocker. Identity semantics are paused and R18 human labels remain
+deferred. GF11 is still `IN PROGRESS` under its `ACTIVE` waiver,
+`GF11-PERF-100K-COLD-FULL` stays `OPEN`, GF12A2 human execution remains
+incomplete, R12 autonomous-quality freeze remains failed, and deployment remains
+deferred until product proof.
+
+## Immediate sequencing overlay: Product Recovery Milestone
+
+PRM-4 is VERIFIED. Normal navigation now discovers and reopens historical scans;
+validation freshness, synchronous request-active/elapsed guidance,
+duplicate-submit prevention, exact completion routing, and recovery copy are
+truthful without execution or authority changes. PRM-1 through PRM-3 remain
+verified. Proceed only to PRM-5 rehearsal and showable-product freeze; detector
+semantic work remains paused.
+
+PRM-3 is VERIFIED. The product now separates System suggestions from Reviewed
+decisions, blocks misleading zero-confirmed reviewed downloads, and states
+partial and chain-head authority without altering any export or review contract.
+PRM-1 and PRM-2 remain verified. Proceed only to PRM-4 navigation,
+scan-history, progress-confidence, and recovery-guidance work; detector semantics
+remain paused.
+
+PRM-2 is VERIFIED. Human review now uses clear Confirm / Reject / Defer vocabulary,
+accurate advanced multi-member guidance, explicit current/previous saved-state
+presentation, and safe concurrency/error recovery without changing review
+authority. PRM-1 remains verified. Proceed only to PRM-3 export-authority clarity
+and feedback; export semantics remain unchanged until then.
+
+PRM-1 is VERIFIED. Persisted authoritative evidence now drives concise System
+explanations in current-product group list/detail and conflict/deferred views,
+with Human decision and advanced evidence kept separate. No detector or export
+semantics changed. Proceed only to PRM-2 review-action clarity and saved-review
+polish; PRM-3 export work remains deferred.
+
+PRM-0 establishes the immediate priority as a five-task, user-visible Product
+Recovery Milestone, starting with plain-language presentation of existing
+persisted group evidence. This overlay does not reorder or erase GF history and
+does not authorize detector work. Normalization, retrieval, GF2-GF6, identity
+signatures, signed evidence, thresholds, statuses, membership, providers,
+schema, migrations, and dependencies remain frozen for the milestone.
+
+R14-R18 remain future identity-engine R&D; R18 human-label execution is
+deferred. GF-11 remains in progress with its active waiver and open cold-full
+debt. R12 still leaves the detector technically unfrozen from the full-real
+quality perspective. Deployment remains post-product-proof work. The finite
+tasks, non-goals, and PASS gates are recorded in
+`PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`.
+
+## Purpose and constraints
+
+This roadmap turns the approved group-first ADR and domain contracts into bounded implementation phases. It is planning documentation only.
+
+Every phase must preserve:
+
+- protected cannot-link safety;
+- disjoint accepted groups;
+- append-only human review;
+- immutable G2 snapshots;
+- historical pair and group readability;
+- zero automatic inventory mutation or writeback;
+- optional, advisory-only AI with ordinary tests making zero provider calls;
+- a documented rollback point before the next phase begins.
+
+No phase may silently change the current selected projection, group status semantics, or export authority.
+
+## Program-wide delivery rules
+
+1. Each phase has its own reviewed prompt/change set and explicit file allowlist.
+2. Additive schema changes precede new writes. Readers tolerate absent historical data.
+3. Old and new paths never both appear as current user-visible truth.
+4. Shadow mode is provider-free and review-free.
+5. Safety gates are release blockers, not weighted quality metrics.
+6. Performance thresholds are established from measured baselines on declared hardware and data shapes.
+7. Pair tables are not deleted during this roadmap.
+
+## GF-0 — Governance and contract freeze
+
+### Goal
+
+Approve the ADR, domain contracts, terminology, product authority, G2 versioning strategy, and phase boundaries before production code begins.
+
+### Likely files/modules
+
+- `docs/GROUP_FIRST_IDENTITY_ARCHITECTURE_ADR.md`
+- `docs/GROUP_FIRST_DOMAIN_CONTRACTS.md`
+- `docs/GROUP_FIRST_MIGRATION_ROADMAP.md`
+- `PROJECT_SSOT.md`, the repository product-requirements authority
+
+### Invariants
+
+- Group is the business result; pair is internal evidence.
+- Site/contract and UOM semantics are approved.
+- Discovery overlap and final disjointness are approved.
+- Reviewed identity remains scan-local.
+- No numeric group confidence is approved.
+
+### Tests/review
+
+- Cross-document vocabulary and route comparison.
+- Source trace verifying every reuse/deprecation decision has an implemented origin.
+- Architecture review of bridge fixtures and progressive-validation semantics.
+- Product-owner sign-off on export authority and the 100k target.
+
+### Migration risk
+
+Low technical risk; high risk of later churn if skipped.
+
+### Rollback point
+
+Documentation commit can be reverted without runtime effect.
+
+### Explicitly out of scope
+
+Production code, database changes, APIs, UI, providers, and benchmarks.
+
+## GF-1 — Canonical scan-record catalog
+
+### Goal
+
+Create immutable, source-row-distinct `InventoryRecord` snapshots before discovery while preserving current raw-data privacy boundaries.
+
+### Likely files/modules
+
+- `backend/app/db/models.py`
+- `backend/app/db/migrations.py`
+- `backend/app/services/validation_service.py`
+- `backend/app/services/scan_runner.py`
+- New canonical-record repository/service and schemas
+- Record/migration/privacy tests
+
+### Invariants
+
+- Distinct source rows never collapse because their canonical values match.
+- Raw canonical values and normalized evidence remain separate.
+- Existing G2 record references remain readable.
+- No complete CSV or arbitrary full row is persisted.
+- Current scan results remain unchanged.
+
+### Tests
+
+- Idempotent snapshot creation and source-row uniqueness.
+- Duplicate-identical-row fixtures.
+- Header mapping, missing data, raw/normalized traceability.
+- Transaction rollback and historical database migration.
+- Privacy allowlist and no-secret/no-provider tests.
+- Existing backend regression suite.
+
+### Migration risk
+
+Medium: record-reference changes can affect G2 fingerprints if introduced prematurely.
+
+### Rollback point
+
+New tables/columns remain unused; current transient rows and G2 path continue.
+
+### Explicitly out of scope
+
+New retrieval, evidence evaluation, resolver behavior, visible API changes.
+
+## GF-2 — Discovery run and neighbor-proposal contracts
+
+### Goal
+
+Separate retrieval proposals from duplicate decisions and add versioned discovery-run observability.
+
+### Likely files/modules
+
+- New discovery contracts, repositories, and run service
+- `backend/app/services/hybrid_retrieval.py`
+- `backend/app/core/config.py`
+- `backend/app/db/models.py` and additive migrations
+- Discovery metrics and tests
+
+### Invariants
+
+- Retrieval priority is never identity confidence.
+- Discovery produces no business status.
+- Per-record/channel/global caps and degradation are explicit.
+- No-neighbor records are successful outcomes.
+- Current `DuplicateCandidate` writes and visible results remain unchanged.
+
+### Tests
+
+- Stable proposal ordering and fingerprints under input permutation.
+- Cap, reciprocal, no-neighbor, generic-family, and degraded-channel cases.
+- Coverage equations and bounded persistence.
+- Provider request count remains zero.
+- Compatibility comparison with current hybrid retrieval fixtures.
+
+### Migration risk
+
+Medium: duplicated computation or metadata drift during adaptation.
+
+### Rollback point
+
+Disable discovery-contract writes; legacy hybrid retrieval remains authoritative.
+
+### Explicitly out of scope
+
+Neighborhood grouping, independent identity edges, new G2 output.
+
+## GF-3 — Overlapping identity neighborhoods
+
+### Goal
+
+Build and persist bounded, overlapping discovery neighborhoods from neighbor proposals.
+
+### Likely files/modules
+
+- New neighborhood builder/service and schemas
+- New neighborhood tables/repositories
+- Discovery metrics and advanced diagnostic tests
+- No normal UI changes
+
+### Invariants
+
+- Neighborhood overlap is allowed and deterministic.
+- A neighborhood never declares duplicate identity.
+- Generic/oversized families are deferred before unbounded expansion.
+- Every truncation changes provenance and downstream fingerprint.
+- Current visible pair-first G2 remains unchanged.
+
+### Tests
+
+- Overlapping anchors and canonical membership.
+- Generic hub suppression and family deferral.
+- Neighborhood/member cap behavior.
+- Coverage/no-neighbor accounting.
+- Persistence idempotency, pagination, and rollback.
+
+### Migration risk
+
+Medium: poorly chosen neighborhood rules can reduce recall or create oversized unions.
+
+### Rollback point
+
+Retain proposal rows/metrics but disable neighborhood creation.
+
+### Explicitly out of scope
+
+Identity resolution and user-visible group selection.
+
+## GF-4 — Independent signed evidence
+
+### Goal
+
+Introduce `IdentityEvidenceEdge` independently of `DuplicateCandidate` and adapt the current deterministic scorer/rules behind `IdentityEdgeEvaluator`.
+
+### Likely files/modules
+
+- `backend/app/engine/identity_edge.py`
+- `backend/app/engine/decision_engine.py`
+- New edge evaluator/service/contracts/repository
+- `backend/app/db/models.py` and additive migrations
+- Attribute-conflict index foundation
+- Pair compatibility adapters and tests
+
+### Invariants
+
+- Existing deterministic scores/rules do not change in this phase.
+- Protected conflicts always resolve to cannot-link.
+- Human must-link cannot override deterministic cannot-link.
+- UOM/site/accounting alone cannot become identity authority.
+- Edge evaluation does not require or create `DuplicateCandidate`.
+- Visible G2 remains legacy-generated.
+
+### Tests
+
+- Parity between evaluator output and current pair classifier fixtures.
+- Legacy candidate/exclusion import provenance.
+- Edge idempotency, ordering, precedence, and safe failure.
+- Attribute conflict index equivalence for protected rules.
+- Zero-provider test.
+
+### Migration risk
+
+High: safety drift between the legacy scorer path and the adapter is unacceptable.
+
+### Rollback point
+
+Stop independent edge writes and retain legacy candidate-based G0.
+
+### Explicitly out of scope
+
+New partitioning, group status changes, pair deprecation.
+
+## GF-5 — Constrained resolver v1
+
+Implementation status: verified through GF-5A contracts and golden cases,
+GF-5B pure constrained resolution, and GF-5C immutable lifecycle/persistence
+with non-visible normal-scan integration. It still publishes no G2 result.
+
+### Goal
+
+Implement the deterministic group-first resolver over neighborhoods and independent signed evidence, initially without publishing G2 results.
+
+### Likely files/modules
+
+- New resolution contracts/service
+- Refactored/reused logic from `identity_group_projection.py`
+- Attribute consensus and bridge-analysis modules
+- Bounded partition-search module
+- Resolution/hypothesis persistence tables
+- Extensive resolver fixtures
+
+### Invariants
+
+- Neutral edges never seed support.
+- No accepted hypothesis contains cannot-link.
+- Final likely/review hypotheses are disjoint.
+- Bridge conflicts cannot become one group.
+- Safe subgroup salvage cannot create overlapping accepted membership.
+- Bounds cause deferred results, never optimistic acceptance.
+- Resolver is deterministic and provider-free.
+
+### Tests
+
+- A-B/B-C/A-C cannot-link and neutral bridge fixtures.
+- Rotor/stator, DE/NDE, inlet/outlet, side, component, generic hub fixtures.
+- Competing neighborhoods and ambiguous ownership.
+- Stable safe-subgroup salvage and partition ties.
+- Complete-pair small groups and progressive large neighborhoods.
+- Input-order/property tests and invariant fuzzing.
+- Persistence checkpoint/resume and rollback.
+
+### Migration risk
+
+High: this is the new decision core.
+
+### Rollback point
+
+Resolver runs remain non-visible; legacy G1/G2 is untouched.
+
+### Explicitly out of scope
+
+G2 publication, normal APIs/UI, pair-write shutdown, AI.
+
+## GF-6 — Versioned G2 adapter
+
+Implementation status: verified through GF-6A pure adapter contracts and GF-6B
+immutable, non-current persistence with current-reader compatibility isolation.
+
+### Goal
+
+Adapt completed resolver output to immutable, idempotent G2 snapshots with explicit v1/v2 validation semantics.
+
+### Likely files/modules
+
+- `backend/app/services/identity_group_snapshot_service.py`
+- `backend/app/db/models.py`
+- `backend/app/db/migrations.py`
+- `backend/app/services/identity_group_query_service.py`
+- Group schemas and G2 snapshot tests
+
+### Invariants
+
+- Historical v1 snapshots are byte/semantically compatible.
+- V2 snapshots record discovery/resolution provenance and validation mode.
+- Required checks are complete for every accepted group.
+- G2 write remains one atomic transaction.
+- Creating a v2 shadow snapshot does not make it current/visible.
+- Conflicts/deferred families remain separate from accepted groups.
+
+### Tests
+
+- V1 fixture replay and historical empty-state behavior.
+- V2 complete and progressive snapshots.
+- Evidence copying/reference integrity.
+- Fingerprint idempotency and version isolation.
+- Transaction fault injection.
+- Wrong-scan/run selection rejection.
+
+### Migration risk
+
+High: accidental selection of a shadow or partial projection would create two truths.
+
+### Rollback point
+
+Keep v2 adapter disabled; v1 G2 remains selected.
+
+### Explicitly out of scope
+
+Normal UI promotion, pair deprecation, provider work.
+
+## GF-7 — Controlled shadow comparison
+
+Implementation status: verified through GF-7A pure comparison contracts and
+metrics plus GF-7B immutable, explicitly controlled, non-visible persistence.
+G2-v1 remains current; GF-8 promotion/orchestration has not started.
+
+### Goal
+
+Run old and new pipelines on controlled scans, keeping the old G2 result visible and recording non-visible comparison metrics.
+
+### Likely files/modules
+
+- New shadow orchestration/comparison service and tables
+- Scan/admin diagnostic route or offline CLI
+- Benchmark corpora and comparison reports
+- No business UI result selector
+
+### Invariants
+
+- Old path remains the only visible current result.
+- Shadow output cannot receive human review.
+- Shadow execution makes zero external provider calls.
+- No source data or existing snapshot is modified.
+- Full case-level differences remain inspectable without exposing secrets.
+
+### Tests
+
+- Comparison metric correctness on exact/split/merge/overlap fixtures.
+- Cannot-link and duplicate-membership blocker detection.
+- Old/new failure isolation.
+- No-visible-selection and no-review enforcement.
+- Runtime/evidence-volume measurement integrity.
+
+### Migration risk
+
+Medium: operational cost and confusion if shadow artifacts leak into normal APIs.
+
+### Rollback point
+
+Disable shadow scheduling and retain collected read-only comparison records.
+
+### Explicitly out of scope
+
+Graduation, business UI changes, provider benchmarking.
+
+## GF-8 — Group-first scan orchestration
+
+Implementation status: verified through GF-8A frozen orchestration contracts
+and GF-8B controlled legacy-primary/group-first-primary runtime integration.
+G2-v1 remains the visible compatibility projection until GF-9.
+
+### Goal
+
+Make canonical snapshot, discovery, evidence acquisition, resolver, and G2 v2 the required normal scan stages after graduation gates pass.
+
+### Likely files/modules
+
+- `backend/app/services/scan_runner.py`
+- `backend/app/services/scan_service.py`
+- `backend/app/api/routes_scans.py`
+- Scan status/stage models and migrations
+- Background/resume scheduler seam
+- End-to-end scan tests
+
+### Invariants
+
+- A scan is not group-ready completed without a valid selected G2 snapshot.
+- Stage failures are safe, observable, and resumable where declared.
+- Optional channel degradation is explicit.
+- Automatic LLM work is not a required stage.
+- Legacy mode remains a feature-flagged rollback during compatibility.
+
+### Tests
+
+- Stage success, degradation, failure, retry, restart, and atomic G2 publication.
+- Valid zero-group scan.
+- Completed-with-deferred behavior.
+- Concurrent scan isolation.
+- Old/new mode selection and rollback.
+- Zero-provider execution with AI disabled.
+
+### Migration risk
+
+High: changes the normal execution path.
+
+### Rollback point
+
+Switch the visible engine flag back to legacy pair-first orchestration; v2 records remain non-destructive.
+
+### Explicitly out of scope
+
+Removing pair tables or changing provider defaults.
+
+## GF-9 — Group-first API, UI, and export inversion
+
+Implementation status: verified and complete through GF-9A read-authority
+contracts, GF-9B backend inversion, and GF-9C frontend/export end-to-end
+graduation. GF-10 pair-path write deprecation is verified and complete.
+
+### Goal
+
+Make group counts, groups, conflicts, and human review the complete normal business workflow while keeping advanced pair diagnostics available.
+
+### Likely files/modules
+
+- `backend/app/api/routes_identity_groups.py`
+- Group query/export/review services and schemas
+- `frontend/src/pages/ScanResults.jsx`
+- Group/review UI utilities and components
+- Frontend/backend API and export tests
+
+### Invariants
+
+- Groups remain the default view.
+- Pair counts/status are not the scan headline.
+- Pair review and pair AI controls are absent from the normal workflow.
+- Group evidence is bounded and paginated.
+- System and reviewed exports clearly differ in authority.
+- Existing compatibility routes continue to read historical scans.
+
+### Tests
+
+- Summary counters and cursor pagination at large fixture sizes.
+- Group detail/evidence pagination.
+- Group review and scan-wide reviewed-set exclusivity.
+- Confirmed-only operational export.
+- UI accessibility and group-first wording tests.
+- Historical scan and compatibility behavior.
+
+### Migration risk
+
+Medium: user confusion or accidental change to export authority.
+
+### Rollback point
+
+Re-enable the prior UI composition while retaining v2 API fields and snapshots.
+
+### Explicitly out of scope
+
+Deleting legacy endpoints/data or adding AI UI.
+
+## GF-10 — Pair-path write deprecation
+
+Implementation status: VERIFIED AND COMPLETE. GF-10A verified the residual
+dependency inventory and froze the post-GF-9 policy-v2 contracts. GF-10B-PRE
+verified truthful G2-v2 audit persistence, and GF-10B runtime deprecation now
+suppresses pair/G1/G2-v1/shadow writes for explicit group-first scans while
+preserving policy-v2 legacy behavior and historical policy-v1 reads.
+
+GF-10 remains one roadmap phase with two bounded delivery units:
+
+- GF-10A — residual pair-path dependency inventory and post-GF-9
+  orchestration/deprecation contracts;
+- GF-10B — runtime write deprecation for group-first-primary scans plus
+  compatibility/shadow cleanup.
+
+### Goal
+
+Stop creating new pair business decisions after every supported consumer uses independent evidence and group results.
+
+### Likely files/modules
+
+- Candidate repository and scan orchestration
+- Pair feedback routes/services
+- Pair LLM triage scheduling/services
+- Pair export/API compatibility layer
+- Deprecation telemetry and documentation
+
+### Deprecation order
+
+1. Hide pair review and pair LLM controls from normal UI.
+2. Mark pair feedback and pair LLM APIs deprecated; reject new writes only after client telemetry confirms no supported dependency.
+3. Stop automatic pair LLM scheduling.
+4. Stop `DuplicateCandidate` writes in group-first scans.
+5. Keep pair APIs/exports read-only for historical and legacy-mode scans.
+6. Remove the legacy conflict-unaware grouping route after its compatibility window.
+7. Consider archival strategy only in a later separately approved program.
+
+### Invariants
+
+- Historical pair data stays readable.
+- No G2/G6 evidence loses provenance.
+- New group-first scans remain fully explainable without `DuplicateCandidate`.
+- Pair deprecation cannot change group membership.
+
+### Tests
+
+- Read-only historical API/export fixtures.
+- Explicit write rejection and version headers.
+- No hidden pair scheduler/background writes.
+- New group-first scan contains complete independent evidence.
+- Legacy-mode rollback continues during the declared period.
+
+### Migration risk
+
+Medium/high: undocumented consumers may depend on pair endpoints.
+
+### Rollback point
+
+Temporarily re-enable pair writes behind the compatibility flag without changing G2 selection.
+
+### Explicitly out of scope
+
+Dropping tables, deleting rows, or migrating historical pair feedback into invented group reviews.
+
+## GF-11 — 100k scale hardening
+
+Implementation status: IN PROGRESS. GF-11A, GF-11B, GF-11C-PRE, and GF-11C
+are verified bounded units. GF-11D remains insufficient/not graduated after
+the post-CACHE1 canonical 100k rerun.
+Production policy-v2 discovery uses exact indexed
+v4 lexical retrieval below 25,000 eligible records and bounded rarity-aware
+retrieval with one fixed fail-closed second pass at 25,000 and above. The 50k
+production run recovered all 6,250 primary-insufficient anchors, left zero
+remaining, and matched the exact reference for final proposals, neighborhoods,
+and coverage. Deterministic 900-key cache-load chunks resolve the SQLite
+variable-limit failure without changing transactions or hit/miss behavior.
+
+The 100k production lexical-only check completed bounded retrieval in 98.300
+seconds and recovered all 12,500 primary-insufficient anchors, but it is not a
+full-pipeline graduation. CHAR_VECTOR, cache save, and fusion/materialization
+remain measured bottlenecks. The canonical GF-11D 100k run timed out at the
+300-second gate. Its sole 900-second diagnostic completed 721.191-second
+DISCOVERY and GF4, then timed out in GF5 before GF6. CHAR_VECTOR was the
+largest measured production stage at 336.432 seconds. CHAR1 subsequently
+reduced full-pipeline CHAR_VECTOR to 144.876 seconds without changing its
+contract, but the official rerun still timed out during cache save at 300.011
+seconds. The single extended diagnostic completed 571.720-second DISCOVERY and
+GF4, then failed GF5 with `IDENTITYRESOLUTIONVALIDATIONERROR` after 201.772
+seconds; GF6 was skipped. That typed GF5 validation failure is the single next
+blocker in the preserved historical run. GF-11D-GF5-PRE diagnosed the false
+scan-wide targeted-request budget check, and GF-11D-GF5-FIX corrected it to
+the frozen per-work-unit contract. The post-fix RERUN2 official 100k run timed
+out during CHAR_VECTOR at 300.002 seconds. Its one extended diagnostic
+completed 379.361-second DISCOVERY, GF4, corrected/persisted GF5, and GF6 with
+zero provider, deprecated-write, or safety violations. CACHE1 then replaced
+per-row cache-save round trips with deterministic bounded prefetch and batched
+persistence without changing cache semantics. The post-CACHE1 RERUN3 official
+run still timed out at 300.009 seconds during retrieval fusion/materialization.
+Its single extended diagnostic completed the full pipeline safely with
+324.468-second DISCOVERY, GF4, corrected/persisted GF5, and GF6. Cache save
+was 7.137 seconds; CHAR_VECTOR was the largest measured DISCOVERY stage at
+128.777 seconds and is the single next hardening target. GF-11D remains
+insufficient, GF-12 remains not started, and these units do not alter the GF-0
+through GF-12 order.
+
+The `<=300.000000 s` COLD_FULL 100k DISCOVERY target remains unmet. By explicit
+supervising architect / product-owner decision, the bounded
+`GF11-PERF-100K-COLD-FULL` performance waiver is ACTIVE. GF-11 remains IN
+PROGRESS and the debt remains OPEN; the waiver permits independent GF-12
+validation to start but does not grant GF-11 performance graduation or final
+production graduation. The controlling scope and expiry conditions are in
+`GF11_100K_COLD_FULL_PERFORMANCE_WAIVER.md`.
+
+### Goal
+
+Meet measured 100k-record performance and reliability gates without changing identity semantics.
+
+### Likely files/modules
+
+- Chunked ingestion/canonical snapshot services
+- Discovery indexes and `IdentityVectorIndex` adapters
+- Background/resumable stage execution
+- Database indexes/query pagination
+- Load/benchmark tooling and observability
+- Frontend virtualization where measured necessary
+
+### Invariants
+
+- No global all-pairs operation.
+- No full dense N-by-N matrix.
+- Evidence and neighborhood volume obey configured bounds.
+- Generic families defer safely.
+- Performance optimization cannot weaken cannot-link or required checks.
+- Repeated/resumed stages remain idempotent.
+
+### Tests/benchmarks
+
+- 5k, 20k, and 100k representative scans on declared hardware.
+- Sparse, generic-heavy, technical-family, and cross-site distributions.
+- Runtime, peak memory, database growth, evidence volume, and pagination latency.
+- Kill/restart/resume and concurrent-job isolation.
+- Quality/coverage comparisons at each cap.
+- Thresholds set from baseline before graduation; no invented timings.
+
+### Migration risk
+
+High: index/storage changes can alter recall if contracts are not fixed.
+
+### Rollback point
+
+Select the previous discovery adapter/configuration version; keep resolver/G2 contracts stable.
+
+### Explicitly out of scope
+
+One-million-record distributed execution and external provider optimization.
+
+## GF-12 — Production validation and graduation
+
+Implementation status: STARTED. GF-12A1 is VERIFIED: the group-first validation
+contract and corrected canonical offline quality baseline are established with
+corpus v1, truth v2, deterministic evaluation, and zero safety/provider
+violations. GF-12A2 human-review protocol/tooling is VERIFIED and R18 has
+prepared an explicitly authorized blinded real candidate-edge package. Its
+state is `HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`;
+human-reviewed production-quality validation and final graduation remain
+pending.
+
+GF-12B1 privacy/security/data-boundary baseline is VERIFIED. PS1-PS24 confirm
+provider-none and offline-evaluator isolation, synthetic-secret non-disclosure,
+blinded/private artifact minimization, export/review allowlists, controlled
+input failure, and record-independent artifact paths with zero provider calls.
+Retention/deletion gaps remain documented as `UNSPECIFIED`; this result does not
+authorize a dataset or complete GF-12.
+
+GF-12B2 recovery/failure-mode/transactional-integrity baseline is VERIFIED.
+RF1-RF26 establish fail-closed publication, caller-owned rollback, cache rollback,
+deterministic fresh-rerun equality, cross-scan isolation, failed-read/review/export
+protection, a provider-free 500-record production-path exercise, and zero provider
+calls. Durable same-scan resume status is `NOT_IMPLEMENTED`; production
+cancellation and production scan timeout are `UNSUPPORTED / NOT IMPLEMENTED`.
+Current recovery is a new scan by retry or restart, and no stage-resume capability
+is claimed. This validation does not complete GF-12.
+
+GF-12B3 observability/runbook/operational-readiness baseline is VERIFIED.
+OR1-OR24 validate scan lifecycle/correlation, persisted stage reconciliation,
+authoritative-read readiness, failed read/review/export isolation, secret-safe
+diagnostics, provider-none execution, health/readiness, waiver visibility, and
+human-validation dependency visibility. The operator runbook and fail-closed
+readiness checklist use only current synchronous interfaces. Public stage/failure-
+history telemetry, structured scan logging, and public group-provider status remain
+open; resume, production cancellation, and production scan timeout remain
+`NOT_IMPLEMENTED`. This does not complete GF-12 or resolve deployment/tenancy/
+authorization decisions.
+
+By explicit product-owner sequencing decision, the current milestone is
+`SHOWABLE WORKING PRODUCT / DEMO READINESS`, not deployment readiness. GF-12C1
+is VERIFIED for that bounded milestone: DEMO1-DEMO24 pass on the explicitly
+synthetic 17-record local fixture, the complete group-first scan/read/detail/
+review/export flow works, size-2 and size-3 identity sets are visible, conflict
+outcomes remain distinct, and three fresh runs have identical semantic product
+identity with provider calls zero. `SHOWABLE WORKING PRODUCT = VERIFIED` and
+`DEMO-READY = YES`; this is not production deployment or human-quality
+graduation.
+
+Deployment architecture, tenancy, application IAM/authorization, managed
+production storage, cloud/platform deployment, external integrations,
+production network and retention policy, and reference production hardware are
+deferred until after the demo milestone and remain future work. The post-demo
+tracks are: (A) authorized human-reviewed quality validation, (B) deployment/
+IAM/tenancy/storage/network/retention architecture, (C) authorized external
+integrations/provider strategy, and (D) remaining production performance/scale
+debt. GF-12 remains STARTED / production validation incomplete.
+
+Start was authorized under the bounded GF-11 COLD_FULL performance waiver.
+Authorized independent work includes quality and false-
+positive/false-negative evaluation, group correctness, safety, privacy and
+security, recovery, observability, runbooks, UAT, deployment readiness,
+reference-hardware definition, warm/resume benchmark design, and workflow/SLO
+evidence. Final production graduation remains blocked while the open GF-11
+performance debt is unresolved unless a later explicit governance decision
+addresses it.
+
+### Goal
+
+Validate correctness, safety, usability, and operating characteristics on representative human-reviewed data before declaring the new architecture production-ready.
+
+### Likely files/modules
+
+- Offline evaluation/benchmark services
+- Curated and organization-approved labeled datasets
+- Security/privacy/operations documentation
+- Release and rollback runbooks
+- No provider selection requirement
+
+### Invariants
+
+- Safety gates remain absolute.
+- Aggregate shadow similarity cannot substitute for case review.
+- Operational accuracy claims use human-reviewed real-client data.
+- Provider performance is not part of deterministic engine graduation.
+
+### Tests/review
+
+- Per-group precision/recall-style evaluation against approved reviewed sets.
+- Split/merge and missed-record adjudication.
+- Cannot-link, exclusivity, and writeback-zero audits.
+- 100k benchmark thresholds and recovery exercises.
+- Security, privacy, tenancy, authorization, and export review.
+- User acceptance of group review and operational export.
+
+### Migration risk
+
+High organizational risk if representative labels or owner decisions are absent.
+
+### Rollback point
+
+Keep group-first disabled for production tenants or revert the visible-engine flag while preserving validation artifacts.
+
+### Explicitly out of scope
+
+Cross-scan identity registry, automatic merge/writeback, and provider selection.
+
+## Shadow-comparison specification
+
+### Execution isolation
+
+- Enabled only by explicit controlled configuration/CLI/admin action.
+- Never scheduled merely because a normal scan exists.
+- Reads the same canonical record snapshot and approved scope.
+- Writes to shadow-purpose discovery/resolution/comparison records.
+- Does not become the selected G2 projection.
+- Cannot create or consume G6 review as current state unless a read-only labeled-evaluation copy is explicitly supplied.
+- Makes zero provider calls.
+
+### Metrics
+
+| Category | Metrics |
+|---|---|
+| Membership | exact-group matches, group Jaccard, record co-membership agreement |
+| Coverage | records with neighbors, grouped, unassigned, missed by either path |
+| Shape | group counts/sizes, likely/review/conflict/deferred counts |
+| Difference | old groups split by new, old groups merged by new, moved records, unmatched groups |
+| Safety | protected cannot-link violations, duplicate accepted membership, unresolved bridge risks |
+| Evidence | proposals, independent edges, targeted evaluations, complete/progressive checks |
+| Resource | runtime by stage, peak memory, DB bytes/rows, resume count |
+| Quality | case-level labeled outcome, safe abstention, false merge, false split, missed identity |
+
+Comparison group matching uses deterministic maximum-overlap matching only for reporting. It does not resolve identity.
+
+### Graduation rules
+
+- Every safety metric is zero on all required suites.
+- Every material merge/split difference is reviewed at case level.
+- Discovery coverage and cap losses meet thresholds established by the evaluation owner.
+- Human-reviewed quality meets approved thresholds on representative data.
+- 5k/20k/100k performance meets measured budgets.
+- Historical APIs/exports and rollback have been exercised.
+- Architecture owner, product owner, and data steward approve promotion.
+
+## Program acceptance matrix
+
+### Safety gates
+
+- `accepted_group_cannot_link_count == 0`
+- `accepted_record_multi_membership_count == 0`
+- `reviewed_set_multi_membership_count == 0`
+- `automatic_source_mutation_count == 0`
+- `external_provider_calls_in_deterministic_pipeline == 0`
+
+### Functional gates
+
+- Normal result, review, and export operate on 2..N groups.
+- Group resolution does not require a persisted `DuplicateCandidate`.
+- Conflict/deferred/unassigned outcomes are explicit.
+- Group status derives from the group evidence contract, never average pair score.
+- Advanced pair evidence remains available without being the business workflow.
+
+### Discovery gates
+
+- Coverage denominator and numerator are reproducible.
+- No-neighbor records are counted.
+- Every cap and truncation has a bounded reason.
+- Generic-family deferral is visible.
+- Identical inputs/configuration produce identical proposal and neighborhood fingerprints.
+
+### Regression gates
+
+- Historical G2 v1 scans remain readable.
+- Current G3-G7 behavior is unchanged for v1 or explicitly versioned for v2.
+- Pair diagnostics remain readable through the compatibility period.
+- Existing human review history remains append-only.
+- Ordinary automated tests make zero real provider requests.
+
+### Performance benchmark requirements
+
+For 5k, 20k, and 100k datasets, record:
+
+- hardware/OS/runtime/database and configuration versions;
+- data-shape distribution, block sizes, missingness, and generic-family prevalence;
+- stage runtime and retry/resume behavior;
+- peak process memory and persisted storage growth;
+- proposal, neighborhood, evidence, group, conflict, deferred, and unassigned counts;
+- API list/detail/export latency under bounded pagination;
+- discovery coverage and labeled quality effects of caps.
+
+Baseline results are collected before setting pass thresholds. A phase cannot claim 100k readiness merely because it completes a synthetic uniform dataset.
+
+## Compatibility-period exit criteria
+
+Pair compatibility may end only after:
+
+- no supported normal UI uses pair APIs;
+- no current export consumer requires pair business columns;
+- new scans have complete independent evidence provenance;
+- historical pair reads have an archival/access plan;
+- pair feedback and pair LLM write endpoints have been deprecated for a declared period;
+- rollback no longer depends on creating new pair rows;
+- the user explicitly approves retirement.
+
+Table deletion is not part of this roadmap and requires a separate destructive-migration decision.
+
+## Recommended first implementation phase
+
+GF-0 is the prerequisite governance and contract-freeze phase. Once its documentation commit is reviewed and accepted, **GF-1 — Canonical scan-record catalog** is the first production implementation phase. No later phase may start by skipping its prerequisites.
+
+## GF-12C1-R1 real-input compatibility checkpoint
+
+The historical real CSV input contract and New Scan/demo browser parity are
+restored without changing canonical identity fields or group-first authority.
+Real-target Validate only is VERIFIED. Small representative real-schema uploads
+complete in same-site and cross-site group-first modes with zero provider calls.
+GF-12C1-R2 verifies character retrieval on the full 5,327-row input. Three zero
+vectors deterministically return zero legitimate neighbors; the other 5,324
+anchors return K=5, and three runs have identical output fingerprints. No large-N
+exact fallback or fabricated neighbor was added. The full real scan crossed the
+corrected stage but remained nonterminal beyond 900 seconds, so end-to-end product
+readiness remains BLOCKED by a separate downstream runtime condition. GF-11
+remains IN PROGRESS, its waiver is ACTIVE, `GF11-PERF-100K-COLD-FULL` is OPEN,
+and 300 seconds remains NOT MET.
+
+GF-12C1-R3 directly localizes that runtime condition after completed DISCOVERY
+and GF4. Real GF5 forms 244 work units; several dense units remain eligible
+under the unchanged 20-member cap, including an 18-record/130-edge unit with a
+106,743-subset theoretical space and the existing 16,400-attempt bound.
+Candidate-group generation is the proven dominant stage, GF6 is not reached,
+and stopped diagnostics remain non-authoritative. No optimization or semantic
+change was made. The single next category is
+`NEXT_GF5_REAL_DATA_WORK_UNIT_CORRECTION`.
+
+GF-12C1-R4 is verified. The resolver now fast-forwards only the mathematically
+inevitable existing candidate-generation exhaustion outcome, preserving the
+16,400 bound, strict limit-plus-one metric, defer reason, complete within-bound
+enumeration, candidate/group semantics, cannot-links, deterministic ranking,
+and all downstream contracts. The real 5,327-row target completes GF5 and GF6
+authoritatively with zero provider calls. Real-target execution is verified;
+human quality, deployment readiness, GF-11 performance graduation, and GF-12
+completion remain open.
+
+GF-12C1-R5 is verified. System Group Export now also has a human-readable XLSX
+representation with Summary, merged Duplicate Groups, and flat Group Data while
+the existing CSV and Reviewed Identity Export authorities remain unchanged.
+The XLSX is deterministic, provider-free, formula-safe, generated in memory,
+and fails closed through persisted group-first read authority. This does not
+change the ACTIVE GF-11 waiver, OPEN `GF11-PERF-100K-COLD-FULL` debt, unmet
+300-second target, `HUMAN_REVIEW_DATASET_REQUIRED` status, or post-demo deferral
+of deployment/integration work.
+
+GF-12C1-R6 verifies that the ordinary browser New Scan explicitly selects the
+current group-first product, persists policy-v2/G2-v2 authority, and preserves
+explicit legacy compatibility and historical reads. It also repairs the
+Microsoft Excel table/filter conflict by leaving the Group Data AutoFilter to
+the table alone. Fresh real scan 27 has exact API/CSV/XLSX parity, but its
+read-only canary is `Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION`: tyre subtypes,
+wheel versus tyre, and dirty carbon-stick versus pencil are repeatable review-
+group failure patterns. Detector semantics were not changed in R6. A separate
+bounded correction is required before freezing this real output for demo use.
+
+GF-12C1-R7 is verified. A bounded `identity-discriminator-v1` now promotes
+explicit incompatible physical classes, mutually exclusive tyre variants, and
+the proven copied-description/part-number/UOM composite to auditable GF4
+cannot-links. Existing GF5 whole-group safety consumes those edges unchanged.
+Fresh scan 29 removes C5/C6/C7, preserves C8/C9, contains zero accepted groups
+with the new contradiction, and has exact G2-v2 API/CSV/XLSX parity. Its quality
+gate is `Q1_DEMO_QUALITY_PLAUSIBLE`; manual workbook inspection and GF-12A2
+human-label validation remain open.
+
+GF-12C1-R9 is a partial quality correction. It extends the same GF4 identity
+discriminator contract with bounded reusable aliases/classes and explicit
+two-sided part-number contradiction provenance. Fresh scan 30 safely separates
+all four R8 D families, preserves R7 controls, makes zero provider calls, has
+zero protected contradictions inside accepted groups, and retains exact
+G2-v2 CSV/XLSX parity. A repeated 45-group audit nevertheless finds one new,
+separate left-side/right-side shock abbreviation family. The next work, if
+authorized, is limited to that proven directional-variant gap; the demo freeze
+must not be claimed yet. GF-11 performance debt and GF-12A2 human review remain
+open and deployment/integration remains deferred.
+
+GF-12C1-R10 verifies the bounded directional quality step. A shared-base
+LEFT/RIGHT qualifier safely separates the remaining R9 shock pair through
+existing GF4/GF5 authority and preserves every R7/R9 control. Scan 31 has zero
+protected internal contradictions, zero provider calls, and exact CSV/XLSX
+parity. The repeated semantic audit finds a separate BUFFER01/MIRROR01 copied-
+description false group, so the overall demo is not freeze-ready. R10A commits
+the independently verified directional implementation. Any next detector work
+is limited to that newly proven family. GF-11 and GF-12A2 remain open;
+deployment/integration remains deferred.
+
+GF-12C1-R11 is verified as a bounded quality pass. Two reusable object classes
+and one explicit incompatibility relation safely separate both real
+buffer/mirror instances through existing GF4/GF5 authority. Scan 2 has zero
+protected contradictions inside accepted groups, zero provider calls, exact
+423-member G2-v2 CSV/XLSX parity, and a repeated 46-group audit with D=0. The
+next permitted step is a final freeze-only audit with no detector changes.
+GF-12A2 human validation and GF-11 performance debt remain open;
+deployment/integration remains deferred.
+
+GF-12C1-R12 failed the final full-real freeze with four likely false groups.
+GF-12C1-R13 completes the architecture reassessment and selects
+`R13-E_COMBINE_SIGNATURE_AND_SUPPORT_GATE`; it does not change detector
+semantics or reopen noun-by-noun production patching. The next permitted unit is
+a versioned pure identity-signature/signed-evidence seam plus historical and
+positive-control golden cases, with no runtime call-site integration. Later
+phases must derive signatures, shadow GF4 classifications, prove regression
+safety, integrate GF4 in a bounded commit, and then repeat a fresh real G2-v2
+scan and freeze audit. The detector remains unfrozen. GF-11 remains in progress
+under its active waiver with open cold-full debt and an unmet 300-second target;
+GF-12A2 remains human-review-data-required; deployment/integration is deferred.
+
+GF-12C1-R14 completes only the pure contract-seam phase of the R13 plan. The
+unused engine-domain contracts preserve record-local source observations,
+explicit unknown/unresolved semantics, independent signed-evidence channels,
+and deterministic fingerprint material. No extractor or runtime call site is
+connected. The next permitted unit is deterministic per-record signature
+derivation behind the unused seam, still without GF4 behavior change. The
+detector remains unfrozen and all GF-11, GF-12A2, and deployment/integration
+constraints remain in force.
+
+GF-12C1-R15 completes deterministic record-local signature derivation behind
+the unused seam. Its bounded residual representation preserves unknown and
+source-conflicted information but has no support, contradiction, or grouping
+authority. The full protected CSV derives read-only with no failures and no
+provider calls. The next permitted unit is non-authoritative pairwise
+`SignedIdentityEvidence` derivation in tests/offline shadow mode, with no GF4
+support-classification change. The detector remains unfrozen; all GF-11,
+GF-12A2, and deployment/integration constraints remain in force.
+
+GF-12C1-R16 completes the non-authoritative pairwise signed-evidence shadow
+unit. Protected contradictions remain explicit and the four R12 false groups
+receive no misleading identity support, but seven named legitimate controls
+remain lexical-only. The next permitted unit is a bounded representation and
+evidence study for those seven controls in golden tests and offline shadow
+mode. It must not make copied text or structural family prefixes authoritative
+and must not add a GF4 decision gate or runtime integration. The detector
+remains unfrozen; all GF-11, GF-12A2, and deployment/integration constraints
+remain in force.
+
+GF-12C1-R17 completes the trusted-identity coverage gap study without selecting
+a code correction. A combined phrase/stem/existing-fact strategy covers all
+seven controls and the four named R12 guards, but its wider accepted-edge audit
+contains unsafe numeric-variant promotions. The next required unit is an
+independently human-labelled identity/non-identity edge dataset covering these
+evidence families, followed by the same bounded offline counterfactual audit.
+No R15/R16 or GF4 implementation is authorized. The detector remains unfrozen;
+all GF-11, GF-12A2, and deployment/integration constraints remain in force.
+
+GF-12A2-R18 prepares the independently reviewable evidence package required by
+R17. A 20-pair diagnostic panel and deterministic 300-pair evaluation sample
+are drawn from a persisted 20,395-edge real candidate population, not accepted
+groups alone. Reviewer A/B copies are blinded and empty; adjudication and later
+counterfactual evaluation remain separate future work. GF-12A2 advances only
+to `HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`. No
+detector semantics are authorized until completed independent labels are
+imported and evaluated; all GF-11 and deployment/integration constraints remain
+in force.

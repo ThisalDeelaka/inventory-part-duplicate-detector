@@ -8,19 +8,36 @@ from app.api import (
     routes_config,
     routes_diagnostics,
     routes_feedback,
+    routes_identity_groups,
     routes_llm,
     routes_load_test,
     routes_scans,
 )
 from app.core.config import settings
 from app.db.database import Base, SessionLocal, engine
-from app.db.migrations import ensure_sqlite_demo_columns
+from app.db.migrations import (
+    ensure_g2_v2_projection_tables,
+    ensure_group_review_tables,
+    ensure_identity_discovery_tables,
+    ensure_identity_group_snapshot_tables,
+    ensure_identity_resolution_tables,
+    ensure_scan_orchestration_tables,
+    ensure_shadow_comparison_tables,
+    ensure_sqlite_demo_columns,
+)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_demo_columns(engine)
+    ensure_identity_group_snapshot_tables(engine)
+    ensure_identity_discovery_tables(engine)
+    ensure_group_review_tables(engine)
+    ensure_identity_resolution_tables(engine)
+    ensure_g2_v2_projection_tables(engine)
+    ensure_shadow_comparison_tables(engine)
+    ensure_scan_orchestration_tables(engine)
     yield
 
 
@@ -35,6 +52,7 @@ app.add_middleware(
 )
 app.include_router(routes_config.router)
 app.include_router(routes_scans.router)
+app.include_router(routes_identity_groups.router)
 app.include_router(routes_feedback.router)
 app.include_router(routes_diagnostics.router)
 app.include_router(routes_load_test.router)

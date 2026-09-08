@@ -7,22 +7,10 @@ from app.repositories.warning_repository import WarningRepository
 from app.services.scan_runner import ScanRunner
 
 
-def run_scan(
-    db: Session,
-    df,
-    scan_name: str,
-    selected_fields: list[str],
-    threshold: float,
-    source_type="CSV",
-    sensitive_mode: bool = True,
-    scan_mode: str = "SAME_SITE_DUPLICATE",
-    strict_custom_fields: list[dict] | None = None,
-    custom_fields_used: list[dict] | None = None,
-    part_type: str = "INVENTORY",
-):
-    return ScanRunner(db).run(
-        df, scan_name, selected_fields, threshold, source_type, sensitive_mode, scan_mode,
-        strict_custom_fields, custom_fields_used, part_type,
+def run_scan(db: Session, df, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE", configuration=None, orchestration_mode=None):
+    return ScanRunner(db, configuration=configuration).run(
+        df, scan_name, selected_fields, threshold, source_type, sensitive_mode,
+        scan_mode, orchestration_mode,
     )
 
 

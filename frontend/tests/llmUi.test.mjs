@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  AI_ENHANCEMENT_FILTERS,
+  HYBRID_RETRIEVAL_METRIC_LABELS,
+  RETRIEVAL_CHANNEL_LABELS,
   ADVISORY_AUTHORITY_LABEL,
   DETERMINISTIC_AUTHORITY_LABEL,
   EFFECTIVE_STATUS_OPTIONS,
@@ -19,11 +22,101 @@ import {
   nextValidationToken,
   normalizeLlmError,
   normalizeTriageStatus,
+  retrievalChannelLabel,
   scanExportTargets,
   scanTriageTargets,
   shouldPollTriage,
   triageFailureLabel,
+  uomRelationshipLabel,
 } from '../src/utils/llmUi.js'
+
+test('AI enhancement filters expose retrieval and advisory views', () => {
+  assert.deepEqual(AI_ENHANCEMENT_FILTERS.map(item => item[1]), [
+    'All', 'Standard deterministic', 'Hybrid retrieval', 'Recall rescue',
+    'Semantic-profile resolution', 'Pairwise LLM fallback',
+  ])
+})
+
+test('AI enhancement filters separate provenance and resolution source', () => {
+  const rows = [
+    { id: 1, candidate_source: 'DETERMINISTIC_STANDARD', resolution_source: 'SEMANTIC_PROFILE_COMPARISON' },
+    { id: 2, candidate_source: 'DETERMINISTIC_RECALL_EXPANSION', resolution_source: 'PAIRWISE_LLM_FALLBACK' },
+    { id: 3, candidate_source: 'HYBRID_RETRIEVAL', resolution_source: null },
+  ]
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'STANDARD').map(item => item.id), [1])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'RECALL').map(item => item.id), [2])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'HYBRID').map(item => item.id), [3])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'SEMANTIC').map(item => item.id), [1])
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'PAIRWISE').map(item => item.id), [2])
+})
+
+test('hybrid retrieval filtering does not treat retrieval score as assisted status', () => {
+  const rows = [
+    { id: 1, candidate_source: 'HYBRID_RETRIEVAL', retrieval_score: 99, effective_status: 'HUMAN_REVIEW' },
+    { id: 2, candidate_source: 'DETERMINISTIC_STANDARD', retrieval_score: null, effective_status: 'LLM_LIKELY_DUPLICATE' },
+  ]
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'HYBRID').map(item => item.id), [1])
+  assert.equal(filterAndPrioritizeCandidates(rows, 'HYBRID')[0].effective_status, 'HUMAN_REVIEW')
+})
+
+test('retrieval channel labels describe character vectors accurately', () => {
+  assert.equal(RETRIEVAL_CHANNEL_LABELS.CHAR_VECTOR, 'Character vector')
+  assert.equal(retrievalChannelLabel('CHAR_VECTOR'), 'Character vector')
+  assert.equal(retrievalChannelLabel('CHAR_VECTOR_RECIPROCAL'), 'Character vector reciprocal')
+  assert.doesNotMatch(retrievalChannelLabel('CHAR_VECTOR'), /semantic/i)
+  assert.equal(Object.hasOwn(RETRIEVAL_CHANNEL_LABELS, 'EXACT_BLOCK'), false)
+})
+
+test('retrieval priority remains separate from deterministic and human status', () => {
+  const candidate = {
+    candidate_source: 'HYBRID_RETRIEVAL', retrieval_priority: 91.2,
+    business_status: 'POSSIBLE_DUPLICATE_REVIEW', review_status: 'UNREVIEWED',
+  }
+  assert.equal(candidate.retrieval_priority, 91.2)
+  assert.equal(candidate.business_status, 'POSSIBLE_DUPLICATE_REVIEW')
+  assert.equal(candidate.review_status, 'UNREVIEWED')
+})
+
+test('hybrid retrieval metric labels distinguish selected, excluded, added, and budgeted stages', () => {
+  assert.deepEqual(HYBRID_RETRIEVAL_METRIC_LABELS, {
+    selected: 'Retrieval selected',
+    tierA: 'Selected Tier A',
+    tierB: 'Selected Tier B',
+    tierC: 'Selected Tier C',
+    postScoringExcluded: 'Excluded after deterministic checks',
+    added: 'Hybrid candidates added',
+    skippedByBudget: 'Skipped by candidate budget',
+    uomDifferences: 'UOM differences considered',
+    uomConvertible: 'Convertible UOM pairs',
+    uomDifferentBasis: 'Different-basis UOM pairs',
+    uomUnknown: 'Unknown/wildcard UOM pairs',
+  })
+  assert.notEqual(HYBRID_RETRIEVAL_METRIC_LABELS.selected, HYBRID_RETRIEVAL_METRIC_LABELS.added)
+})
+
+test('UOM relationship wording preserves identity and mapping separation', () => {
+  assert.equal(uomRelationshipLabel('SAME_UOM'), 'Same UOM')
+  assert.equal(
+    uomRelationshipLabel('DIFFERENT_DIMENSION_OR_BASIS'),
+    'Different unit dimension or basis',
+  )
+  assert.equal(uomRelationshipLabel('MISSING_OR_WILDCARD'), 'Missing or wildcard UOM')
+  for (const relationship of [
+    'SAME_UOM', 'CONVERTIBLE_SAME_DIMENSION', 'DIFFERENT_DIMENSION_OR_BASIS',
+    'MISSING_OR_WILDCARD', 'MALFORMED_OR_UNKNOWN',
+  ]) {
+    assert.doesNotMatch(uomRelationshipLabel(relationship), /different item|duplicate confidence/i)
+  }
+})
+
+test('standard source filter excludes hybrid and recall candidates', () => {
+  const rows = [
+    { id: 1, candidate_source: 'DETERMINISTIC_STANDARD' },
+    { id: 2, candidate_source: 'HYBRID_RETRIEVAL' },
+    { id: 3, candidate_source: 'DETERMINISTIC_RECALL_EXPANSION' },
+  ]
+  assert.deepEqual(filterAndPrioritizeCandidates(rows, 'STANDARD').map(item => item.id), [1])
+})
 
 test('normalizes safe backend errors and rejects secret or raw payload text', () => {
   assert.deepEqual(

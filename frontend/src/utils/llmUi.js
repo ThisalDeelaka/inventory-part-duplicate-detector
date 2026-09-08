@@ -27,6 +27,57 @@ export const EFFECTIVE_STATUS_OPTIONS = [
   ['NOT_APPLICABLE', 'Not applicable'],
 ]
 
+export const AI_ENHANCEMENT_FILTERS = [
+  ['', 'All'],
+  ['STANDARD', 'Standard deterministic'],
+  ['HYBRID', 'Hybrid retrieval'],
+  ['RECALL', 'Recall rescue'],
+  ['SEMANTIC', 'Semantic-profile resolution'],
+  ['PAIRWISE', 'Pairwise LLM fallback'],
+]
+
+export const RETRIEVAL_CHANNEL_LABELS = Object.freeze({
+  EXACT_DESCRIPTION: 'Exact description',
+  PART_NUMBER_FAMILY: 'Part-number family',
+  LEXICAL: 'Lexical',
+  CHAR_VECTOR: 'Character vector',
+  TECHNICAL_IDENTITY: 'Technical identity',
+})
+
+export const HYBRID_RETRIEVAL_METRIC_LABELS = Object.freeze({
+  selected: 'Retrieval selected',
+  tierA: 'Selected Tier A',
+  tierB: 'Selected Tier B',
+  tierC: 'Selected Tier C',
+  postScoringExcluded: 'Excluded after deterministic checks',
+  added: 'Hybrid candidates added',
+  skippedByBudget: 'Skipped by candidate budget',
+  uomDifferences: 'UOM differences considered',
+  uomConvertible: 'Convertible UOM pairs',
+  uomDifferentBasis: 'Different-basis UOM pairs',
+  uomUnknown: 'Unknown/wildcard UOM pairs',
+})
+
+const UOM_RELATIONSHIP_LABELS = Object.freeze({
+  SAME_UOM: 'Same UOM',
+  CONVERTIBLE_SAME_DIMENSION: 'Convertible units (same dimension)',
+  DIFFERENT_DIMENSION_OR_BASIS: 'Different unit dimension or basis',
+  MISSING_OR_WILDCARD: 'Missing or wildcard UOM',
+  MALFORMED_OR_UNKNOWN: 'Malformed or unknown UOM',
+})
+
+export function uomRelationshipLabel(value) {
+  return UOM_RELATIONSHIP_LABELS[value] || 'Unavailable'
+}
+
+export function retrievalChannelLabel(channel) {
+  if (typeof channel === 'string' && channel.endsWith('_RECIPROCAL')) {
+    const base = channel.slice(0, -'_RECIPROCAL'.length)
+    return `${RETRIEVAL_CHANNEL_LABELS[base] || base} reciprocal`
+  }
+  return RETRIEVAL_CHANNEL_LABELS[channel] || String(channel || 'Hybrid retrieval')
+}
+
 const TRIAGE_STATES = new Set([
   'QUEUED', 'RUNNING', 'PAUSED', 'COMPLETED', 'COMPLETED_WITH_FAILURES', 'FAILED',
 ])
@@ -193,8 +244,15 @@ export function effectiveStatusLabel(status) {
 
 export function filterAndPrioritizeCandidates(candidates, selectedStatus = '') {
   if (!Array.isArray(candidates)) return []
+  const predicates = {
+    STANDARD: candidate => candidate.candidate_source === 'DETERMINISTIC_STANDARD',
+    HYBRID: candidate => candidate.candidate_source === 'HYBRID_RETRIEVAL',
+    RECALL: candidate => candidate.candidate_source === 'DETERMINISTIC_RECALL_EXPANSION',
+    SEMANTIC: candidate => candidate.resolution_source === 'SEMANTIC_PROFILE_COMPARISON',
+    PAIRWISE: candidate => candidate.resolution_source === 'PAIRWISE_LLM_FALLBACK',
+  }
   const filtered = selectedStatus
-    ? candidates.filter(candidate => candidate.effective_status === selectedStatus)
+    ? candidates.filter(predicates[selectedStatus] || (candidate => candidate.effective_status === selectedStatus))
     : [...candidates]
   return filtered.sort((left, right) => {
     const leftPriority = left.effective_status === 'LLM_LIKELY_DUPLICATE' ? 0 : 1

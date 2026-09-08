@@ -58,7 +58,7 @@ def _payload(capability):
 
 def test_every_capability_has_stable_version_and_safety_instructions():
     assert set(PROMPT_VERSIONS) == set(LLMCapability)
-    assert len(set(PROMPT_VERSIONS.values())) == 4
+    assert len(set(PROMPT_VERSIONS.values())) == 5
     for capability in LLMCapability:
         prompt = SYSTEM_PROMPTS[capability].lower()
         assert "exactly one json object" in prompt

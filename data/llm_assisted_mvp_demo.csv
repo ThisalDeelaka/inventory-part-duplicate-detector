@@ -1,6 +1,7 @@
 Stock Ref,Item Narrative,Site Code,Inventory UOM,HSN Code
 MTR-10K-A,Motor 10 kW 415 V three phase flange mounted,SITE-MOTOR,PCS,8501
 MOTOR10K-B,Electric motor ten kilowatt 415V 3 phase flange mount,SITE-MOTOR,PCS,8501
+MTR10K-C,Three phase electric motor 10 kW 415 V flange mounted,SITE-MOTOR,PCS,8501
 GOF-220-A,Gen oil fltr element model 220,SITE-GEN-FILTER,PCS,8421
 FILTER-220-B,Generator oil filter element model 220,SITE-GEN-FILTER,PCS,8421
 FLT-X100-A,Air filter element X100,SITE-FILTER-TYPE,PCS,8421

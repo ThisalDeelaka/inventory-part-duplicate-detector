@@ -9,6 +9,8 @@ class LLMUsageMetadata(BaseModel):
     prompt_tokens: int | None = Field(default=None, ge=0)
     completion_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
+    cache_creation_input_tokens: int | None = Field(default=None, ge=0)
+    cache_read_input_tokens: int | None = Field(default=None, ge=0)
 
 
 class LLMProviderResult(BaseModel):

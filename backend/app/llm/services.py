@@ -508,6 +508,15 @@ def candidate_eligibility(candidate) -> CandidateEligibility:
                 "be used for advisory assistance."
             ),
         )
+    if mismatches:
+        return CandidateEligibility(
+            eligible=False,
+            reason=CandidateGateReason.INELIGIBLE_CRITICAL_MISMATCH,
+            explanation=(
+                "Deterministic critical mismatch evidence cannot be sent to an "
+                "LLM for arbitration."
+            ),
+        )
     left_identity = bool(
         str(candidate.part_no_a or "").strip()
         or str(candidate.description_a or "").strip()
@@ -549,15 +558,6 @@ def candidate_eligibility(candidate) -> CandidateEligibility:
             reason=CandidateGateReason.INELIGIBLE_CROSS_SITE,
             explanation="Cross-site standardization is outside duplicate advisory scope.",
         )
-    if (
-        candidate.business_status == "RELATED_BUT_NOT_DUPLICATE"
-        and mismatches
-    ):
-        return CandidateEligibility(
-            eligible=False,
-            reason=CandidateGateReason.INELIGIBLE_CRITICAL_MISMATCH,
-            explanation="Deterministic critical mismatch evidence supports non-duplicate status.",
-        )
     if candidate.business_status == "POSSIBLE_DUPLICATE_REVIEW":
         return CandidateEligibility(
             eligible=True,
@@ -587,6 +587,14 @@ def candidate_eligibility(candidate) -> CandidateEligibility:
         eligible=False,
         reason=CandidateGateReason.INELIGIBLE_STATUS,
         explanation="The deterministic condition is not allowlisted for LLM advisory.",
+    )
+
+
+def candidate_is_automatic_llm_eligible(candidate) -> bool:
+    """Canonical gate for automatic/provider-facing work on persisted candidates."""
+    return bool(
+        candidate.business_status == "POSSIBLE_DUPLICATE_REVIEW"
+        and candidate_eligibility(candidate).eligible
     )
 
 

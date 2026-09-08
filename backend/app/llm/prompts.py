@@ -7,6 +7,7 @@ from app.llm.contracts import (
     CandidateTriageResponse,
     ColumnSuggestionResponse,
     DifficultValueResponse,
+    InventoryRecordEnrichmentResponse,
 )
 from app.llm.service_contracts import LLMCapability
 
@@ -15,12 +16,14 @@ COLUMN_SUGGESTION_PROMPT_VERSION = "column-suggestion-v1"
 DIFFICULT_VALUE_PROMPT_VERSION = "difficult-value-v1"
 CANDIDATE_ADVISORY_PROMPT_VERSION = "candidate-advisory-v1"
 CANDIDATE_TRIAGE_PROMPT_VERSION = "candidate-triage-v3"
+INVENTORY_RECORD_ENRICHMENT_PROMPT_VERSION = "inventory-record-enrichment-v1"
 
 PROMPT_VERSIONS = {
     LLMCapability.COLUMN_SUGGESTION: COLUMN_SUGGESTION_PROMPT_VERSION,
     LLMCapability.DIFFICULT_VALUE: DIFFICULT_VALUE_PROMPT_VERSION,
     LLMCapability.CANDIDATE_ADVISORY: CANDIDATE_ADVISORY_PROMPT_VERSION,
     LLMCapability.CANDIDATE_TRIAGE: CANDIDATE_TRIAGE_PROMPT_VERSION,
+    LLMCapability.INVENTORY_RECORD_ENRICHMENT: INVENTORY_RECORD_ENRICHMENT_PROMPT_VERSION,
 }
 
 _COMMON_SAFETY = """
@@ -40,6 +43,7 @@ _RESPONSE_MODELS = {
     LLMCapability.DIFFICULT_VALUE: DifficultValueResponse,
     LLMCapability.CANDIDATE_ADVISORY: CandidateAdvisoryResponse,
     LLMCapability.CANDIDATE_TRIAGE: CandidateTriageResponse,
+    LLMCapability.INVENTORY_RECORD_ENRICHMENT: InventoryRecordEnrichmentResponse,
 }
 
 RESPONSE_SCHEMAS = {
@@ -87,6 +91,15 @@ _CAPABILITY_INSTRUCTIONS = {
         "KEEP_DETERMINISTIC_RESULT or HUMAN_REVIEW. supporting_evidence and conflicting_evidence must be "
         "arrays of strings. confidence must be between 0 and 1. deterministic_result_authoritative must be "
         "exactly true."
+    ),
+    LLMCapability.INVENTORY_RECORD_ENRICHMENT: (
+        "Narrow task: extract one independent semantic inventory profile for every supplied record_id. "
+        "Do not compare records, form groups or edges, cluster records, or return duplicate decisions. "
+        "Use only supplied evidence; use null or UNKNOWN when evidence is insufficient and never invent a specification. "
+        "Separate site, department, source-system and administrative prefixes from physical identity. "
+        "Part-number differences alone do not imply different products. Site, contract, UOM and accounting mappings "
+        "do not define physical identity. Return exactly one profile per requested ID, using the exact ID, and no extra IDs. "
+        "Return exactly the required fields and no additional fields."
     ),
 }
 

@@ -1,0 +1,502 @@
+"""Bounded deterministic identity discriminators for GF-4 evidence.
+
+The vocabulary is intentionally small and semantic.  It identifies explicit
+physical object classes and mutually exclusive variants; it does not score
+similarity, infer from missing values, or turn UOM into universal identity
+authority.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+from app.engine.generic_description_guard import is_generic_description
+from app.engine.functional_location_facet import (
+    FunctionalLocationFacet,
+    extract_functional_location_facets,
+    find_functional_location_conflicts,
+)
+from app.engine.normalizer import normalize_description
+from app.engine.uom_relationship import UomRelationship, classify_uom_relationship
+
+
+IDENTITY_DISCRIMINATOR_VERSION = "identity-discriminator-v5"
+
+_OBJECT_CLASS_PATTERNS = {
+    "buffer": (r"\bbuffers?\b",),
+    "carbon-stick": (r"\bcarbon\s+sticks?\b",),
+    "clutch-disk": (r"\bclutch\s*dis[ck]s?\b",),
+    "coil-spring": (r"\bcoil\s*springs?\b",),
+    "commercial-condition": (r"\bconditions?\b",),
+    "commercial-discount": (r"\bdiscounts?\b",),
+    "dust-cap": (r"\bdust\s*caps?\b",),
+    "mirror": (r"\bmirrors?\b",),
+    "nail": (r"\bnails?\b",),
+    "pencil": (r"\bpencils?\b",),
+    "table": (r"\btables?\b",),
+    "tyre": (r"\btyres?\b", r"\btires?\b"),
+    "wheel": (r"\bwheels?\b", r"\brims?\b"),
+}
+_PART_NUMBER_ONLY_CLASSES = frozenset({
+    "commercial-condition",
+    "commercial-discount",
+})
+_INCOMPATIBLE_OBJECT_CLASSES = frozenset({
+    frozenset(("buffer", "mirror")),
+    frozenset(("carbon-stick", "pencil")),
+    frozenset(("clutch-disk", "coil-spring")),
+    frozenset(("clutch-disk", "dust-cap")),
+    frozenset(("coil-spring", "dust-cap")),
+    frozenset(("commercial-condition", "commercial-discount")),
+    frozenset(("nail", "table")),
+    frozenset(("tyre", "wheel")),
+})
+_TYRE_VARIANT_PATTERNS = {
+    "all-terrain": (r"\ball\s+terrain\b", r"\bat\b"),
+    "slick": (r"\bslick\b",),
+    "snow": (r"\bsnow\b",),
+}
+_DIRECTIONAL_SIDE_PATTERNS = {
+    "LEFT": re.compile(
+        r"(?<![a-z0-9])(?:left[\s_-]+(?:side|hand)|lh|l\s*/\s*[hs])(?![a-z0-9])",
+        re.IGNORECASE,
+    ),
+    "RIGHT": re.compile(
+        r"(?<![a-z0-9])(?:right[\s_-]+(?:side|hand)|rh|r\s*/\s*[hs])(?![a-z0-9])",
+        re.IGNORECASE,
+    ),
+}
+_PART_NUMBER_BARE_SIDE_PATTERNS = {
+    "LEFT": re.compile(r"(?<![a-z0-9])left(?![a-z0-9])", re.IGNORECASE),
+    "RIGHT": re.compile(r"(?<![a-z0-9])right(?![a-z0-9])", re.IGNORECASE),
+}
+
+
+@dataclass(frozen=True)
+class RecordDiscriminatorEvidence:
+    part_number_classes: tuple[str, ...]
+    description_classes: tuple[str, ...]
+    part_number_class_matches: tuple[str, ...]
+    description_class_matches: tuple[str, ...]
+    resolved_object_class: str | None
+    object_class_provenance: str
+    tyre_variants: tuple[str, ...]
+    part_number_sides: tuple[str, ...]
+    description_sides: tuple[str, ...]
+    resolved_side: str | None
+    side_provenance: str
+    part_number_side_matches: tuple[str, ...]
+    description_side_matches: tuple[str, ...]
+    part_number_side_base: str
+    description_side_base: str
+    part_number_functional_location_facets: tuple[FunctionalLocationFacet, ...]
+    description_functional_location_facets: tuple[FunctionalLocationFacet, ...]
+
+
+@dataclass(frozen=True)
+class IdentityDiscriminatorResult:
+    protected_conflicts: tuple[dict, ...]
+    evidence_payload: dict
+
+
+def _class_evidence(
+    value, source_family: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    normalized = normalize_description(value)
+    classes = []
+    matches = []
+    for object_class, patterns in _OBJECT_CLASS_PATTERNS.items():
+        if (
+            source_family != "PART_NUMBER"
+            and object_class in _PART_NUMBER_ONLY_CLASSES
+        ):
+            continue
+        class_matches = {
+            match.group(0)
+            for pattern in patterns
+            for match in re.finditer(pattern, normalized)
+        }
+        if class_matches:
+            classes.append(object_class)
+            matches.extend(class_matches)
+    return tuple(sorted(classes)), tuple(sorted(set(matches)))
+
+
+def _tyre_variants(value, classes: tuple[str, ...]) -> set[str]:
+    if "tyre" not in classes:
+        return set()
+    normalized = normalize_description(value)
+    return {
+        variant
+        for variant, patterns in _TYRE_VARIANT_PATTERNS.items()
+        if any(re.search(pattern, normalized) for pattern in patterns)
+    }
+
+
+def _directional_side(value, source_family: str) -> tuple[tuple[str, ...], tuple[str, ...], str]:
+    """Extract bounded explicit handedness while retaining a side-free base."""
+    raw = "" if value is None else str(value).strip().casefold()
+    if raw in {"", "nan", "none"}:
+        return (), (), ""
+    patterns = dict(_DIRECTIONAL_SIDE_PATTERNS)
+    if source_family == "PART_NUMBER":
+        patterns = {
+            side: re.compile(
+                rf"(?:{patterns[side].pattern})|(?:{_PART_NUMBER_BARE_SIDE_PATTERNS[side].pattern})",
+                re.IGNORECASE,
+            )
+            for side in patterns
+        }
+    hits = []
+    matches = []
+    spans = []
+    for side, pattern in patterns.items():
+        for match in pattern.finditer(raw):
+            hits.append(side)
+            matches.append(normalize_description(match.group(0)))
+            spans.append(match.span())
+    if not spans:
+        return (), (), ""
+    base = raw
+    for start, end in sorted(spans, reverse=True):
+        base = f"{base[:start]} {base[end:]}"
+    return tuple(sorted(set(hits))), tuple(sorted(set(matches))), normalize_description(base)
+
+
+def _resolved_side(
+    part_sides: tuple[str, ...], description_sides: tuple[str, ...]
+) -> tuple[str | None, str]:
+    if len(part_sides) == 1:
+        if part_sides == description_sides:
+            return part_sides[0], "PART_NUMBER_AND_DESCRIPTION_SIDE"
+        return part_sides[0], "EXPLICIT_PART_NUMBER_SIDE"
+    if not part_sides and len(description_sides) == 1:
+        return description_sides[0], "EXPLICIT_DESCRIPTION_SIDE"
+    return None, "UNKNOWN_OR_SIDE_SOURCE_CONFLICT"
+
+
+def extract_record_discriminators(part_no, description) -> RecordDiscriminatorEvidence:
+    """Extract only explicit, record-local evidence; unknown stays unknown."""
+    part_classes, part_class_matches = _class_evidence(part_no, "PART_NUMBER")
+    description_classes, description_class_matches = _class_evidence(
+        description, "DESCRIPTION"
+    )
+    shared = set(part_classes) & set(description_classes)
+    if len(shared) == 1:
+        resolved = next(iter(shared))
+        provenance = "PART_NUMBER_AND_DESCRIPTION"
+    elif len(part_classes) == 1 and not description_classes:
+        resolved = part_classes[0]
+        provenance = "EXPLICIT_PART_NUMBER"
+    elif len(description_classes) == 1 and not part_classes:
+        resolved = description_classes[0]
+        provenance = "EXPLICIT_DESCRIPTION"
+    else:
+        resolved = None
+        provenance = "UNKNOWN_OR_SOURCE_CONFLICT"
+
+    variants = _tyre_variants(part_no, part_classes)
+    variants.update(_tyre_variants(description, description_classes))
+    part_sides, part_side_matches, part_side_base = _directional_side(
+        part_no, "PART_NUMBER"
+    )
+    description_sides, description_side_matches, description_side_base = (
+        _directional_side(description, "DESCRIPTION")
+    )
+    resolved_side, side_provenance = _resolved_side(
+        part_sides, description_sides
+    )
+    part_functional_location = extract_functional_location_facets(
+        part_no, source_family="PART_NUMBER"
+    )
+    description_functional_location = extract_functional_location_facets(
+        description, source_family="DESCRIPTION"
+    )
+    return RecordDiscriminatorEvidence(
+        part_number_classes=part_classes,
+        description_classes=description_classes,
+        part_number_class_matches=part_class_matches,
+        description_class_matches=description_class_matches,
+        resolved_object_class=resolved,
+        object_class_provenance=provenance,
+        tyre_variants=tuple(sorted(variants)),
+        part_number_sides=part_sides,
+        description_sides=description_sides,
+        resolved_side=resolved_side,
+        side_provenance=side_provenance,
+        part_number_side_matches=part_side_matches,
+        description_side_matches=description_side_matches,
+        part_number_side_base=part_side_base,
+        description_side_base=description_side_base,
+        part_number_functional_location_facets=part_functional_location,
+        description_functional_location_facets=description_functional_location,
+    )
+
+
+def _incompatible(left: str | None, right: str | None) -> bool:
+    return bool(
+        left and right
+        and frozenset((left, right)) in _INCOMPATIBLE_OBJECT_CLASSES
+    )
+
+
+def object_classes_are_incompatible(left: str | None, right: str | None) -> bool:
+    """Expose the existing bounded relation without creating a second ontology."""
+    return _incompatible(left, right)
+
+
+def _explicit_part_number_conflict(
+    first: RecordDiscriminatorEvidence,
+    second: RecordDiscriminatorEvidence,
+) -> tuple[str, str] | None:
+    """Prefer two explicit incompatible part-number nouns over copied text."""
+    if len(first.part_number_classes) != 1 or len(second.part_number_classes) != 1:
+        return None
+    left = first.part_number_classes[0]
+    right = second.part_number_classes[0]
+    return (left, right) if _incompatible(left, right) else None
+
+
+def _conflict_group(left: str, right: str) -> tuple[str, str]:
+    if left.startswith("commercial-") and right.startswith("commercial-"):
+        return "IDENTITY_CONSTRUCT_CLASS", "commercial identity construct"
+    return "IDENTITY_OBJECT_CLASS", "physical object class"
+
+
+def _side_bases(item: RecordDiscriminatorEvidence) -> set[str]:
+    values = set()
+    if item.resolved_side in item.part_number_sides and item.part_number_side_base:
+        values.add(item.part_number_side_base)
+    if item.resolved_side in item.description_sides and item.description_side_base:
+        values.add(item.description_side_base)
+    return {
+        value for value in values
+        if any(len(token) >= 2 and token.isalpha() for token in value.split())
+    }
+
+
+def _object_source_fields(item: RecordDiscriminatorEvidence) -> list[str]:
+    fields = []
+    if item.resolved_object_class in item.part_number_classes:
+        fields.append("PART_NUMBER")
+    if item.resolved_object_class in item.description_classes:
+        fields.append("DESCRIPTION")
+    return fields
+
+
+def _description_reliability(
+    description_1,
+    description_2,
+    first: RecordDiscriminatorEvidence,
+    second: RecordDiscriminatorEvidence,
+) -> dict:
+    normalized_1 = normalize_description(description_1)
+    normalized_2 = normalize_description(description_2)
+    generic_1 = is_generic_description(description_1)
+    generic_2 = is_generic_description(description_2)
+    if (
+        normalized_1
+        and normalized_1 == normalized_2
+        and not first.description_classes
+        and not second.description_classes
+    ):
+        classification = "IDENTICAL_NON_OBJECT_BEARING_TEXT"
+    elif generic_1 or generic_2 or not normalized_1 or not normalized_2:
+        classification = "GENERIC_OR_MISSING_TEXT"
+    elif normalized_1 == normalized_2:
+        classification = "IDENTICAL_OBJECT_BEARING_TEXT"
+    else:
+        classification = "DISTINCT_TEXT"
+    return {
+        "classification": classification,
+        "description_1_generic": generic_1,
+        "description_2_generic": generic_2,
+        "normalized_descriptions_equal": bool(
+            normalized_1 and normalized_1 == normalized_2
+        ),
+    }
+
+
+def _dirty_description_conflict(
+    trusted: RecordDiscriminatorEvidence,
+    copied: RecordDiscriminatorEvidence,
+    uom_relationship: UomRelationship,
+) -> tuple[str, str] | None:
+    """Recognize copied-description conflict only with three independent signals."""
+    trusted_class = trusted.resolved_object_class
+    if (
+        not trusted_class
+        or len(copied.part_number_classes) != 1
+        or trusted_class not in copied.description_classes
+        or uom_relationship != UomRelationship.DIFFERENT_DIMENSION_OR_BASIS
+    ):
+        return None
+    part_class = copied.part_number_classes[0]
+    if not _incompatible(trusted_class, part_class):
+        return None
+    return trusted_class, part_class
+
+
+def evaluate_identity_discriminators(
+    part_no_1,
+    description_1,
+    uom_1,
+    part_no_2,
+    description_2,
+    uom_2,
+) -> IdentityDiscriminatorResult:
+    """Return high-confidence protected conflicts plus auditable provenance."""
+    first = extract_record_discriminators(part_no_1, description_1)
+    second = extract_record_discriminators(part_no_2, description_2)
+    uom = classify_uom_relationship(uom_1, uom_2)
+    description_reliability = _description_reliability(
+        description_1, description_2, first, second
+    )
+    conflicts = []
+
+    if _incompatible(first.resolved_object_class, second.resolved_object_class):
+        group, label = _conflict_group(
+            first.resolved_object_class, second.resolved_object_class
+        )
+        conflicts.append({
+            "group": group,
+            "label": label,
+            "values_a": [first.resolved_object_class],
+            "values_b": [second.resolved_object_class],
+            "provenance": "EXPLICIT_TWO_SIDED_OBJECT_CLASS",
+            "source_fields_a": _object_source_fields(first),
+            "source_fields_b": _object_source_fields(second),
+            "matched_normalized_evidence_a": list(
+                first.part_number_class_matches
+                + first.description_class_matches
+            ),
+            "matched_normalized_evidence_b": list(
+                second.part_number_class_matches
+                + second.description_class_matches
+            ),
+            "description_reliability": description_reliability,
+            "incompatibility_relation": "BOUNDED_OBJECT_CLASS_INCOMPATIBILITY",
+        })
+
+    else:
+        composite = _explicit_part_number_conflict(first, second)
+        provenance = "EXPLICIT_TWO_SIDED_PART_NUMBER_CLASS"
+        if composite is None:
+            composite = _dirty_description_conflict(first, second, uom.relationship)
+            provenance = "PART_NUMBER_DESCRIPTION_UOM_COMPOSITE"
+        if composite is None:
+            reverse = _dirty_description_conflict(second, first, uom.relationship)
+            if reverse is not None:
+                composite = (reverse[1], reverse[0])
+        if composite is not None:
+            group, label = _conflict_group(*composite)
+            conflicts.append({
+                "group": group,
+                "label": label,
+                "values_a": [composite[0]],
+                "values_b": [composite[1]],
+                "provenance": provenance,
+            })
+
+    if (
+        first.resolved_side in {"LEFT", "RIGHT"}
+        and second.resolved_side in {"LEFT", "RIGHT"}
+        and first.resolved_side != second.resolved_side
+        and _side_bases(first) & _side_bases(second)
+    ):
+        conflicts.append({
+            "group": "IDENTITY_SIDE_VARIANT",
+            "label": "explicit directional side variant",
+            "values_a": [first.resolved_side],
+            "values_b": [second.resolved_side],
+            "provenance": "EXPLICIT_TWO_SIDED_DIRECTIONAL_VARIANT",
+        })
+
+    functional_conflicts = find_functional_location_conflicts(
+        (
+            first.part_number_functional_location_facets
+            + first.description_functional_location_facets
+        ),
+        (
+            second.part_number_functional_location_facets
+            + second.description_functional_location_facets
+        ),
+    )
+    for conflict in functional_conflicts:
+        conflicts.append({
+            "group": "FUNCTIONAL_LOCATION_IDENTITY",
+            "label": "functional/location identity role",
+            "values_a": list(conflict.values_1),
+            "values_b": list(conflict.values_2),
+            "axis": conflict.axis,
+            "shared_construct": conflict.shared_construct,
+            "provenance": "EXPLICIT_TWO_SIDED_FUNCTIONAL_LOCATION_FACET",
+            "source_fields_a": list(conflict.source_families_1),
+            "source_fields_b": list(conflict.source_families_2),
+            "matched_normalized_evidence_a": list(conflict.matched_evidence_1),
+            "matched_normalized_evidence_b": list(conflict.matched_evidence_2),
+        })
+
+    if (
+        first.resolved_object_class == second.resolved_object_class == "tyre"
+        and len(first.tyre_variants) == len(second.tyre_variants) == 1
+        and first.tyre_variants != second.tyre_variants
+    ):
+        conflicts.append({
+            "group": "MUTUALLY_EXCLUSIVE_TYRE_VARIANT",
+            "label": "explicit tyre variant",
+            "values_a": list(first.tyre_variants),
+            "values_b": list(second.tyre_variants),
+            "provenance": "EXPLICIT_TWO_SIDED_VARIANT",
+        })
+
+    def payload(item: RecordDiscriminatorEvidence) -> dict:
+        def facets(values):
+            return [
+                {
+                    "axis": facet.axis,
+                    "value": facet.value,
+                    "shared_construct": facet.shared_construct,
+                    "source_family": facet.source_family,
+                    "matched_evidence": facet.matched_evidence,
+                    "provenance_code": facet.provenance_code,
+                }
+                for facet in values
+            ]
+
+        return {
+            "part_number_classes": list(item.part_number_classes),
+            "description_classes": list(item.description_classes),
+            "part_number_class_matches": list(item.part_number_class_matches),
+            "description_class_matches": list(item.description_class_matches),
+            "resolved_object_class": item.resolved_object_class,
+            "object_class_provenance": item.object_class_provenance,
+            "tyre_variants": list(item.tyre_variants),
+            "part_number_sides": list(item.part_number_sides),
+            "description_sides": list(item.description_sides),
+            "resolved_side": item.resolved_side,
+            "side_provenance": item.side_provenance,
+            "part_number_side_matches": list(item.part_number_side_matches),
+            "description_side_matches": list(item.description_side_matches),
+            "part_number_side_base": item.part_number_side_base,
+            "description_side_base": item.description_side_base,
+            "part_number_functional_location_facets": facets(
+                item.part_number_functional_location_facets
+            ),
+            "description_functional_location_facets": facets(
+                item.description_functional_location_facets
+            ),
+        }
+
+    return IdentityDiscriminatorResult(
+        protected_conflicts=tuple(conflicts),
+        evidence_payload={
+            "version": IDENTITY_DISCRIMINATOR_VERSION,
+            "record_1": payload(first),
+            "record_2": payload(second),
+            "uom_relationship": uom.relationship.value,
+            "description_reliability": description_reliability,
+            "protected_conflict_count": len(conflicts),
+        },
+    )

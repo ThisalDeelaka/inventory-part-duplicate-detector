@@ -1,0 +1,319 @@
+# GF-12C1 showable product acceptance checklist
+
+## R18G-A group-evidence preparation
+
+`R18G_AWAITING_GROUP_HUMAN_REVIEW`: 48 DEVELOPMENT and 16 SEALED HOLDOUT blinded
+whole-group cases are prepared, with zero human labels and zero provider calls.
+The package includes Bicycle and bounded GF5/ADR partition challengers without
+revealing their source. This is evidence preparation, not product-quality or
+external-demo acceptance; runtime and the showable product remain unchanged.
+
+## R18D Review-burden assessment
+
+`R18D_GF5_PARTITION_POLICY_CONFOUNDED`: remaining Review support was measured
+without changing the showable product. No safe suppression rule was found;
+tested patterns harm SAME controls, and generic suppression would remove all 21
+Bicycle Review edges. Persisted Scan 31 still supplies 89 Review groups and 190
+members to the analytical System XLSX, but R18D does not claim they are current
+post-R18C quality truth. External demonstration remains blocked pending
+architect review and new group-level human evidence.
+
+## R18C quality correction
+
+`R18C_LEXICAL_STRONG_TRUST_CORRECTION_VERIFIED`: broad lexical-only Strong
+support is now more cautious, with auditable Strong-to-Review reason codes. The
+existing synthetic showable-product shape remains four groups (one likely,
+three review), and bounded Scan 33 remains 1,124 proposals with all 21 Bicycle
+relationships reaching GF5 and Head/Tail protected. This preserves workflow
+showability but does not authorize external quality claims: R18 is development
+evidence and a new untouched holdout is required.
+
+## R18B-R1 deterministic quality evidence
+
+The Senior reference is recovered and frozen under an explicit single-expert
+claim limit. The 300-pair stratified evaluation classifies broad lexical/copied-
+text trust as too weak, while preserving the exact generic guard. This is
+diagnostic engineering evidence, not production accuracy or demo graduation.
+No runtime behavior changed; external demonstration remains blocked pending
+architect review and the separately authorized R18C decision.
+
+## R18B quality-evaluation blocker
+
+`R18B_PRIMARY_EXPERT_REFERENCE_INVALID`: the primary expert workbook fails the
+frozen R18 blinded-schema and no-formula gates. No deterministic quality result
+or generic-trust conclusion exists, Reviewer B was not promoted to authority,
+and external demonstration remains blocked by identity-output quality. Runtime
+behavior is unchanged.
+
+## IQR-1C bounded acceptance
+
+`IQR1C_GENERIC_FAMILY_SAFETY_DEFERRAL`: the complete 21-edge Bicycle evidence
+shape was traced through GF5. The full family is rejected by the deliberate
+three-or-more-member generic-only cohesion guard, not incomplete validation,
+budget exhaustion, or a Strong-edge prerequisite. No runtime behavior changed.
+External demonstration remains blocked by copied/generic-description trust;
+blinded R18 human-label execution is the next separate task.
+
+## IQR-1B bounded acceptance
+
+`IQR1B_FUNCTIONAL_LOCATION_EVIDENCE_VERIFIED`: Head Light versus Tail Light now
+produces source-proven protected `CANNOT_LINK` evidence and cannot appear in one
+G2 or System XLSX group. IQR-1A's 1,124 proposals, 21 cross-site Bicycle Review
+edges, and deferred Bicycle disposition remain unchanged. Workflow evidence is
+preserved, but external demonstration remains blocked by the sole remaining
+copied/generic-description trust xfail and pending architect review.
+
+## IQR-1A bounded acceptance
+
+`IQR1A_CROSS_SITE_DISCOVERY_VERIFIED`: the Bicycle recall blocker is removed at
+the discovery layer without forcing group membership, changing legacy scan
+semantics, or increasing retrieval budgets. The saved showable-product workflow
+remains preserved. IQR-1B subsequently corrected Head/Tail typed evidence;
+external demonstration remains unauthorized pending the remaining quality work.
+
+## IQR-0 external-demo readiness correction
+
+PRM-5 workflow/presentation verification remains valid, but external demo
+readiness is `BLOCKED_BY_IDENTITY_OUTPUT_QUALITY`. The saved showable-product
+baseline is preserved. Scan 33 proves a site-boundary Bicycle recall defect and
+a separate Head/Tail typed-evidence defect; IQR-0 changes no runtime semantics.
+Pre-demo identity-quality recovery is active and the post-proof roadmap remains
+deferred.
+
+## PRM-5 freeze addendum
+
+PRM-5 rehearsed and froze the showable human-in-the-loop product baseline. Saved
+scan 31 is the verified normal-history full-result path: 5,327 records,
+`group_first_primary`, `G2_V2`, completed and visible-product-ready, with provider
+calls 0. The existing 17-row synthetic fixture remains the optional live path.
+PRM-1 through PRM-4 remain verified; no scripted-path presentation blocker
+remains. This is not an autonomous-quality or production-deployment acceptance:
+R12 failure, incomplete GF12A2 human execution, GF11/waiver/performance debt, and
+deferred deployment all remain unchanged.
+
+## PRM-4 addendum
+
+PRM-4 is VERIFIED for normal product navigation and scan confidence. Latest and
+Recent history reopen persisted results without hard-coded IDs; New Scan requires
+current successful validation, prevents duplicate submission, and truthfully
+shows only synchronous request-active and elapsed state. Invalid routes and
+ordinary failures have actionable recovery. PRM-1 through PRM-3 remain intact.
+PRM-5 rehearsal/freeze is next; GF-12A2 remains incomplete.
+
+## PRM-3 addendum
+
+PRM-3 is VERIFIED for the showable export path. System CSV/XLSX actions are
+clearly analytical machine suggestions; Reviewed CSV is clearly current
+human-confirmed operational authority. The UI handles zero-confirmed and
+partial-review states, chain-head supersession, loading, success, and errors
+without changing backend export membership or review authority. PRM-1 and PRM-2
+remain verified. PRM-4 is next; GF-12A2 remains incomplete.
+
+## PRM-2 addendum
+
+PRM-2 is VERIFIED for the showable review path. A first-time user now sees explicit
+Confirm as same item, Reject duplicate hypothesis, and Defer decision actions,
+their consequences, and a separate Human decision region showing the current
+authoritative result and previous decisions. Multi-member workflows and
+409/422/network recovery remain truthful. No GF-12 detector, review-authority,
+reviewed-set, or export semantics changed. PRM-3 is next.
+
+## PRM-1 addendum
+
+PRM-1 is VERIFIED for the showable current-product path: group previews and
+detail, conflict, and deferred views provide deterministic plain-language
+explanations from persisted evidence before advanced evidence. The UI keeps
+system hypotheses separate from authoritative human decisions. This improves
+comprehension only; it does not change GF-12 detector, review, export, or
+graduation status. PRM-2 is the next bounded product-recovery task.
+
+## Product-recovery continuation
+
+The earlier bounded synthetic showability result remains valid, but PRM-0 now
+governs the immediate CEO/first-time-user recovery work. The audited product
+path is technically complete through intake, current-product group reads,
+append-only review, reviewed identity sets, and separate system/reviewed
+exports. It is not yet presentation-complete: group detail lacks a concise
+plain-language explanation of already-persisted evidence, review/export labels
+need first-time-user clarity, and a full-real live scan is not a safe demo step.
+
+The honest demo uses a pre-completed authoritative full scan plus an optional
+small synthetic live scan. Detector semantics are paused. R18 human-label
+execution and deployment remain deferred; GF-11 stays open under its active
+waiver; and R12 continues to leave the full-real detector technically unfrozen.
+The five bounded recovery tasks and exact PRM-1 next step are in
+`PRODUCT_RECOVERY_CEO_USER_JOURNEY_AUDIT.md`.
+
+Allowed statuses: `PASS`, `FAIL`, `NOT_APPLICABLE`, `DEFERRED_POST_DEMO`,
+`EXTERNAL_EVIDENCE_REQUIRED`.
+
+| Acceptance item | Status | Evidence |
+|---|---|---|
+| Backend starts | `PASS` | Local provider-none Uvicorn startup and `/health`/`/ready` smoke |
+| Frontend starts | `PASS` | Vite local startup smoke and production build |
+| Demo dataset loads | `PASS` | 17-row explicitly synthetic CSV through validate/upload API |
+| Synthetic demo browser-default mapping | `PASS` | New Scan multipart defaults; no hidden explicit mapping in acceptance helper |
+| Real target CSV intake | `PASS` | Unchanged 5,327-row historical file validates through browser/API contract |
+| Real target character retrieval | `PASS` | Three deterministic runs; 5,324 full-K anchors, 3 legitimate zero-neighbor anchors, zero failures |
+| Real target CSV end-to-end product | `PASS` | R4 preserves existing GF5 cap semantics and completes the unchanged 5,327-row target through authoritative GF6 with `visible_product_ready=true` |
+| Scan completes | `PASS` | Three fresh group-first scans `COMPLETED` |
+| Authoritative group result displays | `PASS` | Identity-read summary/list/detail and group-first Scan Results UI |
+| 2..N semantics visible | `PASS` | Size-2 groups plus one size-3 motor group |
+| Conflict/deferred visibility | `PASS` | 3 conflicts and explicit zero-deferred state |
+| Review read path works | `PASS` | Versioned current/history route |
+| Review create/update works | `PASS` | Append-only create, Unsure correction, and restored confirm-all current event |
+| System Group Export works | `PASS` | 9 member rows plus header; member-shaped, group-first |
+| Ordinary New Scan selects current authority | `PASS` | Typed browser/API selection persists policy-v2, group-first primary, and G2-v2 even under legacy configuration default |
+| Microsoft Excel table/filter compatibility | `PASS` | Group Data table owns one AutoFilter; package-level and round-trip regressions cover the reported repair defect |
+| Fresh real G2-v2 API/CSV/XLSX parity | `PASS` | Scan 27: 207 groups and 440 member rows match across the exact authority-selected snapshot and exports |
+| R6 fresh real-output quality canary | `FAIL` | Historical Q2 finding: tyre subtype, wheel/tyre, and dirty carbon-stick/pencil false review groups |
+| R7 corrected real-output quality canary | `PASS` | Scan 29 removes all three false groups through protected GF4 contradictions, preserves F30/B38 controls, and has no surviving group with the new contradiction |
+| R9 bounded D1-D4 correction | `PASS` | Scan 30 safely separates all four R8 false-group families; R7 controls remain safe and no accepted group contains protected endpoints |
+| R9 repeated semantic freeze audit | `FAIL` | A distinct left-side/right-side shock abbreviation group remains under a copied description; classification is `R9_QUALITY_CORRECTION_PARTIAL_NEW_BLOCKER` |
+| R10 directional-side target | `PASS` | Scan 31 places the LEFT/RIGHT shock pair in a protected conflict; no accepted group contains a side contradiction |
+| R10 repeated semantic freeze audit | `FAIL` | The directional implementation is verified; a distinct BUFFER01/MIRROR01 copied-description false group still blocks overall freeze |
+| R12 final freeze-only real audit | `FAIL` | Exact product/export authority and package guards pass, but four likely false groups block freezing the full-real demo candidate |
+| Reviewed Identity Export authority | `PASS` | Header-only before/Unsure; 3 member rows only after current confirmed review |
+| Failure boundary safe | `PASS` | Controlled synthetic failed scan is non-authoritative; final read/export return 409 |
+| Pair provider none | `PASS` | `LLM_DEMO_ENABLED=false`, `LLM_PROVIDER=none` |
+| Group provider none | `PASS` | `GROUP_LLM_PROVIDER=none` |
+| Provider calls zero | `PASS` | GF2/GF5 persisted zero-provider constraints across all three runs |
+| No secret/config leakage | `PASS` | Synthetic sentinel absent from health/readiness/status/results/exports |
+| No automatic merge/delete/writeback | `PASS` | Product contract and implementation boundary |
+| Three-run deterministic demo | `PASS` | Equal offline production-semantic fingerprint, membership/status signature, and normalized export identity |
+| Demo operator runbook | `PASS` | `docs/GF12_DEMO_RUNBOOK.md` |
+| Presenter script | `PASS` | `docs/GF12_DEMO_PRESENTER_SCRIPT.md` |
+| Cross-site duplicate in selected fixture | `NOT_APPLICABLE` | `NOT_AVAILABLE_IN_CURRENT_DEMO_FIXTURE` |
+| Deployment/IAM/tenancy/storage/integration | `DEFERRED_POST_DEMO` | Product-owner sequencing decision; not marked complete |
+| Representative human-quality validation | `PENDING_HUMAN_EXECUTION` | GF-12A2 dataset prepared by R18; zero labels completed |
+| GF-11 300-second debt | `EXTERNAL_EVIDENCE_REQUIRED` | Waiver active, debt open, target not met |
+
+## Milestone wording
+
+```text
+SHOWABLE WORKING PRODUCT:
+  VERIFIED FOR SYNTHETIC DEMO AND REAL-TARGET END-TO-END EXECUTION
+
+DEMO-READY:
+  SYNTHETIC PATH YES; FULL-REAL FREEZE NO
+
+PRODUCTION DEPLOYMENT READY:
+  NO CLAIM
+
+FINAL HUMAN-QUALITY SIGNOFF:
+  PENDING
+
+GF-11 PERFORMANCE DEBT:
+  OPEN
+```
+
+This checklist does not mark GF-12 production validation complete.
+
+R6 proves the interactive authority and XLSX repair, but its read-only real
+quality canary is `Q2_DEMO_QUALITY_NEEDS_BOUNDED_CORRECTION`. The synthetic demo
+acceptance remains verified; the fresh real workbook must not be frozen as the
+demo candidate until the three documented deterministic review-group patterns
+receive a separate bounded correction. GF-12A2 remains
+`HUMAN_REVIEW_DATASET_REQUIRED`.
+
+R7 resolves the three documented R6 deterministic false-group patterns without
+changing retrieval, GF5 thresholds/caps, projection, review, or export
+authority. Fresh scan 29 is `Q1_DEMO_QUALITY_PLAUSIBLE` and has exact G2-v2
+API/CSV/XLSX parity. Product-owner workbook inspection and GF-12A2 human-label
+validation remain required before any broader accuracy claim.
+
+Real-target character retrieval remains verified without fabricated neighbors
+or an exact large-N fallback. R4 corrects the GF5 runtime blocker by enforcing
+the existing candidate-generation exhaustion result before discarded candidate
+construction. The real scan completes GF5 and authoritative GF6 with zero
+provider calls. No retrieval threshold, candidate budget, resolver bound,
+identity semantics, cannot-link rule, or group-first authority was weakened.
+This verifies executable product flow, not human-reviewed accuracy, deployment
+readiness, GF-11 graduation, or GF-12 completion.
+
+R9 corrects the four R8 detector-quality targets through bounded deterministic
+identity semantics and preserves exact scan-30 G2-v2 API/CSV/XLSX membership.
+The repeated 45-group audit still contains one likely false group caused by a
+separate left-side/right-side shock abbreviation extraction gap. Consequently
+the synthetic product remains showable and the real end-to-end path remains
+executable, but the fresh real result is not a frozen demo candidate. No Reason
+polish is authorized. GF-12A2 human validation, GF-11 performance debt, and
+deployment/integration remain open.
+
+R10 safely corrects the directional-side family without broad side inference or
+front/rear semantics. Fresh scan 31 remains operationally showable and export-
+consistent, but its repeated semantic audit identifies a separate buffer-versus-
+mirror false group. The real result is not a frozen demo candidate, but R10A
+authorizes committing the independently verified directional implementation.
+No Reason or presentation change is authorized.
+
+R11 safely closes the proven buffer/mirror family using two reusable bounded
+object classes and one explicit incompatibility relation. The repeated
+46-group audit has D=0, provider calls are zero, and exact G2-v2 CSV/XLSX parity
+holds. This is `R11_QUALITY_PASS_READY_FOR_FINAL_FREEZE`; it authorizes one
+freeze-only audit with no further detector changes. It does not complete
+GF-12A2 human validation, GF-11 performance graduation, deployment, tenancy,
+IAM, storage, or integration readiness.
+
+R12 performs the authorized freeze-only audit without changing detector
+semantics. Its exact current-product G2-v2 product path, API/CSV/XLSX parity,
+workbook package, provider-none boundary, and deterministic internal safety
+sweep pass. The complete flagged-group inspection nevertheless finds four
+likely false identity groups outside the successive bounded vocabularies.
+Therefore the synthetic path remains showable and the full-real path remains
+executable, but the full-real candidate is not frozen and must not be described
+as demo-ready. The architecture/evidence boundary requires reassessment before
+further semantic expansion.
+
+R13 completes the architecture reassessment without changing production
+semantics. It confirms that the R12 failures arise from broad lexical support
+and narrow ontology-dependent contradiction evidence, selects source-aware
+identity signatures plus a GF4 identity-support gate, and classifies ontology
+as supporting rather than primary. Offline experiments prove the direction but
+also show that a crude token gate would overcorrect known-positive groups.
+Accordingly only pure seam/contracts and golden cases are authorized next. The
+full-real detector remains unfrozen and must not be called demo-ready; synthetic
+showability, GF-11 debt, GF-12A2 human validation, and deferred deployment/
+integration statuses are unchanged.
+
+R14 adds the unused identity-signature/signed-evidence contract seam and its
+golden representation tests only. It does not extract evidence, integrate GF4,
+change scoring or support gates, run a real scan, or alter visible product
+authority. Consequently the R12 full-real freeze failure and unfrozen detector
+status are unchanged. The synthetic path remains showable; GF-11 performance
+debt, GF-12A2 human validation, and deployment/integration remain open or
+deferred exactly as before.
+
+R15 adds only unused per-record identity-signature derivation and a read-only
+coverage audit. It does not compare records, build pair evidence, change GF4,
+run a normal scan, or alter visible product authority. Deriving all 5,327 CSV
+rows with zero failures proves representation coverage, not demo quality. The
+R12 full-real freeze failure and unfrozen detector status remain unchanged;
+GF-11 debt, GF-12A2 human validation, and deployment/integration remain open or
+deferred.
+
+R16 adds only pure pairwise signed-evidence derivation in tests and offline
+shadow audit. Protected contradictions remain represented and the four R12
+false groups receive lexical/unresolved evidence without misleading identity
+support, but seven legitimate controls remain lexical-only risks. This is not
+a quality fix and does not authorize a GF4 gate, a normal scan, or any visible
+product authority change. The full-real detector remains unfrozen and the R12
+freeze failure remains in force; GF-11 debt, GF-12A2 human validation, and
+deployment/integration remain open or deferred.
+
+R17 is an offline coverage study, not a detector correction. None of the six
+candidate trust rules proves safe across the exact controls and 252 accepted
+edges; the combined rule exposes explicit unsafe numeric-variant promotions.
+Consequently R16 remains gate-not-ready, no visible authority changes, and the
+full-real detector remains unfrozen with the R12 quality failure in force.
+Human-labelled evidence, GF-11 debt, and deployment/integration remain open or
+deferred.
+
+R18 creates the missing blinded human-review package but does not create human
+quality evidence. Its 316 unique rows combine a deliberately enriched 20-pair
+diagnostic panel with a deterministic 300-pair sample from the full persisted
+candidate-edge population. Reviewer A/B content is identical and blinded, and
+all answer fields remain empty. GF-12A2 is therefore
+`HUMAN_REVIEW_DATASET_PREPARED` / `HUMAN_LABEL_EXECUTION_PENDING`; showable
+product acceptance, detector freeze, R12 quality failure, R16/R17 constraints,
+GF-11 debt, and deferred deployment/integration are unchanged.

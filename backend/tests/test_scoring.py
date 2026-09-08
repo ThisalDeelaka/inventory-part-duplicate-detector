@@ -2,13 +2,17 @@ from app.engine.scoring import score_candidate
 from app.engine.generic_description_guard import is_generic_description
 
 
-def rec(part, description, site="S1", unit="PCS", commodity="X", hsn="1000"):
+def rec(
+    part, description, site="S1", unit="PCS", commodity="X", hsn="1000",
+    accounting_group="A",
+):
     return {
         "PART_NO": part,
         "DESCRIPTION": description,
         "CONTRACT": site,
         "UNIT_MEAS": unit,
         "PRIME_COMMODITY": commodity,
+        "ACCOUNTING_GROUP": accounting_group,
         "HSN_SAC_CODE": hsn,
     }
 
@@ -163,6 +167,53 @@ def test_two_generic_descriptions_are_also_insufficient():
     assert result["generic_description_warning"] is True
     assert result["business_status"] == "INSUFFICIENT_DATA"
     assert result["final_score"] <= 65
+
+
+def test_identical_single_noun_is_review_only_without_independent_identity_evidence():
+    assert is_generic_description("BEARING") is True
+    left = rec("A", "BEARING")
+    right = rec("B", "BEARING")
+    left["PRODUCT_CATEGORY_ID"] = right["PRODUCT_CATEGORY_ID"] = "CAT1"
+    result = score_candidate(
+        left,
+        right,
+        ["CONTRACT", "UNIT_MEAS", "ACCOUNTING_GROUP", "PRODUCT_CATEGORY_ID"],
+        allow_uom_mapping_review=True,
+    )
+
+    assert result["generic_description_warning"] is True
+    assert result["business_status"] == "POSSIBLE_DUPLICATE_REVIEW"
+    assert result["business_status"] != "LIKELY_DUPLICATE"
+    assert result["rule_decision"] == "DOWNGRADE"
+    assert result["rejection_reason"] == "GENERIC_DESCRIPTION"
+    assert result["final_score"] <= 65
+
+
+def test_generic_description_can_be_strong_with_existing_strong_part_number_evidence():
+    result = score_candidate(
+        rec("BRG-6205-A", "BEARING"),
+        rec("BRG6205A", "BEARING"),
+        ["CONTRACT", "UNIT_MEAS"],
+        allow_uom_mapping_review=True,
+    )
+
+    assert result["generic_description_warning"] is True
+    assert result["part_no_similarity"] >= 90
+    assert result["business_status"] == "LIKELY_DUPLICATE"
+    assert result["rule_decision"] == "ALLOW"
+
+
+def test_different_generic_single_nouns_remain_non_positive():
+    result = score_candidate(
+        rec("N1", "BEARING"),
+        rec("N2", "FILTER"),
+        ["CONTRACT", "UNIT_MEAS"],
+        allow_uom_mapping_review=True,
+    )
+
+    assert result["generic_description_warning"] is True
+    assert result["business_status"] == "INSUFFICIENT_DATA"
+    assert result["business_status"] != "LIKELY_DUPLICATE"
 
 
 def test_mutually_exclusive_qualifiers_are_not_duplicates():

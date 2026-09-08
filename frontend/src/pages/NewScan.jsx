@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import LlmStatus from '../components/LlmStatus'
 import {
@@ -9,8 +9,12 @@ import {
   isCurrentValidationToken,
   nextValidationToken,
 } from '../utils/llmUi'
-import { customFieldCreatePayload, customFieldModeLabel, mergeCustomFields } from '../utils/customFieldUi'
-import { DEFAULT_PART_TYPE, PART_TYPE_OPTIONS, filterFieldsForPartType } from '../utils/partTypeUi'
+import {
+  formatElapsed,
+  processingGuidance,
+  scanRequestError,
+  validationContextKey,
+} from '../utils/productJourneyUi'
 
 const FALLBACK_FIELDS = [
   { field: 'CONTRACT', display: 'Site' },
@@ -46,11 +50,15 @@ export default function NewScan() {
   const [threshold, setThreshold] = useState(75)
   const [validation, setValidation] = useState(null)
   const [busy, setBusy] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)
+  const [validatedContext, setValidatedContext] = useState('')
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [columnAssistance, setColumnAssistance] = useState({})
   const columnRequests = useRef({})
   const validationRequestId = useRef(0)
   const fileGeneration = useRef(0)
+  const scanRequestActive = useRef(false)
+  const completionRouted = useRef(false)
   const nav = useNavigate()
 
   const refreshCustomFields = () => api.listCustomFields().then(setCustomFields).catch(() => {})
@@ -59,19 +67,20 @@ export default function NewScan() {
     api.get('/api/config/fields')
       .then(setBuiltInFields)
       .catch(() => {
-        setBuiltInFields(current => [...current, ...FALLBACK_FIELDS])
-        setError(`Backend is not reachable at ${api.baseUrl}. Start the FastAPI backend, then refresh this page.`)
+        setFields(FALLBACK_FIELDS)
+        setError({ title: 'Backend is not reachable', message: `Start the FastAPI backend at ${api.baseUrl}, then reload this page.` })
       })
     refreshCustomFields()
   }, [])
 
-  const { mappingFields, checklistFields } = mergeCustomFields(filterFieldsForPartType(builtInFields, partType), customFields)
-
-  const changePartType = nextPartType => {
-    setPartType(nextPartType)
-    const stillRelevant = new Set(filterFieldsForPartType(builtInFields, nextPartType).map(f => f.field))
-    setSelected(current => current.filter(field => stillRelevant.has(field) || customFields.some(c => c.field_key === field)))
-  }
+  useEffect(() => {
+    if (busy !== 'scan') { setElapsedSeconds(0); return undefined }
+    const started = Date.now()
+    const update = () => setElapsedSeconds(Math.floor((Date.now() - started) / 1000))
+    update()
+    const timer = window.setInterval(update, 1000)
+    return () => window.clearInterval(timer)
+  }, [busy])
 
   const form = (submittedFile = file) => {
     const f = new FormData()
@@ -80,14 +89,14 @@ export default function NewScan() {
     f.append('threshold', Math.min(threshold, MAX_THRESHOLD))
     f.append('selected_fields', JSON.stringify(selected))
     f.append('column_mapping', JSON.stringify(columnMapping))
-    f.append('sensitive_mode', SENSITIVE_MODE)
-    f.append('scan_mode', SCAN_MODE)
-    f.append('part_type', partType)
+    f.append('sensitive_mode', sensitiveMode)
+    f.append('scan_mode', scanMode)
+    f.append('product_authority', 'current_product')
     return f
   }
 
   const validate = async () => {
-    if (!file) return setError('Choose a CSV or XLSX file first.')
+    if (!file) return setError({ title: 'Choose a CSV file', message: 'Select a supported CSV before validating.' })
     const submittedFile = file
     const token = nextValidationToken(validationRequestId.current, fileGeneration.current)
     validationRequestId.current = token.requestId
@@ -96,16 +105,23 @@ export default function NewScan() {
       validationRequestId.current,
       fileGeneration.current,
     )
-    setBusy('validate'); setError('')
+    const submittedSelected = [...selected]
+    const submittedMapping = { ...columnMapping }
+    const submittedSensitiveMode = sensitiveMode
+    setBusy('validate'); setError(null); setValidatedContext('')
     try {
       const result = await api.postForm('/api/scans/validate-only', form(submittedFile))
       if (!tokenIsCurrent()) return
+      const resolvedMapping = { ...result.resolved_column_mapping, ...submittedMapping }
       setValidation(result)
-      setColumnMapping(current => ({ ...result.resolved_column_mapping, ...current }))
+      setColumnMapping(resolvedMapping)
+      setValidatedContext(validationContextKey(
+        token.fileGeneration, submittedSelected, resolvedMapping, submittedSensitiveMode,
+      ))
       setColumnAssistance({})
     }
     catch (e) {
-      if (tokenIsCurrent()) setError(e.message)
+      if (tokenIsCurrent()) setError(scanRequestError(e.status, 'validation'))
     }
     finally {
       if (tokenIsCurrent()) setBusy('')
@@ -113,13 +129,26 @@ export default function NewScan() {
   }
 
   const run = async () => {
-    if (!file) return setError('Choose a CSV or XLSX file first.')
-    setBusy('scan'); setError('')
+    if (scanRequestActive.current) return
+    if (!file) return setError({ title: 'Choose a CSV file', message: 'Select and validate a supported CSV before running a scan.' })
+    if (!validation?.valid || validatedContext !== validationContextKey(
+      fileGeneration.current, selected, columnMapping, sensitiveMode,
+    )) return setError({ title: 'Current validation required', message: 'Validate the current file and mapping successfully before running the scan.' })
+    scanRequestActive.current = true
+    completionRouted.current = false
+    setBusy('scan'); setError(null)
     try {
       const r = await api.postForm('/api/scans/upload', form())
-      nav(`/scans/${r.scan_id}`)
-    } catch (e) { setError(e.message) }
-    finally { setBusy('') }
+      if (!Number.isInteger(Number(r?.scan_id)) || Number(r.scan_id) <= 0) {
+        setError(scanRequestError('unexpected', 'scan'))
+        return
+      }
+      if (!completionRouted.current) {
+        completionRouted.current = true
+        nav(`/scans/${r.scan_id}`)
+      }
+    } catch (e) { setError(scanRequestError(e.status, 'scan')) }
+    finally { scanRequestActive.current = false; setBusy('') }
   }
 
   const updateMapping = (canonicalField, sourceColumn) => {
@@ -193,31 +222,46 @@ export default function NewScan() {
     setValidation(null)
     setColumnMapping({})
     setColumnAssistance({})
-    setCustomFieldDrafts({})
-    setCustomFieldState({})
-    setError('')
+    setError(null)
+    setValidatedContext('')
     setBusy(current => current === 'validate' ? '' : current)
   }
 
+  const currentValidationContext = validationContextKey(
+    fileGeneration.current, selected, columnMapping, sensitiveMode,
+  )
+  const validationIsCurrent = Boolean(validation && validatedContext === currentValidationContext)
+  const canRun = Boolean(file && validation?.valid && validationIsCurrent && !busy)
+
   return (
     <>
-      <header><div><p className="eyebrow">New analysis</p><h1>Run duplicate scan</h1><p>Choose business conditions to narrow comparisons, then tune the review threshold.</p></div><LlmStatus /></header>
-      {error && <div className="error">{error}</div>}
+      <header><div><p className="eyebrow">New scan</p><h1>Run duplicate scan</h1><p>Select a CSV, confirm its field mapping, validate it, then run the scan.</p></div><div className="actions"><Link className="button secondary" to="/">Dashboard</Link></div><LlmStatus /></header>
+      {error && <div className="error" role="alert"><b>{error.title}</b><p>{error.message}</p><Link to="/">View recent scans</Link></div>}
       <div className="two-col">
         <section className="panel form">
-          <label>Scan name<input value={name} onChange={e => setName(e.target.value)} /></label>
-          <label>Part type
-            <select value={partType} onChange={event => changePartType(event.target.value)}>
-              {PART_TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          <label>Scan name<input value={name} disabled={!!busy} onChange={e => setName(e.target.value)} /></label>
+          <label>Inventory CSV<input type="file" accept=".csv,text/csv" disabled={!!busy} onChange={event => selectFile(event.target.files[0] || null)} /></label>
+          <label>Scan mode
+            <select value={scanMode} disabled={!!busy} onChange={e => setScanMode(e.target.value)}>
+              <option value="SAME_SITE_DUPLICATE">Same-site duplicate scan</option>
+              <option value="CROSS_SITE_STANDARDIZATION">Cross-site standardization scan</option>
+              <option value="DISCOVERY">Discovery scan</option>
             </select>
           </label>
-          <label>Parts export (CSV or XLSX)<input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event => selectFile(event.target.files[0] || null)} /></label>
-          <div><label>Review strictness <b>{threshold}</b></label><input type="range" min="60" max={MAX_THRESHOLD} value={threshold} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
+          <label className="inline-check"><input type="checkbox" checked={sensitiveMode} disabled={!!busy} onChange={e => setSensitiveMode(e.target.checked)} /><span><b>Sensitive Data Mode</b><small>No raw CSV persistence, local-only NLP, file fingerprint, and sensitive-pattern warnings.</small></span></label>
+          <div><label>Review strictness <b>{threshold}</b></label><input type="range" min="60" max="95" value={threshold} disabled={!!busy} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
         </section>
-        <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{checklistFields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{f.field}</small></span></label>)}</div></section>
+        <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{fields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} disabled={!!busy} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{f.field}</small></span></label>)}</div></section>
       </div>
-      <div className="actions"><button type="button" className="secondary" onClick={validate} disabled={!!busy}>{busy === 'validate' ? 'Validating...' : 'Validate only'}</button><button type="button" onClick={run} disabled={!!busy}>{busy === 'scan' ? 'Scanning...' : 'Run scan'}</button></div>
-      {validation && <section className="panel"><h2>Validation result <span className={validation.valid ? 'badge HIGH' : 'badge LOW'}>{validation.valid ? 'VALID' : 'BLOCKED'}</span></h2><div className="metrics"><span>{validation.record_count} records</span><span>{validation.empty_descriptions_count} empty descriptions</span><span>{validation.duplicate_part_number_count} repeated part rows</span><span>{validation.warnings.length} warnings</span></div>{validation.privacy && <div className="security-summary"><b>Security transparency</b><span>Raw CSV stored: {validation.privacy.raw_csv_stored ? 'Yes' : 'No'}</span><span>External AI used: {validation.privacy.external_ai_used ? 'Yes' : 'No'}</span><span>Local processing: {validation.privacy.local_processing_only ? 'Yes' : 'No'}</span><small>SHA-256: {validation.privacy.file_sha256}</small></div>}{validation.warnings.map((w, i) => <p className="warning" key={i}>{w.message}</p>)}</section>}
+      <div className="actions"><button type="button" className="secondary" onClick={validate} disabled={!!busy}>{busy === 'validate' ? 'Validating…' : validationIsCurrent ? 'Validate again' : 'Validate CSV'}</button><button type="button" onClick={run} disabled={!canRun}>{busy === 'scan' ? 'Processing inventory…' : 'Run scan'}</button></div>
+      {!validation && <p className="validation-guidance">Run Scan becomes available after the current CSV and mapping pass validation.</p>}
+      {validation && !validationIsCurrent && <p className="warning" role="status"><b>Validation is out of date.</b> The file, selected conditions, mapping, or privacy setting changed. Validate again before running the scan.</p>}
+      {busy === 'scan' && <section className="panel processing-state" role="status" aria-live="polite" aria-busy="true">
+        <p className="eyebrow">Request active</p><h2>Processing inventory…</h2>
+        <p>The scan is still running.</p><p><b>Elapsed time: {formatElapsed(elapsedSeconds)}</b></p>
+        <p>{processingGuidance(elapsedSeconds)}</p>
+      </section>}
+      {validation && <section className="panel" aria-live="polite"><h2>{validation.valid ? 'Validation passed' : 'Validation failed'} <span className={validation.valid ? 'badge HIGH' : 'badge LOW'}>{validation.valid ? 'Ready' : 'Blocked'}</span></h2>{validation.valid ? <p>The current CSV and mapping are supported. Run Scan is available while this validation remains current.</p> : <p>Review the warnings and required field mapping below, then validate again.</p>}<div className="metrics"><span>{validation.record_count} records</span><span>{validation.empty_descriptions_count} empty descriptions</span><span>{validation.duplicate_part_number_count} repeated part rows</span><span>{validation.warnings.length} warnings</span></div>{validation.privacy && <div className="security-summary"><b>Security transparency</b><span>Raw CSV stored: {validation.privacy.raw_csv_stored ? 'Yes' : 'No'}</span><span>External AI used: {validation.privacy.external_ai_used ? 'Yes' : 'No'}</span><span>Local processing: {validation.privacy.local_processing_only ? 'Yes' : 'No'}</span><small>SHA-256: {validation.privacy.file_sha256}</small></div>}{validation.warnings.map((w, i) => <p className="warning" key={i}>{w.message}</p>)}</section>}
       {validation?.available_columns && (
         <section className="panel">
           <h2>CSV column mapping</h2>
@@ -226,7 +270,7 @@ export default function NewScan() {
             {mappingFields.map(field => (
               <label key={field.field}>
                 <span>{field.display}{field.required ? ' *' : ''}<small>{field.field}</small></span>
-                <select value={columnMapping[field.field] || ''} onChange={event => updateMapping(field.field, event.target.value)}>
+                <select value={columnMapping[field.field] || ''} disabled={!!busy} onChange={event => updateMapping(field.field, event.target.value)}>
                   <option value="">Automatic / not available</option>
                   {validation.available_columns.map(column => <option value={column} key={column}>{column}</option>)}
                 </select>
@@ -266,7 +310,7 @@ export default function NewScan() {
                     <b>{column}</b>
                     <small>{samples.length ? 'Samples: ' + samples.join(' · ') : 'No nonblank bounded samples available'}</small>
                   </div>
-                  <button type="button" onClick={() => requestSuggestion(column)} disabled={!samples.length || state.phase === 'loading'} aria-busy={state.phase === 'loading'}>
+                  <button type="button" onClick={() => requestSuggestion(column)} disabled={!!busy || !samples.length || state.phase === 'loading'} aria-busy={state.phase === 'loading'}>
                     {state.phase === 'loading' ? 'Requesting…' : state.phase === 'error' ? 'Retry suggestion' : 'Suggest mapping'}
                   </button>
                   {state.phase === 'error' && <p className="llm-error" role="alert">{state.error}</p>}
@@ -284,7 +328,7 @@ export default function NewScan() {
                           <span>Confidence {Math.round(suggestion.confidence * 100)}%</span>
                           <p>{suggestion.reason}</p>
                           <small>Confirmation required: {suggestion.requires_confirmation ? 'Yes' : 'No'} · {state.result.metadata.cache_hit ? 'Cache hit' : 'Provider result'}</small>
-                          <button type="button" className="secondary" onClick={() => updateMapping(suggestion.suggested_canonical_field, column)}>Use suggestion</button>
+                          <button type="button" className="secondary" disabled={!!busy} onClick={() => updateMapping(suggestion.suggested_canonical_field, column)}>Use suggestion</button>
                         </>
                       ) : (
                         <>

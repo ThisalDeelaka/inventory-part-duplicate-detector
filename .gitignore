@@ -36,3 +36,6 @@ Thumbs.db
 # Local scan/export outputs
 docs/latest_real_scan_*
 docs/latest_visibility_scan_*
+
+# Local human-review packs can contain real inventory data
+artifacts/gf12_a2_human_identity_review/
