@@ -1,3 +1,13 @@
+import {
+  assertDifficultContext,
+  assertPositiveCandidateId,
+  candidateAdvisoryRequest,
+  cleanColumnSamples,
+  normalizeLlmError,
+  normalizeTriageStatus,
+  scanTriageTargets,
+} from '../utils/llmUi'
+
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
 async function request(path, options = {}) {
@@ -10,6 +20,73 @@ async function request(path, options = {}) {
   return response
 }
 
+async function llmJson(path, options = {}) {
+  const response = await fetch(API + path, options)
+  let payload = null
+  try {
+    payload = await response.json()
+  } catch {
+    payload = null
+  }
+  if (!response.ok) {
+    const safe = normalizeLlmError(response.status, payload)
+    const error = new Error(safe.message)
+    error.category = safe.category
+    error.status = safe.status
+    throw error
+  }
+  return payload
+}
+
+export const getLlmStatus = () => llmJson('/api/llm/status')
+
+export function requestColumnSuggestion(sourceColumn, sampleValues) {
+  const samples = cleanColumnSamples(sampleValues)
+  if (!String(sourceColumn).trim() || !samples.length) {
+    throw new Error('A source column and at least one nonblank sample are required.')
+  }
+  return llmJson('/api/llm/column-suggestions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source_column: sourceColumn, sample_values: samples }),
+  })
+}
+
+export function interpretDifficultValue(rawValue, fieldContext, itemFamilyContext) {
+  assertDifficultContext(fieldContext)
+  if (typeof rawValue !== 'string' || !rawValue.trim()) {
+    throw new Error('A nonblank visible value is required.')
+  }
+  const body = { raw_value: rawValue, field_context: fieldContext }
+  if (typeof itemFamilyContext === 'string' && itemFamilyContext.trim()) {
+    body.item_family_context = itemFamilyContext.trim().slice(0, 128)
+  }
+  return llmJson('/api/llm/difficult-values/interpret', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function requestCandidateAdvisory(candidateId) {
+  assertPositiveCandidateId(candidateId)
+  const { path, options } = candidateAdvisoryRequest(candidateId)
+  return llmJson(path, options)
+}
+
+async function triageRequest(scanId, action) {
+  const target = scanTriageTargets(scanId)[action]
+  return normalizeTriageStatus(await llmJson(target.path, target.options))
+}
+
+export const getLlmTriageStatus = scanId => triageRequest(scanId, 'status')
+export const startLlmTriage = scanId => triageRequest(scanId, 'start')
+export const retryFailedLlmTriage = scanId => triageRequest(scanId, 'retryFailed')
+
+export const listCustomFields = () => api.get('/api/config/custom-fields')
+export const createCustomField = payload => api.postJson('/api/config/custom-fields', payload)
+export const deleteCustomField = id => api.json(`/api/config/custom-fields/${id}`, { method: 'DELETE' })
+
 export const api = {
   json: async (path, options) => (await request(path, options)).json(),
   get: (path) => api.json(path),
@@ -20,4 +97,14 @@ export const api = {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
   },
   baseUrl: API,
+  getLlmStatus,
+  requestColumnSuggestion,
+  interpretDifficultValue,
+  requestCandidateAdvisory,
+  getLlmTriageStatus,
+  startLlmTriage,
+  retryFailedLlmTriage,
+  listCustomFields,
+  createCustomField,
+  deleteCustomField,
 }

@@ -19,13 +19,25 @@ class ScanRunner:
         self.warnings = WarningRepository(db)
         self.rejections = RejectionRepository(db)
 
-    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE"):
+    def run(
+        self,
+        df: pd.DataFrame,
+        scan_name: str,
+        selected_fields: list[str],
+        threshold: float,
+        source_type="CSV",
+        sensitive_mode: bool = True,
+        scan_mode: str = "SAME_SITE_DUPLICATE",
+        strict_custom_fields: list[dict] | None = None,
+        custom_fields_used: list[dict] | None = None,
+        part_type: str = "INVENTORY",
+    ):
         scan_mode = normalize_scan_mode(scan_mode)
         validation = validate_dataframe(df, selected_fields, sensitive_mode=sensitive_mode)
         if validation["missing_required_columns"]:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
 
-        scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode)
+        scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode, custom_fields_used, part_type)
         try:
             for warning in validation["warnings"]:
                 self.warnings.save(scan.id, warning)
@@ -41,7 +53,7 @@ class ScanRunner:
             candidates_found = 0
             rejections_found = 0
             for pair in pairs:
-                result = score_candidate(pair["record_a"], pair["record_b"], selected_fields, scan_mode)
+                result = score_candidate(pair["record_a"], pair["record_b"], selected_fields, scan_mode, strict_custom_fields)
                 if result["final_score"] >= threshold:
                     self.candidates.save(scan.id, pair["record_a"], pair["record_b"], result)
                     candidates_found += 1

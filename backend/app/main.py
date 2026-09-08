@@ -4,7 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import routes_config, routes_diagnostics, routes_feedback, routes_load_test, routes_scans
+from app.api import (
+    routes_config,
+    routes_diagnostics,
+    routes_feedback,
+    routes_llm,
+    routes_load_test,
+    routes_scans,
+)
 from app.core.config import settings
 from app.db.database import Base, SessionLocal, engine
 from app.db.migrations import ensure_sqlite_demo_columns
@@ -31,6 +38,7 @@ app.include_router(routes_scans.router)
 app.include_router(routes_feedback.router)
 app.include_router(routes_diagnostics.router)
 app.include_router(routes_load_test.router)
+app.include_router(routes_llm.router)
 
 
 @app.get("/health")

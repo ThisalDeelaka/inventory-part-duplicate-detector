@@ -1,3 +1,5 @@
+from app.core.constants import DEFAULT_PART_TYPE, PART_TYPES
+
 REQUIRED_FIELDS = {"PART_NO", "DESCRIPTION"}
 SCOPE_FIELD = "CONTRACT"
 
@@ -48,6 +50,11 @@ RULE_DECISIONS = {
 def normalize_scan_mode(scan_mode: str | None) -> str:
     value = str(scan_mode or DEFAULT_SCAN_MODE).strip().upper()
     return value if value in SCAN_MODES else DEFAULT_SCAN_MODE
+
+
+def normalize_part_type(part_type: str | None) -> str:
+    value = str(part_type or DEFAULT_PART_TYPE).strip().upper()
+    return value if value in PART_TYPES else DEFAULT_PART_TYPE
 
 
 def clean_field_value(value) -> str:

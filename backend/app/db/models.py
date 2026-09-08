@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -23,12 +23,17 @@ class DuplicateScan(Base):
     warnings_count = Column(Integer, default=0)
     rejections_count = Column(Integer, default=0)
     scan_mode = Column(String(60), default="SAME_SITE_DUPLICATE", nullable=False)
+    part_type = Column(String(20), default="INVENTORY", nullable=False)
+    custom_fields_used = Column(Text, default="[]", nullable=False)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at = Column(DateTime(timezone=True))
     model_version = Column(String(50), nullable=False)
     candidates = relationship("DuplicateCandidate", cascade="all, delete-orphan")
     warnings = relationship("ScanWarning", cascade="all, delete-orphan")
     rejections = relationship("RuleExclusionAudit", cascade="all, delete-orphan")
+    llm_triage_run = relationship(
+        "LlmTriageRun", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class DuplicateCandidate(Base):
@@ -71,6 +76,66 @@ class DuplicateCandidate(Base):
     reviewed_by = Column(String(100))
     reviewed_at = Column(DateTime(timezone=True))
     feedback = relationship("DuplicateFeedback", cascade="all, delete-orphan")
+    llm_advisory_snapshots = relationship("LlmAdvisorySnapshot", cascade="all, delete-orphan")
+
+
+class LlmAdvisorySnapshot(Base):
+    __tablename__ = "llm_advisory_snapshot"
+    __table_args__ = (
+        UniqueConstraint("candidate_id", "capability", name="uq_llm_snapshot_candidate_capability"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    candidate_id = Column(Integer, ForeignKey("duplicate_candidate.id"), nullable=False, index=True)
+    capability = Column(String(50), nullable=False)
+    state = Column(String(30), nullable=False)
+    llm_used = Column(Boolean, nullable=False, default=False)
+    cache_hit = Column(Boolean, nullable=False, default=False)
+    provider = Column(String(100))
+    model = Column(String(200))
+    prompt_version = Column(String(100))
+    assessment = Column(String(50))
+    confidence = Column(Float)
+    recommended_action = Column(String(80))
+    supporting_evidence = Column(Text)
+    conflicting_evidence = Column(Text)
+    bypass_reason = Column(String(200))
+    safe_error_category = Column(String(80))
+    deterministic_result_authoritative = Column(Boolean, nullable=False, default=True)
+    generated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class LlmTriageRun(Base):
+    __tablename__ = "llm_triage_run"
+
+    id = Column(Integer, primary_key=True)
+    scan_id = Column(
+        Integer, ForeignKey("duplicate_scan.id"), nullable=False, unique=True, index=True
+    )
+    state = Column(String(40), nullable=False, default="QUEUED")
+    total_eligible = Column(Integer, nullable=False, default=0)
+    processed_count = Column(Integer, nullable=False, default=0)
+    likely_duplicate_count = Column(Integer, nullable=False, default=0)
+    downgraded_count = Column(Integer, nullable=False, default=0)
+    human_review_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    last_safe_error_category = Column(String(80))
+
+
+class CustomField(Base):
+    __tablename__ = "custom_field"
+    id = Column(Integer, primary_key=True)
+    field_key = Column(String(120), unique=True, nullable=False)
+    display_label = Column(String(200), nullable=False)
+    mode = Column(String(20), nullable=False, default="SUPPORTING")
+    aliases = Column(Text, default="[]", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class DuplicateFeedback(Base):

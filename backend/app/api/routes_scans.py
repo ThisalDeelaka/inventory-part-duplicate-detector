@@ -1,18 +1,59 @@
 import json
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.engine.column_semantics import normalize_scan_mode
+from app.core.config import Settings
+from app.db.models import LlmAdvisorySnapshot, utcnow
+from app.engine.column_semantics import normalize_part_type, normalize_scan_mode
+from app.repositories.custom_field_repository import CustomFieldRepository
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
+from app.services.llm_export_service import (
+    candidate_snapshot_capability,
+    candidates_with_llm_to_csv,
+    rejections_with_llm_to_csv,
+)
+from app.llm.runtime import get_llm_settings
+from app.llm.service_contracts import LLMCapability
+from app.services.llm_triage_service import (
+    automatic_triage_ready,
+    candidate_triage_fields,
+    get_llm_triage_scheduler,
+    get_triage_run,
+    LlmTriageScheduler,
+    prepare_triage_run,
+    schedule_automatic_triage,
+    triage_failure_categories,
+    triage_run_json,
+)
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
+
+
+def _load_custom_fields(db: Session):
+    return CustomFieldRepository(db).list_all()
+
+
+def _custom_field_selection(custom_fields, resolved_column_mapping):
+    """Split the custom fields actually resolved on this upload by participation mode."""
+    by_key = {field.field_key: field for field in custom_fields}
+    supporting_keys, strict_fields, used = [], [], []
+    for key in resolved_column_mapping:
+        field = by_key.get(key)
+        if not field:
+            continue
+        used.append({"field_key": field.field_key, "display_label": field.display_label, "mode": field.mode})
+        if field.mode == "STRICT":
+            strict_fields.append({"field_key": field.field_key, "display_label": field.display_label})
+        else:
+            supporting_keys.append(field.field_key)
+    return supporting_keys, strict_fields, used
 
 
 def _json_attr(obj, name, default):
@@ -34,14 +75,16 @@ def scan_json(scan, privacy=None):
         "rejections_count": getattr(scan, "rejections_count", 0) or 0,
         "started_at": scan.started_at, "completed_at": scan.completed_at, "model_version": scan.model_version,
         "scan_mode": getattr(scan, "scan_mode", "SAME_SITE_DUPLICATE"),
+        "part_type": getattr(scan, "part_type", "INVENTORY"),
+        "custom_fields_used": _json_attr(scan, "custom_fields_used", "[]"),
     }
     if privacy:
         payload["privacy"] = privacy
     return payload
 
 
-def candidate_json(c):
-    return {
+def candidate_json(c, triage_snapshot=None, triage_run_state=None):
+    payload = {
         "id": c.id, "scan_id": c.scan_id, "contract_a": c.contract_a, "part_no_a": c.part_no_a, "description_a": c.description_a,
         "contract_b": c.contract_b, "part_no_b": c.part_no_b, "description_b": c.description_b, "similarity_score": c.similarity_score,
         "confidence_level": c.confidence_level, "description_similarity": c.description_similarity, "tfidf_score": c.tfidf_score,
@@ -64,6 +107,8 @@ def candidate_json(c):
         "normalized_part_no_a": getattr(c, "normalized_part_no_a", "") or "",
         "normalized_part_no_b": getattr(c, "normalized_part_no_b", "") or "",
     }
+    payload.update(candidate_triage_fields(c, triage_snapshot, triage_run_state))
+    return payload
 
 
 @router.get("")
@@ -81,7 +126,18 @@ def scan_detail(scan_id: int, db: Session = Depends(get_db)):
 @router.get("/{scan_id}/candidates")
 def candidates(scan_id: int, db: Session = Depends(get_db)):
     if not get_scan(db, scan_id): raise HTTPException(404, "Scan not found")
-    return [candidate_json(c) for c in get_scan_candidates(db, scan_id)]
+    records = get_scan_candidates(db, scan_id)
+    candidate_ids = [candidate.id for candidate in records]
+    snapshots = db.query(LlmAdvisorySnapshot).filter(
+        LlmAdvisorySnapshot.candidate_id.in_(candidate_ids),
+        LlmAdvisorySnapshot.capability == LLMCapability.CANDIDATE_TRIAGE.value,
+    ).all() if candidate_ids else []
+    snapshot_map = {snapshot.candidate_id: snapshot for snapshot in snapshots}
+    run = get_triage_run(db, scan_id)
+    return [
+        candidate_json(c, snapshot_map.get(c.id), run.state if run else None)
+        for c in records
+    ]
 
 
 @router.get("/{scan_id}/groups")
@@ -120,10 +176,16 @@ def rejections(scan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/validate-only")
-async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True)):
-    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
+async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True), db: Session = Depends(get_db)):
+    custom_fields = _load_custom_fields(db)
+    custom_field_keys = {field.field_key for field in custom_fields}
+    df, metadata = await read_csv_upload_with_metadata(
+        file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+    )
     result = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
-    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts")})
+    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples")})
+    _supporting, _strict, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
+    result["custom_fields_used"] = custom_fields_used
     for target, sources in metadata["column_mapping_conflicts"].items():
         result["warnings"].append({
             "warning_type": "AMBIGUOUS_COLUMN_MAPPING",
@@ -135,13 +197,40 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), db: Session = Depends(get_db)):
-    if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
-    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
-    validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form("INVENTORY"), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
+    if threshold < 0 or threshold > 90: raise HTTPException(400, "threshold must be between 0 and 90")
+    custom_fields = _load_custom_fields(db)
+    custom_field_keys = {field.field_key for field in custom_fields}
+    df, metadata = await read_csv_upload_with_metadata(
+        file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+    )
+    resolved_selected_fields = parse_selected_fields(selected_fields)
+    validation = validate_dataframe(df, resolved_selected_fields, sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
+    supporting_keys, strict_custom_fields, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
+    for key in supporting_keys:
+        if key not in resolved_selected_fields:
+            resolved_selected_fields.append(key)
     try:
-        scan, _ = run_scan(db, df, scan_name.strip() or "Inventory duplicate scan", parse_selected_fields(selected_fields), threshold, sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode))
+        scan, _ = run_scan(
+            db, df, scan_name.strip() or "Inventory duplicate scan", resolved_selected_fields, threshold,
+            sensitive_mode=sensitive_mode, scan_mode=normalize_scan_mode(scan_mode),
+            strict_custom_fields=strict_custom_fields, custom_fields_used=custom_fields_used,
+            part_type=normalize_part_type(part_type),
+        )
+        try:
+            schedule_automatic_triage(
+                db, background_tasks, scan.id, configuration, triage_scheduler
+            )
+        except Exception:
+            db.rollback()
+            run = get_triage_run(db, scan.id)
+            if run is not None:
+                run.state = "FAILED"
+                run.last_safe_error_category = "scheduling_failure"
+                run.completed_at = utcnow()
+                run.updated_at = utcnow()
+                db.commit()
         privacy = security_transparency(file_hash=metadata["file_sha256"], sensitive_mode=sensitive_mode)
         privacy["file_size_bytes"] = metadata["file_size_bytes"]
         return scan_json(scan, privacy=privacy)
@@ -165,3 +254,146 @@ def export_rejections(scan_id: int, db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-rule-exclusions.csv"'},
     )
+
+
+@router.get("/{scan_id}/export-with-llm")
+def export_with_llm(scan_id: int, db: Session = Depends(get_db)):
+    scan = get_scan(db, scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found")
+    candidates = get_scan_candidates(db, scan_id)
+    candidate_ids = [candidate.id for candidate in candidates]
+    snapshots = []
+    if candidate_ids:
+        snapshots = db.query(LlmAdvisorySnapshot).filter(
+            LlmAdvisorySnapshot.candidate_id.in_(candidate_ids),
+            LlmAdvisorySnapshot.capability.in_([
+                candidate_snapshot_capability(),
+                LLMCapability.CANDIDATE_TRIAGE.value,
+            ]),
+        ).all()
+    snapshot_map = {
+        snapshot.candidate_id: snapshot for snapshot in snapshots
+        if snapshot.capability == candidate_snapshot_capability()
+    }
+    triage_snapshot_map = {
+        snapshot.candidate_id: snapshot for snapshot in snapshots
+        if snapshot.capability == LLMCapability.CANDIDATE_TRIAGE.value
+    }
+    run = get_triage_run(db, scan_id)
+    return Response(
+        candidates_with_llm_to_csv(
+            candidates,
+            snapshot_map,
+            triage_snapshot_map,
+            run.state if run else "NOT_STARTED",
+        ),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-candidates-with-llm.csv"'},
+    )
+
+
+@router.get("/{scan_id}/rejections/export-with-llm")
+def export_rejections_with_llm(scan_id: int, db: Session = Depends(get_db)):
+    scan = get_scan(db, scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found")
+    return Response(
+        rejections_with_llm_to_csv(get_scan_rejections(db, scan_id)),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="scan-{scan_id}-rule-exclusions-with-llm.csv"'},
+    )
+
+
+def _require_triage_ready(configuration: Settings) -> None:
+    if not automatic_triage_ready(configuration):
+        raise HTTPException(
+            503,
+            {
+                "category": "configuration",
+                "message": "Automatic LLM triage is disabled or unavailable",
+            },
+        )
+
+
+@router.post("/{scan_id}/llm-triage")
+def start_llm_triage(
+    scan_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    configuration: Settings = Depends(get_llm_settings),
+    triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler),
+):
+    if not get_scan(db, scan_id):
+        raise HTTPException(404, "Scan not found")
+    _require_triage_ready(configuration)
+    run, should_schedule = prepare_triage_run(
+        db,
+        scan_id,
+        configuration,
+        active=triage_scheduler.is_active(scan_id),
+    )
+    if should_schedule:
+        try:
+            triage_scheduler.schedule(background_tasks, scan_id)
+        except Exception:
+            run.state = "FAILED"
+            run.last_safe_error_category = "scheduling_failure"
+            run.completed_at = utcnow()
+            run.updated_at = utcnow()
+            db.commit()
+            raise HTTPException(
+                500,
+                {
+                    "category": "scheduling_failure",
+                    "message": "LLM triage could not be scheduled safely",
+                },
+            ) from None
+    return triage_run_json(run, triage_failure_categories(db, scan_id))
+
+
+@router.get("/{scan_id}/llm-triage")
+def llm_triage_status(scan_id: int, db: Session = Depends(get_db)):
+    if not get_scan(db, scan_id):
+        raise HTTPException(404, "Scan not found")
+    run = get_triage_run(db, scan_id)
+    if run is None:
+        raise HTTPException(404, "LLM triage has not been started")
+    return triage_run_json(run, triage_failure_categories(db, scan_id))
+
+
+@router.post("/{scan_id}/llm-triage/retry-failed")
+def retry_failed_llm_triage(
+    scan_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    configuration: Settings = Depends(get_llm_settings),
+    triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler),
+):
+    if not get_scan(db, scan_id):
+        raise HTTPException(404, "Scan not found")
+    _require_triage_ready(configuration)
+    run, should_schedule = prepare_triage_run(
+        db,
+        scan_id,
+        configuration,
+        retry_failed=True,
+        active=triage_scheduler.is_active(scan_id),
+    )
+    if should_schedule:
+        try:
+            triage_scheduler.schedule(background_tasks, scan_id, retry_failed=True)
+        except Exception:
+            run.state = "FAILED"
+            run.last_safe_error_category = "scheduling_failure"
+            run.completed_at = utcnow()
+            run.updated_at = utcnow()
+            db.commit()
+            raise HTTPException(
+                500,
+                {
+                    "category": "scheduling_failure",
+                    "message": "Failed LLM triage items could not be scheduled safely",
+                },
+            ) from None
+    return triage_run_json(run, triage_failure_categories(db, scan_id))

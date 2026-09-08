@@ -113,9 +113,9 @@ def _blocked_result(record_a, record_b, selected_fields, scan_mode, rule):
     }
 
 
-def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE"):
+def evaluate_candidate(record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE", strict_custom_fields=None):
     scan_mode = normalize_scan_mode(scan_mode)
-    rule = evaluate_hard_business_rules(record_a, record_b, scan_mode)
+    rule = evaluate_hard_business_rules(record_a, record_b, scan_mode, strict_custom_fields)
     if rule["blocked"]:
         return _blocked_result(record_a, record_b, selected_fields, scan_mode, rule)
 
