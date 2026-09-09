@@ -42,6 +42,9 @@ export default function ExportAuthorityPanel({
           <button type="button" disabled={reviewedDisabled} onClick={() => onDownload('reviewed', targets.reviewedIdentities)}>
             {busyKind === 'reviewed' ? 'Preparing reviewed CSV…' : 'Export confirmed duplicate sets (CSV)'}
           </button>
+          <button type="button" disabled={reviewedDisabled} onClick={() => onDownload('reviewed-xlsx', targets.reviewedIdentitiesExcel)}>
+            {busyKind === 'reviewed-xlsx' ? 'Preparing reviewed Excel…' : 'Export confirmed duplicate sets (Excel)'}
+          </button>
           {reviewedState?.status === 'error' && <button type="button" className="secondary" disabled={Boolean(busyKind)} onClick={onRefreshReviewedState}>
             Reload reviewed export availability
           </button>}

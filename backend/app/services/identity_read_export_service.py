@@ -335,11 +335,17 @@ def _v2_confirmed_rows(db, snapshot):
                 }
 
 
-def authority_selected_reviewed_identities_to_csv(db, scan_id: int) -> str:
-    """Export confirmed sets from only the exact authority-selected review chain."""
+def authority_selected_reviewed_identity_rows(db, scan_id: int):
+    """Return the authoritative snapshot and shared member-shaped reviewed-identity rows."""
     snapshot = IdentityReadService(db).load_identity_read_snapshot(scan_id)
     if snapshot.projection_contract == IdentityReadProjectionContract.G2_V1:
         rows = _v1_confirmed_rows(db, snapshot)
     else:
         rows = _v2_confirmed_rows(db, snapshot)
+    return snapshot, tuple(rows)
+
+
+def authority_selected_reviewed_identities_to_csv(db, scan_id: int) -> str:
+    """Export confirmed sets from only the exact authority-selected review chain."""
+    _, rows = authority_selected_reviewed_identity_rows(db, scan_id)
     return _csv(REVIEWED_IDENTITY_EXPORT_FIELDS_V2, rows)

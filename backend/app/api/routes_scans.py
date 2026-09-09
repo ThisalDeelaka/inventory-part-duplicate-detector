@@ -15,6 +15,7 @@ from app.db.models import (
     ScanOrchestrationRun,
     utcnow,
 )
+from app.core.constants import DEFAULT_PART_TYPE, PART_TYPES
 from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
@@ -52,8 +53,29 @@ from app.orchestration.contracts import (
 from app.services.scan_service import get_scan, get_scan_candidates, get_scan_rejections, get_scan_warnings, list_scans, run_scan
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
+from app.repositories.custom_field_repository import CustomFieldRepository
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
+
+
+def _load_custom_fields(db: Session):
+    return CustomFieldRepository(db).list_all()
+
+
+def _custom_field_selection(custom_fields, resolved_column_mapping):
+    """Split the custom fields actually resolved on this upload by participation mode."""
+    by_key = {field.field_key: field for field in custom_fields}
+    supporting_keys, strict_fields, used = [], [], []
+    for key in resolved_column_mapping:
+        field = by_key.get(key)
+        if not field:
+            continue
+        used.append({"field_key": field.field_key, "display_label": field.display_label, "mode": field.mode})
+        if field.mode == "STRICT":
+            strict_fields.append({"field_key": field.field_key, "display_label": field.display_label})
+        else:
+            supporting_keys.append(field.field_key)
+    return supporting_keys, strict_fields, used
 
 
 def _require_pair_diagnostics(db: Session, scan_id: int):
@@ -237,10 +259,16 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form(DEFAULT_PART_TYPE), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
     if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
-    df, metadata = await read_csv_upload_with_metadata(file, parse_column_mapping(column_mapping))
-    validation = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
+    if part_type not in PART_TYPES: part_type = DEFAULT_PART_TYPE
+    custom_fields = _load_custom_fields(db)
+    custom_field_keys = {field.field_key for field in custom_fields}
+    df, metadata = await read_csv_upload_with_metadata(
+        file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+    )
+    resolved_selected_fields = parse_selected_fields(selected_fields)
+    validation = validate_dataframe(df, resolved_selected_fields, sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
     supporting_keys, strict_custom_fields, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
     for key in supporting_keys:
@@ -249,12 +277,15 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     try:
         scan, _ = run_scan(
             db, df, scan_name.strip() or "Inventory duplicate scan",
-            parse_selected_fields(selected_fields), threshold,
+            resolved_selected_fields, threshold,
             sensitive_mode=sensitive_mode,
             scan_mode=normalize_scan_mode(scan_mode), configuration=configuration,
             orchestration_mode=orchestration_mode_for_product_authority(
                 product_authority
             ),
+            part_type=part_type,
+            strict_custom_fields=strict_custom_fields,
+            custom_fields_used=custom_fields_used,
         )
         pair_diagnostics = pair_diagnostics_state_for_scan(db, scan.id)
         try:

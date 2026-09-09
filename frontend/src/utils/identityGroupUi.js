@@ -111,6 +111,10 @@ export function identityReadExportTargets(scanId) {
       path: `${base}/reviewed-identities/export.csv`,
       filename: `scan-${id}-reviewed-identity-sets.csv`,
     },
+    reviewedIdentitiesExcel: {
+      path: `${base}/reviewed-identities/export.xlsx`,
+      filename: `scan-${id}-reviewed-identity-sets.xlsx`,
+    },
     conflicts: {
       path: `${base}/conflicts/export.csv`,
       filename: `scan-${id}-identity-conflicts.csv`,

@@ -131,6 +131,7 @@ def _blocked_result(
 def evaluate_candidate(
     record_a, record_b, selected_fields, scan_mode="SAME_SITE_DUPLICATE",
     *, allow_uom_mapping_review=False,
+    strict_custom_fields: list | None = None,
     features_a: CandidateEvaluationFeatures | None = None,
     features_b: CandidateEvaluationFeatures | None = None,
 ):
@@ -143,6 +144,7 @@ def evaluate_candidate(
     rule = evaluate_hard_business_rules(
         record_a, record_b, scan_mode,
         allow_uom_mapping_review=allow_uom_mapping_review,
+        strict_custom_fields=strict_custom_fields,
     )
     if rule["blocked"]:
         return _blocked_result(

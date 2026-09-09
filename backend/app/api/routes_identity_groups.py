@@ -57,6 +57,7 @@ from app.services.identity_read_export_service import (
     authority_selected_system_groups_to_csv,
 )
 from app.services.identity_read_xlsx_export_service import (
+    authority_selected_reviewed_identities_to_xlsx,
     authority_selected_system_groups_to_xlsx,
 )
 from app.identity_read.fingerprints import canonical_value
@@ -249,6 +250,16 @@ def authoritative_identity_outcomes(scan_id: int, db: Session = Depends(get_db))
     }
 
 
+def _identity_read_xlsx(scan_id, db, converter, filename):
+    _service(db, scan_id)
+    content = _identity_read_safe(lambda: converter(db, scan_id))
+    return Response(
+        content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def _identity_read_csv(scan_id, db, converter, filename):
     _service(db, scan_id)
     content = _identity_read_safe(lambda: converter(db, scan_id))
@@ -271,19 +282,9 @@ def export_authoritative_system_groups(scan_id: int, db: Session = Depends(get_d
 def export_authoritative_system_groups_xlsx(
     scan_id: int, db: Session = Depends(get_db)
 ):
-    _service(db, scan_id)
-    content = _identity_read_safe(
-        lambda: authority_selected_system_groups_to_xlsx(db, scan_id)
-    )
-    return Response(
-        content,
-        media_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
-        headers={
-            "Content-Disposition":
-                f'attachment; filename="scan-{scan_id}-system-groups.xlsx"'
-        },
+    return _identity_read_xlsx(
+        scan_id, db, authority_selected_system_groups_to_xlsx,
+        f"scan-{scan_id}-system-groups.xlsx",
     )
 
 
@@ -294,6 +295,16 @@ def export_authoritative_reviewed_identities(
     return _identity_read_csv(
         scan_id, db, authority_selected_reviewed_identities_to_csv,
         f"scan-{scan_id}-reviewed-identities.csv",
+    )
+
+
+@router.get("/{scan_id}/identity-read/reviewed-identities/export.xlsx")
+def export_authoritative_reviewed_identities_xlsx(
+    scan_id: int, db: Session = Depends(get_db)
+):
+    return _identity_read_xlsx(
+        scan_id, db, authority_selected_reviewed_identities_to_xlsx,
+        f"scan-{scan_id}-reviewed-identities.xlsx",
     )
 
 

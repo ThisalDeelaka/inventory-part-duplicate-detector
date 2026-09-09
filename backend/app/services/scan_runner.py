@@ -103,7 +103,7 @@ class ScanRunner:
             selected_fields=selected_fields,
         )
 
-    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE", orchestration_mode: ScanOrchestrationMode | str | None = None):
+    def run(self, df: pd.DataFrame, scan_name: str, selected_fields: list[str], threshold: float, source_type="CSV", sensitive_mode: bool = True, scan_mode: str = "SAME_SITE_DUPLICATE", orchestration_mode: ScanOrchestrationMode | str | None = None, part_type: str = "INVENTORY", strict_custom_fields: list[dict] | None = None, custom_fields_used: list[dict] | None = None):
         scan_mode = normalize_scan_mode(scan_mode)
         mode = (
             orchestration_mode
@@ -135,7 +135,10 @@ class ScanRunner:
         if validation["missing_required_columns"]:
             raise ValueError(f"Missing required columns: {', '.join(validation['missing_required_columns'])}")
 
-        scan = self.scans.create(scan_name, selected_fields, threshold, source_type, scan_mode)
+        scan = self.scans.create(
+            scan_name, selected_fields, threshold, source_type, scan_mode,
+            custom_fields_used=custom_fields_used, part_type=part_type,
+        )
         discovery_run_id = None
         evidence_run_id = None
         orchestration_run_id = None
@@ -262,6 +265,7 @@ class ScanRunner:
                 feature_b = evaluation_features(pair["record_b"])
                 result = score_candidate(
                     pair["record_a"], pair["record_b"], selected_fields, scan_mode,
+                    strict_custom_fields=strict_custom_fields,
                     features_a=feature_a, features_b=feature_b,
                 )
                 if result["final_score"] >= threshold:
@@ -306,6 +310,7 @@ class ScanRunner:
                     result = score_candidate(
                         left, right, selected_fields, identity_discovery_scan_mode,
                         allow_uom_mapping_review=True,
+                        strict_custom_fields=strict_custom_fields,
                         features_a=evaluation_features(left),
                         features_b=evaluation_features(right),
                     )

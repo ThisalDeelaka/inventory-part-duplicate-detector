@@ -10,6 +10,21 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+class CustomField(Base):
+    __tablename__ = "custom_field"
+    __table_args__ = (
+        UniqueConstraint("field_key", name="uq_custom_field_key"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    field_key = Column(String(100), nullable=False, index=True)
+    display_label = Column(String(200), nullable=False)
+    mode = Column(String(20), nullable=False)
+    aliases = Column(Text, default="[]", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class DuplicateScan(Base):
     __tablename__ = "duplicate_scan"
     id = Column(Integer, primary_key=True)

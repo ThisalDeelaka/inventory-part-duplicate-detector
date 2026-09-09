@@ -110,7 +110,7 @@ def apply_column_mapping(
                     normalized if fallback_target in primary_targets else fallback_target
                 )
             else:
-                automatic = FIELD_ALIASES.get(normalized, normalized)
+                automatic = FIELD_ALIASES.get(normalized, custom_field_aliases.get(normalized, normalized))
             target = f"UNMAPPED_{normalized}_{position}" if automatic in reserved_targets else automatic
         renamed[source] = target
         target_sources.setdefault(target, []).append(source)

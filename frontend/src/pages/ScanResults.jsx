@@ -276,7 +276,7 @@ function ValidScanResults({ id }) {
 
   const download = async (kind, target) => {
     setExportFeedback(null)
-    if (kind === 'reviewed' && (
+    if ((kind === 'reviewed' || kind === 'reviewed-xlsx') && (
       reviewedExportState.status !== 'ready' || !reviewedExportState.has_confirmed_sets
     )) {
       setExportFeedback({
