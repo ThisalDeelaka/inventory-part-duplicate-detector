@@ -102,6 +102,8 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert "SCAN INFORMATION" in overview_text
     assert "FINDINGS AT A GLANCE" in overview_text
     assert "ADDITIONAL FINDINGS REQUIRING ATTENTION" in overview_text
+    assert "EVIDENCE STRENGTH DISTRIBUTION" in overview_text
+    assert "not a duplicate probability" in overview_text
     assert "HUMAN REVIEW PROGRESS" in overview_text
     assert "HOW TO USE THIS WORKBOOK" in overview_text
     assert "REPORT DETAILS / TECHNICAL FOOTER" in overview_text
@@ -110,13 +112,15 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert overview["E7"].value == snapshot.canonical_record_count
     assert overview["A15"].value == "Total Candidate Groups"
     assert overview["A16"].value == snapshot.group_count
-    assert overview["A29"].value == "Reviewed"
-    assert overview["G29"].value == "1 of 1"
-    assert overview["A33"].value == "Deferred by Reviewer"
-    assert overview["G33"].value == 1
+    assert overview["A29"].value == "High Evidence (75–100)"
+    assert sum((overview["A30"].value, overview["D30"].value, overview["G30"].value)) == 1
+    assert overview["A35"].value == "Reviewed"
+    assert overview["G35"].value == "1 of 1"
+    assert overview["A39"].value == "Deferred by Reviewer"
+    assert overview["G39"].value == 1
     assert "Deferred / Unreviewed" not in overview_text
-    assert overview["A45"].value == "Scan ID"
-    assert overview["C45"].value == scan.id
+    assert overview["A51"].value == "Scan ID"
+    assert overview["C51"].value == scan.id
     occupied = set()
     for merged in overview.merged_cells.ranges:
         for row_number in range(merged.min_row, merged.max_row + 1):
@@ -147,6 +151,14 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert {row["Group"] for row in detail_rows} == {"CG-000001"}
     assert {row["Review Status"] for row in detail_rows} == {"Review Deferred"}
     assert {row["Evidence"] for row in detail_rows} == {"Review Evidence"}
+    assert {row["Evidence Score"] for row in _dict_rows(index)} == {50}
+    assert {row["Evidence Band"] for row in _dict_rows(index)} == {
+        "Moderate Evidence"
+    }
+    assert {
+        row["Support Density"] for row in _dict_rows(review)
+        if row["Support Density"] is not None
+    } == {"100%"}
     assert {row["Human Decision"] for row in detail_rows} == {
         "Deferred for later review"
     }
@@ -162,16 +174,22 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert {row["Source Row"] for row in tech_rows} == {
         int(row["source_row_reference"]) for row in csv_rows
     }
+    assert {row["Score Version"] for row in tech_rows} == {
+        "GROUP_EVIDENCE_SCORE_V1"
+    }
+    assert {row["Created Date Policy"] for row in tech_rows} == {
+        "CREATED_DATE_NOT_IDENTITY_EVIDENCE_V1"
+    }
     for primary in (review, index, flat):
         assert "Canonical Group ID" not in tuple(cell.value for cell in primary[1])
         assert "Stable Record Reference" not in tuple(cell.value for cell in primary[1])
 
     expected_merges = {
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFG"
+        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGHIJ"
     }
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
     assert not any(
-        merged.min_col >= 8 for merged in review.merged_cells.ranges
+        merged.min_col >= 11 for merged in review.merged_cells.ranges
     )
     assert [row["Member #"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
@@ -194,7 +212,7 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     member_count = snapshot.groups[0].member_count
     assert member_count >= 3
     assert {str(item) for item in sheet.merged_cells.ranges} == {
-        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFG"
+        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFGHIJ"
     }
     rows = _dict_rows(sheet)
     assert len(rows) == member_count
@@ -215,12 +233,12 @@ def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, cl
         concise_reason_for_group_status("POSSIBLE_DUPLICATE_GROUP_REVIEW")
     }
     overview = workbook["Overview"]
-    assert overview["A29"].value == "Reviewed"
-    assert overview["G29"].value == "0 of 1"
-    assert overview["A30"].value == "Awaiting Review"
-    assert overview["G30"].value == 1
-    assert overview["A33"].value == "Deferred by Reviewer"
-    assert overview["G33"].value == 0
+    assert overview["A35"].value == "Reviewed"
+    assert overview["G35"].value == "0 of 1"
+    assert overview["A36"].value == "Awaiting Review"
+    assert overview["G36"].value == 1
+    assert overview["A39"].value == "Deferred by Reviewer"
+    assert overview["G39"].value == 0
     assert overview["E24"].value == "Deferred Families"
 
 
@@ -500,7 +518,7 @@ def test_no_unsupported_claims_secrets_formulas_or_writeback(db, client):
     forbidden = (
         "ground truth", "api key", "credential", "password", "merge target",
         "likely duplicate", "confirmed duplicate", "high-confidence duplicate",
-        "accuracy", "probability", "confidence %",
+        "accuracy", "confidence %",
     )
     for sheet in workbook.worksheets:
         for row in sheet.iter_rows():
@@ -508,3 +526,5 @@ def test_no_unsupported_claims_secrets_formulas_or_writeback(db, client):
                 assert cell.data_type != "f"
                 if isinstance(cell.value, str):
                     assert not any(term in cell.value.lower() for term in forbidden)
+                    if "probability" in cell.value.lower():
+                        assert "not" in cell.value.lower()

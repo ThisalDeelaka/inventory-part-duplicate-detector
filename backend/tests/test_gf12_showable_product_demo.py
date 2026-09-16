@@ -451,6 +451,7 @@ def test_demo24_only_bounded_xlsx_export_production_files_change():
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
         "backend/app/identity_read/explanations.py",
+            "backend/app/identity_read/group_evidence_strength.py",
             "backend/app/schemas/identity_groups.py",
             "backend/app/schemas/identity_group_reviews.py",
             "backend/app/services/identity_group_export_service.py",
@@ -472,6 +473,7 @@ def test_demo24_only_bounded_xlsx_export_production_files_change():
                     "backend/app/resolution/validation.py",
                     "backend/app/services/identity_resolution_service.py",
                 "backend/app/benchmarks/scan_determinism_audit.py",
+                "backend/app/benchmarks/group_evidence_strength_shadow.py",
             }
     for document in (DEMO_CONTRACT, DEMO_RUNBOOK, PRESENTER_SCRIPT, ACCEPTANCE):
         assert document.exists()

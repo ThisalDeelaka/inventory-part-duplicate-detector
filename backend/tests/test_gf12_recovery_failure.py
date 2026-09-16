@@ -570,7 +570,8 @@ def test_rf26_only_bounded_xlsx_export_production_change():
         "backend/app/engine/signed_identity_evidence.py",
         "backend/app/orchestration/contracts.py",
         "backend/app/api/routes_identity_groups.py",
-        "backend/app/identity_read/explanations.py",
+            "backend/app/identity_read/explanations.py",
+            "backend/app/identity_read/group_evidence_strength.py",
             "backend/app/schemas/identity_groups.py",
             "backend/app/schemas/identity_group_reviews.py",
             "backend/app/services/identity_group_export_service.py",
@@ -591,7 +592,8 @@ def test_rf26_only_bounded_xlsx_export_production_change():
                 "backend/app/resolution/request_constraints.py",
                 "backend/app/resolution/validation.py",
                 "backend/app/services/identity_resolution_service.py",
-                "backend/app/benchmarks/scan_determinism_audit.py",
+                    "backend/app/benchmarks/scan_determinism_audit.py",
+                    "backend/app/benchmarks/group_evidence_strength_shadow.py",
             }
     assert set(production) <= allowed
     if production:
@@ -611,6 +613,7 @@ def test_rf26_only_bounded_xlsx_export_production_change():
                 or "retrieval_order_key" in diff
                 or "request_scoped_group_constraints" in diff
                 or "selected_condition_labels" in diff
+                or "evidence_strength" in diff
             )
         forbidden_names = ["generate_candidate_pairs"]
         if "assess_lexical_trust" not in diff:

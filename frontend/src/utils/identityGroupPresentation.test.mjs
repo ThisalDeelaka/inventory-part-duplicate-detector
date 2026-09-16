@@ -6,6 +6,7 @@ import {
   groupEvidenceTierLabel,
   groupReviewAuthorityLabel,
   groupStatusLabel,
+  evidenceStrengthView,
 } from './identityGroupUi.js'
 import { summarizeReviewedExportAvailability } from './identityExportUi.js'
 import { groupReviewLabel } from './identityGroupReviewUi.js'
@@ -27,6 +28,21 @@ test('system evidence tiers do not claim probability or confidence', () => {
   for (const status of [LIKELY, REVIEW]) {
     assert.doesNotMatch(groupEvidenceTierLabel(status), /confidence|probability|accuracy|%/i)
   }
+})
+
+test('evidence strength is formatted as an index, not a probability', () => {
+  const view = evidenceStrengthView({
+    evidence_score: 74.6,
+    evidence_band: 'MODERATE EVIDENCE',
+    support_density: 0.9,
+  })
+  assert.deepEqual(view, {
+    scoreLabel: '75 / 100',
+    bandLabel: 'Moderate Evidence',
+    densityLabel: '90%',
+  })
+  assert.doesNotMatch(JSON.stringify(view), /probability|confidence/i)
+  assert.equal(evidenceStrengthView(null), null)
 })
 
 test('human confirmation visually overrides the system suggestion', () => {

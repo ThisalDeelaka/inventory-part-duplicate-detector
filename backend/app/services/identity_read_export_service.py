@@ -17,6 +17,7 @@ from app.db.models import (
 from app.identity_read.contracts import IdentityReadProjectionContract
 from app.identity_read.fingerprints import canonical_value
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
+from app.identity_read.group_evidence_strength import project_group_evidence_strength
 from app.services.export_service import sanitize_csv_cell
 from app.services.identity_group_review_export_service import (
     reviewed_identity_decisions_to_csv,
@@ -35,6 +36,9 @@ SYSTEM_GROUP_EXPORT_FIELDS = [
     "source_projection_run_id", "source_orchestration_run_id",
     "source_resolution_run_id", "group_key", "group_reference", "group_status",
     "candidate_display_label", "review_requirement", "system_evidence_tier",
+    "evidence_score", "evidence_band", "evidence_score_version",
+    "support_density", "strong_support_share", "strong_relationship_count",
+    "review_relationship_count", "non_groupable_relationship_count",
     "validation_mode", "member_count", "member_order", "record_id",
     "stable_record_reference", "source_row_reference", "part_no", "description",
     "site_or_contract", "uom", "product_category", "hsn_sac",
@@ -132,6 +136,17 @@ def authority_selected_system_group_rows(db, scan_id: int):
     rows = []
     for group in snapshot.groups:
         coverage = group.validation_coverage
+        strength = project_group_evidence_strength(group)
+        score_fields = strength.as_dict() if strength is not None else {
+            "evidence_score": None,
+            "evidence_band": None,
+            "evidence_score_version": None,
+            "support_density": None,
+            "strong_support_share": None,
+            "strong_relationship_count": None,
+            "review_relationship_count": None,
+            "non_groupable_relationship_count": None,
+        }
         group_key = serialize_versioned_identity_group_key(group.versioned_group_key)
         for member in group.members:
             rows.append({
@@ -142,6 +157,7 @@ def authority_selected_system_group_rows(db, scan_id: int):
                 "candidate_display_label": system_candidate_label(group.status.value),
                 "review_requirement": REQUIRES_HUMAN_REVIEW,
                 "system_evidence_tier": system_evidence_tier(group.status.value),
+                **score_fields,
                 "validation_mode": group.validation_mode.value,
                 "member_count": group.member_count,
                 "member_order": member.member_order,

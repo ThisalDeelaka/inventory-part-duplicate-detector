@@ -70,6 +70,12 @@ from app.identity_read.key_codec import (
     parse_versioned_identity_group_key,
     serialize_versioned_identity_group_key,
 )
+from app.identity_read.group_evidence_strength import (
+    GROUP_EVIDENCE_SCORE_VERSION,
+    GroupEvidenceScoreInvariantViolation,
+    evidence_strength_distribution,
+    project_group_evidence_strength,
+)
 from app.services.identity_read_service import (
     IdentityReadAuthorityInconsistent,
     IdentityReadGroupNotFound,
@@ -109,6 +115,8 @@ def _identity_read_safe(call):
         raise HTTPException(422, str(exc)) from None
     except (IdentityReadGroupNotFound, InvalidVersionedIdentityGroupKey) as exc:
         raise HTTPException(404, str(exc)) from None
+    except GroupEvidenceScoreInvariantViolation as exc:
+        raise HTTPException(422, str(exc)) from None
 
 
 def _read_projection(snapshot):
@@ -121,6 +129,7 @@ def _read_projection(snapshot):
 
 
 def _read_group(group, *, detail=False, review_state=None):
+    evidence_strength = project_group_evidence_strength(group)
     payload = {
         "versioned_group_key": serialize_versioned_identity_group_key(
             group.versioned_group_key
@@ -137,6 +146,9 @@ def _read_group(group, *, detail=False, review_state=None):
         "bridge_risk_summary": canonical_value(group.bridge_risk_summary),
         "genericity_risk_summary": canonical_value(group.genericity_risk_summary),
         "missing_evidence_summary": canonical_value(group.missing_evidence_summary),
+        "evidence_strength": (
+            evidence_strength.as_dict() if evidence_strength is not None else None
+        ),
         "system_explanation": canonical_value(explain_identity_group(group)),
         "member_preview": [canonical_value(item) for item in group.members[:3]],
         "review_state": review_state or {"reviewed": False},
@@ -155,12 +167,18 @@ def authoritative_identity_summary(scan_id: int, db: Session = Depends(get_db)):
     snapshot = _identity_read_safe(
         lambda: IdentityReadService(db).load_identity_read_snapshot(scan_id)
     )
+    distribution = _identity_read_safe(
+        lambda: evidence_strength_distribution(snapshot.groups)
+    )
     return {
         "snapshot_available": True,
         "read_ready": True,
         "projection": _read_projection(snapshot),
         **canonical_value(snapshot.summary),
         "snapshot_fingerprint": snapshot.snapshot_fingerprint,
+        "evidence_score_version": GROUP_EVIDENCE_SCORE_VERSION,
+        "scored_group_count": sum(distribution.values()),
+        "evidence_strength_distribution": distribution,
     }
 
 
