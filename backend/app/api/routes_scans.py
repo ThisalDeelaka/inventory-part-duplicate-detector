@@ -16,7 +16,7 @@ from app.db.models import (
     ScanOrchestrationRun,
     utcnow,
 )
-from app.core.constants import DEFAULT_PART_TYPE, PART_TYPES
+from app.core.constants import DEFAULT_PART_TYPE, DEFAULT_REVIEW_STRICTNESS, PART_TYPES
 from app.engine.column_semantics import normalize_scan_mode
 from app.services.export_service import candidates_to_csv, rejections_to_csv
 from app.services.grouping_service import build_duplicate_groups
@@ -262,7 +262,7 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(75), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form(DEFAULT_PART_TYPE), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(DEFAULT_REVIEW_STRICTNESS), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form(DEFAULT_PART_TYPE), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
     if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
     if part_type not in PART_TYPES: part_type = DEFAULT_PART_TYPE
     custom_fields = _load_custom_fields(db)

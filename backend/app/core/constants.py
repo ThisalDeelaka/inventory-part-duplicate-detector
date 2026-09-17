@@ -5,6 +5,10 @@ PART_TYPES = {"INVENTORY", "PURCHASE", "SALES"}
 DEFAULT_PART_TYPE = "INVENTORY"
 ALL_PART_TYPES = ["INVENTORY", "PURCHASE", "SALES"]
 
+# Review strictness (similarity threshold) is no longer user-configurable in the
+# product UI; every scan submitted through it runs at this fixed value.
+DEFAULT_REVIEW_STRICTNESS = 75.0
+
 FIELD_DEFINITIONS = [
     {"field": "CONTRACT", "display": "Site", "required": False, "part_types": ["INVENTORY", "PURCHASE"]},
     {"field": "PART_NO", "display": "Part No", "required": True, "part_types": ALL_PART_TYPES},

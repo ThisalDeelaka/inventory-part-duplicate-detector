@@ -33,8 +33,7 @@ const FALLBACK_FIELDS = [
   { field: 'HSN_SAC_CODE', display: 'HSN/SAC Code' },
 ]
 
-const MIN_THRESHOLD = 60
-const MAX_THRESHOLD = 90
+const REVIEW_STRICTNESS = 75
 const SCAN_MODE = 'SAME_SITE_DUPLICATE'
 
 export default function NewScan() {
@@ -50,7 +49,6 @@ export default function NewScan() {
   const [columnMapping, setColumnMapping] = useState({})
   const [file, setFile] = useState(null)
   const [name, setName] = useState('Inventory duplicate scan')
-  const [threshold, setThreshold] = useState(75)
   const [validation, setValidation] = useState(null)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState(null)
@@ -99,7 +97,7 @@ export default function NewScan() {
     const f = new FormData()
     f.append('file', submittedFile)
     f.append('scan_name', name)
-    f.append('threshold', Math.min(Math.max(threshold, MIN_THRESHOLD), MAX_THRESHOLD))
+    f.append('threshold', REVIEW_STRICTNESS)
     f.append('selected_fields', JSON.stringify(selected))
     f.append('column_mapping', JSON.stringify(columnMapping))
     f.append('scan_mode', SCAN_MODE)
@@ -259,11 +257,10 @@ export default function NewScan() {
             <small>Site is enforced only when selected below. When unselected, cross-site identity suggestions remain eligible for review.</small>
           </label>
           <label>Parts export (CSV or XLSX)<input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={!!busy} onChange={event => selectFile(event.target.files[0] || null)} /></label>
-          <div><label>Review strictness <b>{threshold}</b></label><input type="range" min={MIN_THRESHOLD} max={MAX_THRESHOLD} value={threshold} disabled={!!busy} onChange={e => setThreshold(+e.target.value)} /><small>Move right to show only stronger matches. Move left to discover more possible matches.</small></div>
         </section>
         <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{checklistFields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} disabled={!!busy} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{duplicateConditionHelp(f.field)}</small><small>{f.field}</small></span></label>)}</div></section>
       </div>
-      <div className="actions"><button type="button" className="secondary" onClick={validate} disabled={!!busy}>{busy === 'validate' ? 'Validating…' : validationIsCurrent ? 'Validate again' : 'Validate CSV'}</button><button type="button" onClick={run} disabled={!canRun}>{busy === 'scan' ? 'Processing inventory…' : 'Run scan'}</button></div>
+      <div className="actions"><button type="button" className="secondary" onClick={validate} disabled={!!busy || !file}>{busy === 'validate' ? 'Validating…' : validationIsCurrent ? 'Validate again' : 'Validate CSV'}</button><button type="button" onClick={run} disabled={!canRun}>{busy === 'scan' ? 'Processing inventory…' : 'Run scan'}</button></div>
       {!validation && <p className="validation-guidance">Run Scan becomes available after the current CSV and mapping pass validation.</p>}
       {validation && !validationIsCurrent && <p className="warning" role="status"><b>Validation is out of date.</b> The file, selected conditions, mapping, or privacy setting changed. Validate again before running the scan.</p>}
       {busy === 'scan' && <section className="panel processing-state" role="status" aria-live="polite" aria-busy="true">
