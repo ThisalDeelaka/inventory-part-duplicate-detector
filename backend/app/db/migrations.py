@@ -263,6 +263,30 @@ def ensure_identity_resolution_tables(engine):
         IdentityResolutionUnassignedRecord.__table__,
         IdentityResolutionConstraintInput.__table__,
     ], checkfirst=True)
+    _ensure_resolver_reference_column_widths(engine)
+
+
+def _ensure_resolver_reference_column_widths(engine):
+    if engine.url.get_backend_name().startswith("sqlite"):
+        return
+    targets = [
+        ("identity_resolution_group_snapshot", "hypothesis_id", 128),
+        ("identity_resolution_conflict_snapshot", "conflict_id", 128),
+        ("identity_resolution_deferred_snapshot", "deferred_id", 128),
+    ]
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    with engine.begin() as connection:
+        for table, column, width in targets:
+            if table not in existing_tables:
+                continue
+            columns = {item["name"]: item for item in inspector.get_columns(table)}
+            current = columns.get(column)
+            if current is None or getattr(current["type"], "length", None) == width:
+                continue
+            connection.execute(text(
+                f"ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({width})"
+            ))
 
 
 def ensure_g2_v2_projection_tables(engine):

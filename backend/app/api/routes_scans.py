@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -54,6 +55,8 @@ from app.services.scan_service import get_scan, get_scan_candidates, get_scan_re
 from app.services.privacy_service import security_transparency
 from app.services.validation_service import parse_column_mapping, parse_selected_fields, read_csv_upload_with_metadata, validate_dataframe
 from app.repositories.custom_field_repository import CustomFieldRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
@@ -331,6 +334,7 @@ async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...)
             },
         ) from exc
     except Exception as exc:
+        logger.exception("scan upload failed for scan_name=%r", scan_name)
         raise HTTPException(
             500,
             {
