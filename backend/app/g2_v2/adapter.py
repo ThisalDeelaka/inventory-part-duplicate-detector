@@ -71,6 +71,12 @@ def _targeted_evidence(item, group_reference, required):
         evaluator_version=item.evaluator_version,
         evidence_fingerprint=item.evidence_fingerprint,
         required_for_validation=required,
+        source_evidence_contract_version=(
+            item.evidence_contract_version
+            if item.deterministic_score is not None
+            else None
+        ),
+        deterministic_score=item.deterministic_score,
     )
 
 

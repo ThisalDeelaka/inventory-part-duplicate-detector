@@ -24,6 +24,8 @@ from app.resolution.contracts import (
     TargetedEvidenceRequest,
     TargetedEvidenceReason,
     TargetedEvidenceResult,
+    TARGETED_EVIDENCE_CONTRACT_V1,
+    TARGETED_EVIDENCE_CONTRACT_VERSION,
 )
 from app.resolution.fingerprints import (
     deferred_identity_work_unit_fingerprint,
@@ -203,6 +205,8 @@ def targeted_result_from_evaluation(
         evaluator_version=evaluated_relationship.evaluation_algorithm_version,
         evidence_fingerprint=evaluated_relationship.evidence_fingerprint,
         generic_only=bool(generic_evidence.get("generic_guard_reason")),
+        evidence_contract_version=TARGETED_EVIDENCE_CONTRACT_VERSION,
+        deterministic_score=evaluated_relationship.deterministic_score,
     )
 
 
@@ -671,6 +675,25 @@ def validate_resolution_result(
         _require(isinstance(targeted.edge_class, IdentityEdgeClass),
                  "targeted evidence edge class is not allowlisted")
         _canonical_texts(targeted.reason_codes, "targeted evidence reason codes")
+        _require(
+            targeted.evidence_contract_version in {
+                TARGETED_EVIDENCE_CONTRACT_V1,
+                TARGETED_EVIDENCE_CONTRACT_VERSION,
+            },
+            "targeted evidence contract version is unsupported",
+        )
+        if targeted.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_VERSION:
+            _require(
+                isinstance(targeted.deterministic_score, (int, float))
+                and not isinstance(targeted.deterministic_score, bool)
+                and 0.0 <= float(targeted.deterministic_score) <= 100.0,
+                "score-preserving targeted evidence requires a bounded deterministic score",
+            )
+        else:
+            _require(
+                targeted.deterministic_score is None,
+                "legacy targeted evidence cannot claim a deterministic score",
+            )
         result_keys.append(targeted.request.request_fingerprint)
     _require(tuple(sorted(result_keys)) == tuple(result_keys),
              "targeted evidence results must use deterministic order")

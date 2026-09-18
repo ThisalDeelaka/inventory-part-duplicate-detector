@@ -68,6 +68,8 @@ class G2V2InternalEvidence:
     evaluator_version: str
     evidence_fingerprint: str
     required_for_validation: bool
+    source_evidence_contract_version: str | None = None
+    deterministic_score: float | None = None
 
 
 @dataclass(frozen=True)

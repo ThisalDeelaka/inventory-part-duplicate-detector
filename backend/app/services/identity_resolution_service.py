@@ -48,6 +48,7 @@ from app.resolution.contracts import (
     TargetedEvidenceReason,
     TargetedEvidenceRequest,
     TargetedEvidenceResult,
+    TARGETED_EVIDENCE_CONTRACT_V1,
 )
 from app.resolution.fingerprints import fingerprint_payload
 from app.resolution.resolver import (
@@ -262,6 +263,8 @@ def _persist_result(repository, run, value, result):
             evaluator_version=(results[request.request_fingerprint].evaluator_version if request.request_fingerprint in results else None),
             evidence_fingerprint=(results[request.request_fingerprint].evidence_fingerprint if request.request_fingerprint in results else None),
             generic_only=(results[request.request_fingerprint].generic_only if request.request_fingerprint in results else None),
+            evidence_contract_version=(results[request.request_fingerprint].evidence_contract_version if request.request_fingerprint in results else None),
+            deterministic_score=(results[request.request_fingerprint].deterministic_score if request.request_fingerprint in results else None),
         ) for request in result.targeted_evidence_requests
     ])
     repository.add_all([
@@ -364,6 +367,10 @@ def load_persisted_resolution_result(db, resolution_run_id: int) -> IdentityReso
                 reason_codes=tuple(json.loads(row.reason_codes_json)),
                 evidence_summary=row.evidence_summary, evaluator_version=row.evaluator_version,
                 evidence_fingerprint=row.evidence_fingerprint, generic_only=bool(row.generic_only),
+                evidence_contract_version=(
+                    row.evidence_contract_version or TARGETED_EVIDENCE_CONTRACT_V1
+                ),
+                deterministic_score=row.deterministic_score,
             ))
     metrics = IdentityResolutionMetrics(**{
         name: getattr(run, name) for name in IdentityResolutionMetrics.__dataclass_fields__

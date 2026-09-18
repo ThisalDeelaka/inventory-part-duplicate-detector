@@ -1,7 +1,8 @@
 import dataclasses
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import create_engine, event, inspect, text
+from unittest.mock import patch
 
 from app.db.migrations import ensure_identity_resolution_tables
 from app.db.models import (
@@ -13,7 +14,11 @@ from app.db.models import (
     IdentityGroupSnapshot,
 )
 from app.repositories.resolution_repository import ResolutionRepository
-from app.resolution.contracts import ResolverConfiguration
+from app.resolution.contracts import (
+    ResolverConfiguration,
+    TARGETED_EVIDENCE_CONTRACT_V1,
+    TARGETED_EVIDENCE_CONTRACT_VERSION,
+)
 from app.services.identity_resolution_service import (
     load_persisted_resolution_result,
     resolve_and_persist_identity_groups,
@@ -86,6 +91,24 @@ def test_targeted_evidence_is_separate_from_gf4_proposal_evidence(db):
     assert db.query(IdentityResolutionTargetedEvidence).filter_by(
         resolution_run_id=persisted.resolution_run_id
     ).count() == len(persisted.result.targeted_evidence_requests)
+    targeted_rows = db.query(IdentityResolutionTargetedEvidence).filter_by(
+        resolution_run_id=persisted.resolution_run_id,
+        evaluation_completed=True,
+    ).all()
+    assert targeted_rows
+    assert all(
+        item.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_VERSION
+        and item.deterministic_score is not None
+        for item in targeted_rows
+    )
+    loaded = load_persisted_resolution_result(db, persisted.resolution_run_id)
+    assert tuple(
+        (item.evidence_contract_version, item.deterministic_score)
+        for item in loaded.targeted_evidence_results
+    ) == tuple(
+        (item.evidence_contract_version, item.deterministic_score)
+        for item in persisted.result.targeted_evidence_results
+    )
     assert db.query(IdentityEvidenceEdgeSnapshot).filter_by(
         evidence_run_id=evidence.run.evidence_run_id
     ).count() == 2
@@ -96,6 +119,76 @@ def test_targeted_evidence_is_separate_from_gf4_proposal_evidence(db):
     ], [(0, 1), (1, 2), (2, 3)])
     assert multiple.status == "COMPLETED"
     assert len(multiple.result.targeted_evidence_results) > 1
+
+
+def test_targeted_score_reload_uses_persisted_value_without_recomputation(db):
+    _scan, _discovery, _evidence, persisted = resolve_fixture(db, [
+        row("A", "SKF BEARING 6205"),
+        row("B", "SKF BEARING 6205"),
+        row("C", "SKF BEARING 6205"),
+    ], [(0, 1), (1, 2)])
+    expected = tuple(
+        item.deterministic_score for item in persisted.result.targeted_evidence_results
+    )
+    assert expected and all(item is not None for item in expected)
+    with patch(
+        "app.engine.identity_evidence_evaluator.evaluate_canonical_identity_relationship",
+        side_effect=AssertionError("reload must not invoke canonical evaluator"),
+    ):
+        loaded = load_persisted_resolution_result(db, persisted.resolution_run_id)
+    assert tuple(
+        item.deterministic_score for item in loaded.targeted_evidence_results
+    ) == expected
+
+
+def test_legacy_targeted_row_loads_without_claiming_score(db):
+    _scan, _discovery, _evidence, persisted = resolve_fixture(db, [
+        row("A", "SKF BEARING 6205"),
+        row("B", "SKF BEARING 6205"),
+        row("C", "SKF BEARING 6205"),
+    ], [(0, 1), (1, 2)])
+    rows = db.query(IdentityResolutionTargetedEvidence).filter_by(
+        resolution_run_id=persisted.resolution_run_id,
+        evaluation_completed=True,
+    ).all()
+    assert rows
+    db.execute(text(
+        "UPDATE identity_resolution_targeted_evidence "
+        "SET evidence_contract_version = NULL, deterministic_score = NULL "
+        "WHERE resolution_run_id = :run_id AND evaluation_completed = 1"
+    ), {"run_id": persisted.resolution_run_id})
+    db.commit()
+    loaded = load_persisted_resolution_result(db, persisted.resolution_run_id)
+    assert all(
+        item.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_V1
+        and item.deterministic_score is None
+        for item in loaded.targeted_evidence_results
+    )
+
+
+def test_legacy_sqlite_targeted_table_gets_nullable_score_columns():
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE identity_resolution_targeted_evidence "
+            "(id INTEGER PRIMARY KEY)"
+        ))
+        connection.execute(text(
+            "INSERT INTO identity_resolution_targeted_evidence (id) VALUES (1)"
+        ))
+    ensure_identity_resolution_tables(engine)
+    columns = {
+        item["name"]: item for item in inspect(engine).get_columns(
+            "identity_resolution_targeted_evidence"
+        )
+    }
+    assert columns["evidence_contract_version"]["nullable"] is True
+    assert columns["deterministic_score"]["nullable"] is True
+    with engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT evidence_contract_version, deterministic_score "
+            "FROM identity_resolution_targeted_evidence WHERE id = 1"
+        )).one() == (None, None)
 
 
 def test_child_persistence_failure_rolls_back_and_marks_run_failed(db):
