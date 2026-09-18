@@ -10,7 +10,6 @@ import {
   groupAuthorityLabel,
   groupEvidenceTierLabel,
   groupReviewAuthorityLabel,
-  evidenceStrengthView,
   identityReadErrorState,
   identityReadExportTargets,
   validationCoverageLabel,
@@ -95,21 +94,6 @@ function GroupDetail({ scanId, detail, onReviewSaved }) {
   </div>
 }
 
-function EvidenceStrength({ value }) {
-  const display = evidenceStrengthView(value)
-  if (!display) return <p className="evidence-strength-unavailable"><b>Evidence Strength:</b> Not available for this projection.</p>
-  return <section className="evidence-strength" aria-label="Group Evidence Strength">
-    <div><span>Evidence Strength</span><strong>{display.scoreLabel}</strong><b>{display.bandLabel}</b></div>
-    <dl>
-      <div><dt>Support Density</dt><dd>{display.densityLabel}</dd></div>
-      <div><dt>Strong Relationships</dt><dd>{value.strong_relationship_count}</dd></div>
-      <div><dt>Review Relationships</dt><dd>{value.review_relationship_count}</dd></div>
-      <div><dt>Non-groupable</dt><dd>{value.non_groupable_relationship_count}</dd></div>
-    </dl>
-    <small>This score summarizes deterministic evidence strength for the suggested group. It is not a probability of duplication.</small>
-  </section>
-}
-
 function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, toggleDetail, onReviewSaved }) {
   if (!result) return <p className="empty">Loading system-suggested candidate groups…</p>
   if (!result.items.length) return <p className="empty">This ready result contains zero system-suggested candidate groups.</p>
@@ -123,7 +107,6 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
         <small>{group.group_size} records · {validationCoverageLabel(group.validation_coverage)}</small>
       </div><span className={`badge group-status ${group.group_status}`}>{groupReviewAuthorityLabel(group.review_state)}</span></div>
       <p><b>System evidence tier:</b> {groupEvidenceTierLabel(group.group_status)}</p>
-      <EvidenceStrength value={group.evidence_strength} />
       <p><b>Validation:</b> {validationModeLabel(group.validation_mode)}</p>
       <SystemExplanation explanation={group.system_explanation} compact />
       <p><b>Human authority:</b> {groupReviewLabel(group.review_state)}</p>
@@ -342,7 +325,7 @@ function ValidScanResults({ id }) {
       </div>
       <p className="banner">The system identifies records that may represent the same inventory identity. Suggestions require human review; no records are automatically merged, deleted, or changed in IFS.</p>
       {summaryError ? <div className={`error identity-${summaryError.kind}`} role="alert"><b>{summaryError.title}</b><p>{summaryError.message}</p></div> :
-        !summary ? <p>Loading authoritative identity summary…</p> : <><div className="cards compact-cards">
+        !summary ? <p>Loading authoritative identity summary…</p> : <div className="cards compact-cards">
           <article><label>Records scanned</label><strong>{summary.canonical_record_count}</strong></article>
           <article><label>System-Suggested Candidate Groups</label><strong>{summary.group_count}</strong><small>Advisory candidates requiring human review</small></article>
           <article><label>Stronger Evidence</label><strong>{summary.likely_group_count}</strong><small>Not a probability or confirmation</small></article>
@@ -353,13 +336,7 @@ function ValidScanResults({ id }) {
           <article><label>Conflicts</label><strong>{summary.conflict_count}</strong></article>
           <article><label>Deferred / unresolved</label><strong>{summary.deferred_count}</strong></article>
           <article><label>Not safely assigned</label><strong>{summary.unassigned_count}</strong><small>Not confirmed unique</small></article>
-        </div>
-        <section className="evidence-distribution" aria-label="Evidence Strength distribution">
-          <div><h3>Evidence Strength</h3><small>Deterministic support index, not a duplicate probability.</small></div>
-          <span><b>High Evidence</b><small>75–100</small><strong>{summary.evidence_strength_distribution?.['HIGH EVIDENCE'] ?? 0}</strong></span>
-          <span><b>Moderate Evidence</b><small>50–74</small><strong>{summary.evidence_strength_distribution?.['MODERATE EVIDENCE'] ?? 0}</strong></span>
-          <span><b>Limited Evidence</b><small>0–49</small><strong>{summary.evidence_strength_distribution?.['LIMITED EVIDENCE'] ?? 0}</strong></span>
-        </section></>}
+        </div>}
     </section>
 
     {view !== 'pairs' && <div className="view-toggle" role="tablist" aria-label="Identity result views">

@@ -1,17 +1,5 @@
 # Group-first inventory identity project SSOT
 
-## Group Evidence Strength Score V1
-
-`GROUP_EVIDENCE_SCORE_V1_VERIFIED`: final candidate groups now receive a
-read-only, versioned deterministic support index after GF5. The score is
-`100 * (Strong + 0.5 * Review) / Possible Relationships`, with High (75–100),
-Moderate (50–74), and Limited (0–49) reviewer-facing bands. It is explicitly
-not a probability, AI confidence, human decision, or detector input; Created
-date is excluded. API, UI, and the existing five-sheet formula-free XLSX expose
-the additive projection. The current 5,327-row Site-selected shadow scored all
-208 unchanged groups as 83 High / 125 Moderate / 0 Limited with zero provider
-calls. See `docs/GROUP_EVIDENCE_STRENGTH_SCORE_V1.md`.
-
 ## Selected Site is a request-scoped group constraint
 
 `REQUEST_SCOPED_SITE_CONSTRAINT_VERIFIED`: selecting Site (`CONTRACT`) now

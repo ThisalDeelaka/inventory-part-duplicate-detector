@@ -193,18 +193,6 @@ class SystemExplanationResponse(BaseModel):
     evidence_basis: list[str]
 
 
-class GroupEvidenceStrengthResponse(BaseModel):
-    evidence_score: float
-    evidence_band: str
-    evidence_score_version: str
-    possible_relationship_count: int
-    strong_relationship_count: int
-    review_relationship_count: int
-    non_groupable_relationship_count: int
-    support_density: float
-    strong_support_share: float
-
-
 class IdentityReadGroupResponse(BaseModel):
     versioned_group_key: str
     group_reference: str
@@ -219,7 +207,6 @@ class IdentityReadGroupResponse(BaseModel):
     bridge_risk_summary: dict[str, Any] | None = None
     genericity_risk_summary: dict[str, Any] | None = None
     missing_evidence_summary: dict[str, Any] | None = None
-    evidence_strength: GroupEvidenceStrengthResponse | None = None
     system_explanation: SystemExplanationResponse
     member_preview: list[dict[str, Any]] = Field(default_factory=list, max_length=3)
     review_state: GroupReviewStateResponse = Field(default_factory=GroupReviewStateResponse)
@@ -250,9 +237,6 @@ class IdentityReadSummaryApiResponse(BaseModel):
     deferred_count: int
     unassigned_count: int
     snapshot_fingerprint: str
-    evidence_score_version: str
-    scored_group_count: int
-    evidence_strength_distribution: dict[str, int]
 
 
 class IdentityReadOutcomesResponse(BaseModel):

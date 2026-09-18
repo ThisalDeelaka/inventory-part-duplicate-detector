@@ -54,17 +54,6 @@ export const groupStatusLabel = status => GROUP_STATUS_LABELS[status]
   || fallbackLabel(status, 'System-Suggested Candidate Group')
 export const groupEvidenceTierLabel = status => GROUP_EVIDENCE_TIERS[status]
   || 'Unspecified evidence'
-export function evidenceStrengthView(value) {
-  if (!value) return null
-  const score = Number(value.evidence_score)
-  const density = Number(value.support_density)
-  return {
-    scoreLabel: `${Number.isFinite(score) ? Math.round(score) : 0} / 100`,
-    bandLabel: String(value.evidence_band || 'Unspecified evidence')
-      .toLowerCase().replace(/\b\w/g, character => character.toUpperCase()),
-    densityLabel: `${Math.round((Number.isFinite(density) ? density : 0) * 100)}%`,
-  }
-}
 export const groupAuthorityLabel = (status, reviewState = {}) => (
   reviewState.reviewed
     ? HUMAN_AUTHORITY_LABELS[reviewState.current_decision_type] || 'Human Review Recorded'

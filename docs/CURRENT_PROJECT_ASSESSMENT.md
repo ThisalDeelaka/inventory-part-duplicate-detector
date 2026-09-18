@@ -1,17 +1,5 @@
 # Current project assessment
 
-## Group Evidence Strength is available as a read-only reviewer aid
-
-`GROUP_EVIDENCE_SCORE_V1_VERIFIED` /
-`DEMO_SAFE_WITH_GROUP_EVIDENCE_SCORE`: API, UI, and XLSX now expose a versioned
-deterministic evidence index over already-final GF5 groups. It uses only final
-Strong, Review, and Non-groupable relationship classes, fails closed on
-Cannot-link, and is explicitly not a duplicate probability. Created date,
-human outcomes, provider output, and raw Site/UOM values are not score inputs.
-The 5,327-row Site-selected shadow retained all 208 groups and produced 83 High,
-125 Moderate, and zero Limited groups; provider calls were zero. See
-`GROUP_EVIDENCE_STRENGTH_SCORE_V1.md`.
-
 ## Request-scoped Site constraint verified
 
 `REQUEST_SCOPED_SITE_CONSTRAINT_VERIFIED` /

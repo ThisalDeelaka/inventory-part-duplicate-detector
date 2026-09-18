@@ -98,13 +98,6 @@ def test_b3_group_first_without_v1_reads_only_v2(db, client):
     assert response.status_code == 200
     assert response.json()["projection"]["projection_contract"] == "G2_V2"
     assert response.json()["items"][0]["group_reference"] == group.versioned_group_key.group_reference
-    strength = response.json()["items"][0]["evidence_strength"]
-    assert strength["evidence_score_version"] == "GROUP_EVIDENCE_SCORE_V1"
-    assert strength["evidence_score"] == 50.0
-    assert strength["evidence_band"] == "MODERATE EVIDENCE"
-    summary = client.get(f"/api/scans/{scan.id}/identity-read/summary").json()
-    assert summary["scored_group_count"] == summary["group_count"] == 1
-    assert sum(summary["evidence_strength_distribution"].values()) == 1
 
 
 def test_b4_group_first_missing_v2_never_falls_back_to_existing_v1(db, client):
@@ -381,7 +374,6 @@ def test_progressive_v2_detail_api_preserves_two_of_three_without_synthetic_edge
     assert body["validation_coverage"]["possible_internal_pair_count"] == 3
     assert body["validation_coverage"]["missing_nonrequired_pair_count"] == 1
     assert len(body["internal_evidence"]) == 2
-    assert body["evidence_strength"] is None
     assert body["system_explanation"]["headline"] == "Potential Same-Identity Group - Requires Human Review"
     assert "2 of 2 evaluated relationships" in body["system_explanation"]["summary"]
     assert any(

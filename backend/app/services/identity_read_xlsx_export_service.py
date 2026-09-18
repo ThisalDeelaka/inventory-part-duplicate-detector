@@ -14,13 +14,6 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from app.core.constants import FIELD_DEFINITIONS
 from app.db.models import DuplicateScan
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
-from app.identity_read.group_evidence_strength import (
-    CREATED_DATE_POLICY,
-    GROUP_EVIDENCE_SCORE_VERSION,
-    EvidenceBand,
-    evidence_strength_distribution,
-    project_group_evidence_strength,
-)
 from app.services.identity_group_review_service import VersionedIdentityGroupReviewService
 from app.services.identity_group_presentation import (
     human_review_presentation,
@@ -42,13 +35,11 @@ SHEET_ORDER = (
     "Technical Reference",
 )
 GROUP_INDEX_COLUMNS = (
-    "Group", "Review Status", "Evidence", "Evidence Score", "Evidence Band",
-    "Members", "Sites",
+    "Group", "Review Status", "Evidence", "Members", "Sites",
     "Why Suggested", "Human Decision", "Human Comment",
 )
 REVIEW_GROUP_COLUMNS = (
-    "Group", "Review Status", "Evidence", "Evidence Score", "Evidence Band",
-    "Support Density", "Group Sites", "Why Suggested",
+    "Group", "Review Status", "Evidence", "Group Sites", "Why Suggested",
     "Human Decision", "Human Comment", "Member #", "Part Number",
     "Description", "Site", "UOM", "Part Type", "Commodity Group 01",
     "Commodity Group 02", "Safety Code", "Accounting Group", "Product Code",
@@ -64,8 +55,7 @@ DETAILED_DATA_COLUMNS = (
 TECHNICAL_REFERENCE_COLUMNS = (
     "Group", "Canonical Group ID", "Member #", "Part Number", "Source Row",
     "Stable Record Reference", "Projection Contract", "Source Projection Run",
-    "Original System Reason", "Score Name", "Score Version", "Score Formula",
-    "Score Bands", "Score Authority", "Created Date Policy",
+    "Original System Reason",
 )
 
 # Backward-compatible imports now describe the corresponding client sheets.
@@ -175,22 +165,11 @@ def _sites(member_rows) -> str:
 
 def _group_presentation(label: str, group, state: dict | None, member_rows) -> dict:
     review_state, human_decision = human_review_presentation(state)
-    strength = project_group_evidence_strength(group)
     return {
         "label": label,
         "canonical_id": serialize_versioned_identity_group_key(group.versioned_group_key),
         "review_status": review_state,
         "evidence": system_evidence_tier(group.status.value),
-        "evidence_score": (
-            round(strength.evidence_score, 2) if strength is not None else "Not available"
-        ),
-        "evidence_band": (
-            strength.evidence_band.value.title()
-            if strength is not None else "Not available"
-        ),
-        "support_density": (
-            f"{strength.support_density:.0%}" if strength is not None else "Not available"
-        ),
         "members": group.member_count,
         "sites": _sites(member_rows),
         "why": concise_reason_for_group_status(group.status.value),
@@ -418,29 +397,6 @@ def _write_overview(workbook, scan, snapshot, review_states) -> None:
         sheet, "E:H", "Deferred Families", snapshot.deferred_count, start_row=24,
     )
 
-    distribution = evidence_strength_distribution(snapshot.groups)
-    _merge_and_write(
-        sheet, "A28:H28", "EVIDENCE STRENGTH DISTRIBUTION",
-        fill=PatternFill("solid", fgColor=_NAVY),
-        font=Font(color=_WHITE, bold=True),
-        alignment=Alignment(horizontal="left", vertical="center"),
-    )
-    for columns, label, band in (
-        ("A:C", "High Evidence (75–100)", EvidenceBand.HIGH),
-        ("D:F", "Moderate Evidence (50–74)", EvidenceBand.MODERATE),
-        ("G:H", "Limited Evidence (0–49)", EvidenceBand.LIMITED),
-    ):
-        _write_kpi(
-            sheet, columns, label, distribution[band.value], start_row=29,
-        )
-    _merge_and_write(
-        sheet, "A32:H32",
-        "Evidence Strength is a deterministic support index, not a duplicate probability.",
-        fill=PatternFill("solid", fgColor=_PALE_GRAY),
-        font=Font(color=_TEXT, italic=True, size=9),
-        alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
-    )
-
     reviewed = sum(bool(state.get("reviewed")) for state in review_states.values())
     confirmed = sum(
         state.get("current_decision_type")
@@ -457,7 +413,7 @@ def _write_overview(workbook, scan, snapshot, review_states) -> None:
     )
     awaiting_review = snapshot.group_count - reviewed
     _merge_and_write(
-        sheet, "A34:H34", "HUMAN REVIEW PROGRESS",
+        sheet, "A28:H28", "HUMAN REVIEW PROGRESS",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -468,24 +424,24 @@ def _write_overview(workbook, scan, snapshot, review_states) -> None:
         ("Confirmed", confirmed),
         ("Rejected", rejected),
         ("Deferred by Reviewer", reviewer_deferred),
-    ), start=35):
+    ), start=29):
         _write_progress_row(sheet, row_number, label, value)
 
     _merge_and_write(
-        sheet, "A41:H42",
+        sheet, "A35:H36",
         WORKBOOK_NOTICE,
         fill=PatternFill("solid", fgColor=_PALE_GOLD),
         font=Font(color=_TEXT, bold=True),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
     _merge_and_write(
-        sheet, "A44:H44", "HOW TO USE THIS WORKBOOK",
+        sheet, "A38:H38", "HOW TO USE THIS WORKBOOK",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
     _merge_and_write(
-        sheet, "A45:H48",
+        sheet, "A39:H42",
         "1. Open Review Groups and inspect each suggested group.\n"
         "2. Record Confirm, Reject, or Defer decisions in the application using "
         "the source records and evidence.\n"
@@ -502,12 +458,12 @@ def _write_overview(workbook, scan, snapshot, review_states) -> None:
         ("Source Projection Run", snapshot.source_projection_run_id),
     )
     _merge_and_write(
-        sheet, "A50:H50", "REPORT DETAILS / TECHNICAL FOOTER",
+        sheet, "A44:H44", "REPORT DETAILS / TECHNICAL FOOTER",
         fill=PatternFill("solid", fgColor="5B7894"),
         font=Font(color=_WHITE, bold=True, size=10),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
-    for row_number, (label, value) in enumerate(metadata, start=51):
+    for row_number, (label, value) in enumerate(metadata, start=45):
         _merge_and_write(
             sheet, f"A{row_number}:B{row_number}", label,
             fill=PatternFill("solid", fgColor=_PALE_GRAY),
@@ -524,9 +480,7 @@ def _write_overview(workbook, scan, snapshot, review_states) -> None:
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    for row_number in (
-        1, 2, 3, 7, 8, 11, 12, 16, 17, 20, 21, 25, 26, 30, 31, 41, 42,
-    ):
+    for row_number in (1, 2, 3, 7, 8, 11, 12, 16, 17, 20, 21, 25, 26, 35, 36):
         sheet.row_dimensions[row_number].height = 24
     sheet.row_dimensions[11].height = 32
 
@@ -537,16 +491,15 @@ def _write_group_index(sheet, groups) -> None:
         p = item["presentation"]
         _write_row(
             sheet, row_number,
-            (p["label"], p["review_status"], p["evidence"], p["evidence_score"],
-             p["evidence_band"], p["members"], p["sites"], p["why"],
-             p["human_decision"], p["human_comment"]),
-            wrap_columns=(2, 5, 7, 8, 9, 10),
+            (p["label"], p["review_status"], p["evidence"], p["members"],
+             p["sites"], p["why"], p["human_decision"], p["human_comment"]),
+            wrap_columns=(2, 5, 6, 7, 8),
         )
         _style_state(sheet.cell(row_number, 2), p["review_status"])
         sheet.row_dimensions[row_number].height = 36
-    _set_widths(sheet, (16, 34, 20, 16, 20, 11, 22, 45, 32, 45))
+    _set_widths(sheet, (16, 34, 20, 11, 22, 45, 32, 45))
     if groups:
-        sheet.auto_filter.ref = f"A1:J{sheet.max_row}"
+        sheet.auto_filter.ref = f"A1:H{sheet.max_row}"
 
 
 def _write_review_groups(sheet, groups) -> None:
@@ -554,7 +507,7 @@ def _write_review_groups(sheet, groups) -> None:
     current_row = 2
     if not groups:
         _merge_and_write(
-            sheet, "A2:X3", "No candidate groups were generated for this scan.",
+            sheet, "A2:U3", "No candidate groups were generated for this scan.",
             fill=PatternFill("solid", fgColor=_PALE_GRAY),
             font=Font(color=_TEXT, italic=True),
             alignment=Alignment(horizontal="center", vertical="center"),
@@ -567,11 +520,10 @@ def _write_review_groups(sheet, groups) -> None:
             source = _source_values(member_row)
             _write_row(
                 sheet, current_row,
-                (p["label"], p["review_status"], p["evidence"],
-                 p["evidence_score"], p["evidence_band"], p["support_density"],
-                 p["sites"], p["why"], p["human_decision"], p["human_comment"],
+                (p["label"], p["review_status"], p["evidence"], p["sites"],
+                 p["why"], p["human_decision"], p["human_comment"],
                  member_number, *source),
-                wrap_columns=(2, 5, 7, 8, 9, 10, 13),
+                wrap_columns=(2, 4, 5, 6, 7, 10),
             )
             sheet.row_dimensions[current_row].height = 42
             current_row += 1
@@ -586,7 +538,7 @@ def _write_review_groups(sheet, groups) -> None:
                     top=_MEDIUM_BLUE if row_number == start_row else _THIN_GRAY,
                     bottom=_MEDIUM_BLUE if row_number == end_row else _THIN_GRAY,
                 )
-        for column_number in range(1, 11):
+        for column_number in range(1, 8):
             if end_row > start_row:
                 sheet.merge_cells(
                     start_row=start_row, start_column=column_number,
@@ -598,8 +550,8 @@ def _write_review_groups(sheet, groups) -> None:
         _style_state(sheet.cell(start_row, 2), p["review_status"])
     _set_widths(
         sheet,
-        (16, 34, 20, 16, 20, 16, 22, 42, 32, 42, 10, 20, 48, 18, 14, 18,
-         22, 22, 16, 20, 18, 20, 20, 18),
+        (16, 34, 20, 22, 42, 32, 42, 10, 20, 48, 18, 14, 18, 22, 22,
+         16, 20, 18, 20, 20, 18),
     )
 
 
@@ -648,20 +600,13 @@ def _write_technical_reference(sheet, groups, snapshot) -> None:
                  member_row.get("part_no"), member_row.get("source_row_reference"),
                  member_row.get("stable_record_reference"),
                  snapshot.projection_contract.value,
-                 snapshot.source_projection_run_id, p["original_reason"],
-                 "Group Evidence Strength Score", GROUP_EVIDENCE_SCORE_VERSION,
-                 "100 * (Strong + 0.5 * Review) / Possible Relationships",
-                 "High 75–100; Moderate 50–74; Limited 0–49",
-                 "Read-only advisory metric; not probability, AI confidence, or human decision",
-                 CREATED_DATE_POLICY),
-                wrap_columns=(2, 6, 9, 10, 11, 12, 13, 14, 15),
+                 snapshot.source_projection_run_id, p["original_reason"]),
+                wrap_columns=(2, 6, 9),
             )
             row_number += 1
-    _set_widths(
-        sheet, (16, 38, 10, 20, 14, 42, 22, 22, 58, 30, 30, 56, 45, 58, 42),
-    )
+    _set_widths(sheet, (16, 38, 10, 20, 14, 42, 22, 22, 58))
     if groups:
-        sheet.auto_filter.ref = f"A1:O{sheet.max_row}"
+        sheet.auto_filter.ref = f"A1:I{sheet.max_row}"
 
 
 def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
