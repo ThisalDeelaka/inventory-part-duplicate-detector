@@ -25,6 +25,32 @@ import { scanStatusLabel } from '../utils/productJourneyUi'
 
 const memberReference = member => member.stable_record_reference || member.record_ref_key
 
+const matchBandLabel = value => ({
+  HIGH_MATCH: 'High Match',
+  MODERATE_MATCH: 'Moderate Match',
+  BORDERLINE_MATCH: 'Borderline Match',
+}[value] || 'Unscored')
+
+function MatchStrength({ group, detailed = false }) {
+  if (group.match_strength_status !== 'SCORED') return <section className="match-strength" aria-label="Deterministic match strength">
+    <p><b>Match Strength:</b> Unscored</p>
+    <small>Deterministic evidence was not sufficient to calculate this advisory score.</small>
+  </section>
+  return <section className="match-strength" aria-label="Deterministic match strength">
+    <p><b>Match Strength:</b> {Number(group.match_strength).toFixed(2)} / 100 · {matchBandLabel(group.match_band)}</p>
+    <small>Deterministic evidence summary; not a probability or a human decision.</small>
+    {group.safety_status_message && <p className="warning">{group.safety_status_message}</p>}
+    {detailed && group.group_size >= 3 && <details><summary>How this group score was derived</summary>
+      <div className="metrics">
+        <span>Support density: {Number(group.support_density).toFixed(4)}</span>
+        <span>Lower quartile: {Number(group.lower_quartile_score).toFixed(2)}</span>
+        <span>Weakest member anchor: {Number(group.weakest_member_anchor).toFixed(2)}</span>
+        <span>Pair range: {Number(group.pair_score_min).toFixed(2)}–{Number(group.pair_score_max).toFixed(2)}</span>
+      </div>
+    </details>}
+  </section>
+}
+
 function MemberTable({ members }) {
   return <div className="table-wrap mini group-members"><table>
     <thead><tr><th>#</th><th>Site / Contract</th><th>Part No.</th><th>Description</th><th>UOM</th><th>Product category</th><th>HSN/SAC</th></tr></thead>
@@ -83,6 +109,7 @@ function AdvisoryEligibility({ scanId, detail }) {
 
 function GroupDetail({ scanId, detail, onReviewSaved }) {
   return <div className="group-detail">
+    <MatchStrength group={detail} detailed />
     <section><h3>All identity-set members</h3>
       <p><b>Projection-safe identity:</b> <code>{detail.versioned_group_key}</code></p>
       <MemberTable members={detail.members || []} />
@@ -107,6 +134,7 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
         <small>{group.group_size} records · {validationCoverageLabel(group.validation_coverage)}</small>
       </div><span className={`badge group-status ${group.group_status}`}>{groupReviewAuthorityLabel(group.review_state)}</span></div>
       <p><b>System evidence tier:</b> {groupEvidenceTierLabel(group.group_status)}</p>
+      <MatchStrength group={group} />
       <p><b>Validation:</b> {validationModeLabel(group.validation_mode)}</p>
       <SystemExplanation explanation={group.system_explanation} compact />
       <p><b>Human authority:</b> {groupReviewLabel(group.review_state)}</p>
@@ -330,6 +358,9 @@ function ValidScanResults({ id }) {
           <article><label>System-Suggested Candidate Groups</label><strong>{summary.group_count}</strong><small>Advisory candidates requiring human review</small></article>
           <article><label>Stronger Evidence</label><strong>{summary.likely_group_count}</strong><small>Not a probability or confirmation</small></article>
           <article><label>Review Evidence</label><strong>{summary.review_group_count}</strong><small>Requires Human Review</small></article>
+          <article><label>High Match</label><strong>{summary.match_strength_distribution?.HIGH_MATCH ?? 0}</strong><small>Deterministic advisory band</small></article>
+          <article><label>Moderate Match</label><strong>{summary.match_strength_distribution?.MODERATE_MATCH ?? 0}</strong><small>Deterministic advisory band</small></article>
+          <article><label>Borderline / Unscored</label><strong>{(summary.match_strength_distribution?.BORDERLINE_MATCH ?? 0) + (summary.match_strength_distribution?.UNSCORED ?? 0)}</strong><small>Requires evidence review</small></article>
           <article><label>Human Confirmed Groups</label><strong>{reviewedExportState.affirmative_groups ?? '…'}</strong></article>
           <article><label>Human Rejected Candidates</label><strong>{reviewedExportState.rejected_groups ?? '…'}</strong></article>
           <article><label>Review Deferred / Unreviewed</label><strong>{reviewedExportState.status === 'ready' ? (reviewedExportState.deferred_groups + reviewedExportState.unreviewed_groups) : '…'}</strong></article>

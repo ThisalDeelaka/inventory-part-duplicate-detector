@@ -78,6 +78,11 @@ from app.services.identity_read_service import (
     IdentityReadService,
 )
 from app.llm.group_contracts import group_advisory_request_fingerprint
+from app.match_strength.service import (
+    MatchStrengthProjectionService,
+    match_strength_distribution,
+    match_strength_payload,
+)
 from app.services.group_llm_eligibility import GroupAdvisoryContractService
 
 
@@ -120,7 +125,7 @@ def _read_projection(snapshot):
     }
 
 
-def _read_group(group, *, detail=False, review_state=None):
+def _read_group(group, *, match_strength, detail=False, review_state=None):
     payload = {
         "versioned_group_key": serialize_versioned_identity_group_key(
             group.versioned_group_key
@@ -140,6 +145,7 @@ def _read_group(group, *, detail=False, review_state=None):
         "system_explanation": canonical_value(explain_identity_group(group)),
         "member_preview": [canonical_value(item) for item in group.members[:3]],
         "review_state": review_state or {"reviewed": False},
+        **match_strength_payload(match_strength, group_status=group.status.value),
     }
     if detail:
         payload["members"] = [canonical_value(item) for item in group.members]
@@ -155,12 +161,14 @@ def authoritative_identity_summary(scan_id: int, db: Session = Depends(get_db)):
     snapshot = _identity_read_safe(
         lambda: IdentityReadService(db).load_identity_read_snapshot(scan_id)
     )
+    strengths = MatchStrengthProjectionService(db).project_groups(snapshot.groups)
     return {
         "snapshot_available": True,
         "read_ready": True,
         "projection": _read_projection(snapshot),
         **canonical_value(snapshot.summary),
         "snapshot_fingerprint": snapshot.snapshot_fingerprint,
+        "match_strength_distribution": match_strength_distribution(strengths.values()),
     }
 
 
@@ -191,12 +199,14 @@ def authoritative_identity_groups(
     review_states = VersionedIdentityGroupReviewService(db).current_states_for_snapshot(
         snapshot
     )
+    strengths = MatchStrengthProjectionService(db).project_groups(snapshot.groups)
     items = groups[offset:offset + limit]
     return {
         "projection": _read_projection(snapshot), "limit": limit, "offset": offset,
         "total": len(groups), "items": [
             _read_group(
                 item,
+                match_strength=strengths[item.versioned_group_key],
                 review_state=review_states.get(
                     serialize_versioned_identity_group_key(item.versioned_group_key)
                 ),
@@ -218,7 +228,8 @@ def authoritative_identity_group_detail(
     group = _identity_read_safe(
         lambda: IdentityReadService(db).load_identity_read_group(scan_id, key)
     )
-    return _read_group(group, detail=True)
+    strength = MatchStrengthProjectionService(db).project_group(group)
+    return _read_group(group, match_strength=strength, detail=True)
 
 
 @router.get(

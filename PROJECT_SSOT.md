@@ -775,3 +775,13 @@ Review Evidence groups, all requiring human review. Detector/GF5 semantics,
 membership, decisions, API/CSV contracts, frontend behavior, and provider calls
 remain unchanged; provider calls are zero. The containing commit subject is
 `Polish client XLSX review experience`.
+
+## Deterministic Match Strength V2
+
+`DETERMINISTIC_MATCH_STRENGTH_V2` is an additive, read-only post-GF5 advisory
+projection. It uses only persisted, semantically verified deterministic edge
+scores and never reruns the evaluator or calls a provider. The 5,327-row shadow
+gate preserved detector invariants S0-S10 exactly and scored all 208 accepted
+groups (117 high, 91 moderate). API, UI, CSV, and five-sheet XLSX presentation
+are authorized; group authority, membership, signed evidence tiers, human
+review decisions, and detector semantics remain unchanged.

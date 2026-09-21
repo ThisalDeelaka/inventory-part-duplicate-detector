@@ -1677,3 +1677,15 @@ review-state, empty-state, long-comment, formula-safety, and zero-provider-call
 checks pass. No detector, GF4/GF5/GF6, membership, review authority, API/CSV,
 frontend, migration, or provider behavior changed. The containing reference
 commit has subject `Polish client XLSX review experience`.
+
+## Deterministic Match Strength V2
+
+The project now has a deterministic group-level Match Strength advisory derived
+after GF5 from persisted verified evidence. Two-member groups retain their exact
+edge score; larger groups use the lower quartile, weakest-member anchor, and
+support density. Missing or unverifiable evidence fails closed to a typed
+unscored result. The protected 5,327-row provider-disabled shadow gate preserved
+all detector outputs and S0-S10 invariants, with 208 of 208 groups scored. The
+feature is presentation-only across typed read APIs, frontend, CSV, and the
+existing five-sheet XLSX. It is not a probability, merge decision, evidence
+tier, or replacement for human review.

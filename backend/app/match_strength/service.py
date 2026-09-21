@@ -30,7 +30,9 @@ class MatchStrengthProjectionService:
             item.evidence_fingerprint
             for group in groups
             for item in group.internal_evidence
-            if item.evidence_origin == G2V2EvidenceOrigin.PROPOSAL_EVIDENCE
+            if getattr(item, "evidence_origin", None)
+            == G2V2EvidenceOrigin.PROPOSAL_EVIDENCE
+            and getattr(item, "evidence_fingerprint", None)
         }
         proposal_rows = (
             self.db.query(IdentityEvidenceEdgeSnapshot)
@@ -56,6 +58,15 @@ class MatchStrengthProjectionService:
         if (
             group.versioned_group_key.projection_contract
             != IdentityReadProjectionContract.G2_V2
+        ):
+            return project_match_strength(
+                tuple(item.stable_record_reference for item in group.members),
+                (),
+                evidence_snapshot_compatible=False,
+            )
+        if any(
+            not hasattr(item, "evidence_origin")
+            for item in group.internal_evidence
         ):
             return project_match_strength(
                 tuple(item.stable_record_reference for item in group.members),

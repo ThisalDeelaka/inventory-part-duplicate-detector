@@ -1,4 +1,8 @@
+import csv
+import io
+
 import pandas as pd
+from openpyxl import load_workbook
 from unittest.mock import patch
 
 from app.match_strength.contracts import MatchBand, MatchStrengthStatus
@@ -12,7 +16,7 @@ from app.services.scan_runner import ScanRunner
 from test_group_first_scan_orchestration import configuration
 
 
-def test_persisted_projection_scores_without_evaluator_rerun(db):
+def test_persisted_projection_scores_without_evaluator_rerun(db, client):
     records = pd.DataFrame([
         {"PART_NO": "A", "DESCRIPTION": "SKF 6205 BEARING", "CONTRACT": "S1", "UNIT_MEAS": "PCS"},
         {"PART_NO": "B", "DESCRIPTION": "SKF BEARING 6205", "CONTRACT": "S1", "UNIT_MEAS": "PCS"},
@@ -29,6 +33,45 @@ def test_persisted_projection_scores_without_evaluator_rerun(db):
         projected = MatchStrengthProjectionService(db).project_groups(snapshot.groups)
     assert projected
     assert all(result.status == MatchStrengthStatus.SCORED for result in projected.values())
+
+    summary = client.get(f"/api/scans/{scan_id}/identity-read/summary")
+    listing = client.get(f"/api/scans/{scan_id}/identity-read/groups")
+    assert summary.status_code == listing.status_code == 200
+    summary_payload = summary.json()
+    listed = listing.json()["items"]
+    assert sum(summary_payload["match_strength_distribution"].values()) == summary_payload["group_count"]
+    assert all(item["match_strength_status"] == "SCORED" for item in listed)
+    assert all(item["match_strength_version"] == "DETERMINISTIC_MATCH_STRENGTH_V2" for item in listed)
+
+    detail = client.get(
+        f"/api/scans/{scan_id}/identity-read/groups/{listed[0]['versioned_group_key']}"
+    ).json()
+    assert detail["match_strength"] == listed[0]["match_strength"]
+    assert detail["match_band"] == listed[0]["match_band"]
+
+    csv_response = client.get(
+        f"/api/scans/{scan_id}/identity-read/system-groups/export.csv"
+    )
+    csv_rows = list(csv.DictReader(io.StringIO(csv_response.text)))
+    assert csv_rows and all(row["match_strength"] for row in csv_rows)
+    assert all(row["match_strength_version"] == "DETERMINISTIC_MATCH_STRENGTH_V2" for row in csv_rows)
+
+    xlsx_response = client.get(
+        f"/api/scans/{scan_id}/identity-read/system-groups/export.xlsx"
+    )
+    workbook = load_workbook(io.BytesIO(xlsx_response.content), data_only=False)
+    assert workbook.sheetnames == [
+        "Overview", "Review Groups", "Group Index", "Detailed Data",
+        "Technical Reference",
+    ]
+    assert "Match Strength" in tuple(cell.value for cell in workbook["Group Index"][1])
+    assert "Match Strength Version" in tuple(
+        cell.value for cell in workbook["Technical Reference"][1]
+    )
+    assert not any(
+        isinstance(cell.value, str) and cell.value.startswith("=")
+        for sheet in workbook.worksheets for row in sheet.iter_rows() for cell in row
+    )
 
 
 def test_distribution_and_high_review_crossover_are_independent():

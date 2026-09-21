@@ -210,6 +210,19 @@ class IdentityReadGroupResponse(BaseModel):
     system_explanation: SystemExplanationResponse
     member_preview: list[dict[str, Any]] = Field(default_factory=list, max_length=3)
     review_state: GroupReviewStateResponse = Field(default_factory=GroupReviewStateResponse)
+    match_strength: float | None = None
+    match_band: str | None = None
+    match_strength_version: str
+    match_strength_status: str
+    match_strength_unscored_reason: str | None = None
+    support_density: float | None = None
+    lower_quartile_score: float | None = None
+    weakest_member_anchor: float | None = None
+    pair_score_min: float | None = None
+    pair_score_median: float | None = None
+    pair_score_max: float | None = None
+    safety_status_crossover: bool = False
+    safety_status_message: str | None = None
 
 
 class IdentityReadGroupDetailResponse(IdentityReadGroupResponse):
@@ -237,6 +250,7 @@ class IdentityReadSummaryApiResponse(BaseModel):
     deferred_count: int
     unassigned_count: int
     snapshot_fingerprint: str
+    match_strength_distribution: dict[str, int]
 
 
 class IdentityReadOutcomesResponse(BaseModel):

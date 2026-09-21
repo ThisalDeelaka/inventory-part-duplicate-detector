@@ -36,7 +36,8 @@ SHEET_ORDER = (
 )
 GROUP_INDEX_COLUMNS = (
     "Group", "Review Status", "Evidence", "Members", "Sites",
-    "Why Suggested", "Human Decision", "Human Comment",
+    "Why Suggested", "Human Decision", "Human Comment", "Match Strength",
+    "Match Band",
 )
 REVIEW_GROUP_COLUMNS = (
     "Group", "Review Status", "Evidence", "Group Sites", "Why Suggested",
@@ -44,6 +45,7 @@ REVIEW_GROUP_COLUMNS = (
     "Description", "Site", "UOM", "Part Type", "Commodity Group 01",
     "Commodity Group 02", "Safety Code", "Accounting Group", "Product Code",
     "Product Family", "Product Category", "HSN/SAC Code",
+    "Match Strength", "Match Band",
 )
 DETAILED_DATA_COLUMNS = (
     "Group", "Review Status", "Evidence", "Members", "Group Sites",
@@ -51,11 +53,16 @@ DETAILED_DATA_COLUMNS = (
     "Inventory UOM", "Part Type", "Commodity Group 01", "Commodity Group 02",
     "Safety Code", "Accounting Group", "Product Code", "Product Family",
     "Product Category", "HSN/SAC Code",
+    "Match Strength", "Match Band",
 )
 TECHNICAL_REFERENCE_COLUMNS = (
     "Group", "Canonical Group ID", "Member #", "Part Number", "Source Row",
     "Stable Record Reference", "Projection Contract", "Source Projection Run",
     "Original System Reason",
+    "Match Strength Version", "Match Strength Status", "Unscored Reason",
+    "Support Density", "Lower Quartile Score", "Weakest Member Anchor",
+    "Pair Score Minimum", "Pair Score Median", "Pair Score Maximum",
+    "Safety Status Crossover", "Safety Status Message",
 )
 
 # Backward-compatible imports now describe the corresponding client sheets.
@@ -176,6 +183,19 @@ def _group_presentation(label: str, group, state: dict | None, member_rows) -> d
         "original_reason": reason_for_group_status(group.status.value),
         "human_decision": human_decision,
         "human_comment": (state or {}).get("comment") or "",
+        "match_strength": member_rows[0].get("match_strength") if member_rows else None,
+        "match_band": member_rows[0].get("match_band") if member_rows else None,
+        "match_strength_version": member_rows[0].get("match_strength_version") if member_rows else None,
+        "match_strength_status": member_rows[0].get("match_strength_status") if member_rows else None,
+        "match_strength_unscored_reason": member_rows[0].get("match_strength_unscored_reason") if member_rows else None,
+        "support_density": member_rows[0].get("support_density") if member_rows else None,
+        "lower_quartile_score": member_rows[0].get("lower_quartile_score") if member_rows else None,
+        "weakest_member_anchor": member_rows[0].get("weakest_member_anchor") if member_rows else None,
+        "pair_score_min": member_rows[0].get("pair_score_min") if member_rows else None,
+        "pair_score_median": member_rows[0].get("pair_score_median") if member_rows else None,
+        "pair_score_max": member_rows[0].get("pair_score_max") if member_rows else None,
+        "safety_status_crossover": member_rows[0].get("safety_status_crossover") if member_rows else False,
+        "safety_status_message": member_rows[0].get("safety_status_message") if member_rows else None,
     }
 
 
@@ -322,7 +342,7 @@ def _write_progress_row(sheet, row_number: int, label: str, value) -> None:
     )
 
 
-def _write_overview(workbook, scan, snapshot, review_states) -> None:
+def _write_overview(workbook, scan, snapshot, review_states, strength_distribution) -> None:
     sheet = workbook.active
     sheet.title = "Overview"
     sheet.sheet_view.showGridLines = False
@@ -476,6 +496,19 @@ def _write_overview(workbook, scan, snapshot, review_states) -> None:
             font=Font(color="5B7894", size=9),
             alignment=Alignment(vertical="center", wrap_text=True),
         )
+    _merge_and_write(
+        sheet, "A51:H51", "DETERMINISTIC MATCH STRENGTH",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    for row_number, (label, value) in enumerate((
+        ("High Match", strength_distribution["HIGH_MATCH"]),
+        ("Moderate Match", strength_distribution["MODERATE_MATCH"]),
+        ("Borderline Match", strength_distribution["BORDERLINE_MATCH"]),
+        ("Unscored", strength_distribution["UNSCORED"]),
+    ), start=52):
+        _write_progress_row(sheet, row_number, label, value)
     sheet.freeze_panes = "A6"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
@@ -492,14 +525,17 @@ def _write_group_index(sheet, groups) -> None:
         _write_row(
             sheet, row_number,
             (p["label"], p["review_status"], p["evidence"], p["members"],
-             p["sites"], p["why"], p["human_decision"], p["human_comment"]),
+             p["sites"], p["why"], p["human_decision"], p["human_comment"],
+             p["match_strength"], p["match_band"]),
             wrap_columns=(2, 5, 6, 7, 8),
         )
         _style_state(sheet.cell(row_number, 2), p["review_status"])
         sheet.row_dimensions[row_number].height = 36
-    _set_widths(sheet, (16, 34, 20, 11, 22, 45, 32, 45))
+    _set_widths(sheet, (16, 34, 20, 11, 22, 45, 32, 45, 16, 20))
     if groups:
-        sheet.auto_filter.ref = f"A1:H{sheet.max_row}"
+        sheet.auto_filter.ref = (
+            f"A1:{get_column_letter(len(GROUP_INDEX_COLUMNS))}{sheet.max_row}"
+        )
 
 
 def _write_review_groups(sheet, groups) -> None:
@@ -522,7 +558,7 @@ def _write_review_groups(sheet, groups) -> None:
                 sheet, current_row,
                 (p["label"], p["review_status"], p["evidence"], p["sites"],
                  p["why"], p["human_decision"], p["human_comment"],
-                 member_number, *source),
+                 member_number, *source, p["match_strength"], p["match_band"]),
                 wrap_columns=(2, 4, 5, 6, 7, 10),
             )
             sheet.row_dimensions[current_row].height = 42
@@ -551,7 +587,7 @@ def _write_review_groups(sheet, groups) -> None:
     _set_widths(
         sheet,
         (16, 34, 20, 22, 42, 32, 42, 10, 20, 48, 18, 14, 18, 22, 22,
-         16, 20, 18, 20, 20, 18),
+         16, 20, 18, 20, 20, 18, 16, 20),
     )
 
 
@@ -565,7 +601,7 @@ def _write_detailed_data(sheet, groups) -> None:
                 sheet, row_number,
                 (p["label"], p["review_status"], p["evidence"], p["members"],
                  p["sites"], p["human_decision"], p["human_comment"],
-                 *_source_values(member_row)),
+                 *_source_values(member_row), p["match_strength"], p["match_band"]),
                 wrap_columns=(2, 5, 6, 7, 9),
             )
             _style_state(sheet.cell(row_number, 2), p["review_status"])
@@ -574,7 +610,7 @@ def _write_detailed_data(sheet, groups) -> None:
     _set_widths(
         sheet,
         (16, 34, 20, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
-         20, 18, 20, 20, 18),
+         20, 18, 20, 20, 18, 16, 20),
     )
     if sheet.max_row >= 2:
         table = Table(
@@ -600,13 +636,24 @@ def _write_technical_reference(sheet, groups, snapshot) -> None:
                  member_row.get("part_no"), member_row.get("source_row_reference"),
                  member_row.get("stable_record_reference"),
                  snapshot.projection_contract.value,
-                 snapshot.source_projection_run_id, p["original_reason"]),
-                wrap_columns=(2, 6, 9),
+                 snapshot.source_projection_run_id, p["original_reason"],
+                 p["match_strength_version"], p["match_strength_status"],
+                 p["match_strength_unscored_reason"], p["support_density"],
+                 p["lower_quartile_score"], p["weakest_member_anchor"],
+                 p["pair_score_min"], p["pair_score_median"], p["pair_score_max"],
+                 p["safety_status_crossover"], p["safety_status_message"]),
+                wrap_columns=(2, 6, 9, 20),
             )
             row_number += 1
-    _set_widths(sheet, (16, 38, 10, 20, 14, 42, 22, 22, 58))
+    _set_widths(
+        sheet,
+        (16, 38, 10, 20, 14, 42, 22, 22, 58, 34, 22, 28, 16, 20, 22,
+         18, 18, 18, 22, 58),
+    )
     if groups:
-        sheet.auto_filter.ref = f"A1:I{sheet.max_row}"
+        sheet.auto_filter.ref = (
+            f"A1:{get_column_letter(len(TECHNICAL_REFERENCE_COLUMNS))}{sheet.max_row}"
+        )
 
 
 def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
@@ -632,8 +679,25 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
             "member_rows": member_rows,
         })
 
+    strength_distribution = {
+        "HIGH_MATCH": 0,
+        "MODERATE_MATCH": 0,
+        "BORDERLINE_MATCH": 0,
+        "UNSCORED": 0,
+    }
+    for item in groups:
+        presentation = item["presentation"]
+        key = (
+            presentation["match_band"]
+            if presentation["match_strength_status"] == "SCORED"
+            else "UNSCORED"
+        )
+        strength_distribution[key] += 1
+
     workbook = Workbook()
-    _write_overview(workbook, scan, snapshot, review_states)
+    _write_overview(
+        workbook, scan, snapshot, review_states, strength_distribution
+    )
     review_groups = workbook.create_sheet("Review Groups")
     group_index = workbook.create_sheet("Group Index")
     detailed_data = workbook.create_sheet("Detailed Data")
