@@ -60,6 +60,9 @@ carry the same projection; the workbook overview contains band counts and its
 technical sheet contains the version, status, reason, and derivation metrics.
 Human-review fields and workflow remain unchanged.
 
+Detailed Data remains record-oriented; group Match Strength is presented in
+group-oriented sheets.
+
 ## Shadow validation
 
 Before visible integration, the provider-disabled 5,327-row protected CSV

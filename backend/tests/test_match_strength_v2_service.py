@@ -12,6 +12,9 @@ from app.match_strength.service import (
     match_strength_payload,
 )
 from app.services.identity_read_service import IdentityReadService
+from app.services.identity_read_xlsx_export_service import (
+    TECHNICAL_REFERENCE_HEADER_ROW,
+)
 from app.services.scan_runner import ScanRunner
 from test_group_first_scan_orchestration import configuration
 
@@ -66,7 +69,8 @@ def test_persisted_projection_scores_without_evaluator_rerun(db, client):
     ]
     assert "Match Strength" in tuple(cell.value for cell in workbook["Group Index"][1])
     assert "Match Strength Version" in tuple(
-        cell.value for cell in workbook["Technical Reference"][1]
+        cell.value
+        for cell in workbook["Technical Reference"][TECHNICAL_REFERENCE_HEADER_ROW]
     )
     assert not any(
         isinstance(cell.value, str) and cell.value.startswith("=")

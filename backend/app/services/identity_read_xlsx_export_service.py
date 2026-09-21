@@ -53,7 +53,6 @@ DETAILED_DATA_COLUMNS = (
     "Inventory UOM", "Part Type", "Commodity Group 01", "Commodity Group 02",
     "Safety Code", "Accounting Group", "Product Code", "Product Family",
     "Product Category", "HSN/SAC Code",
-    "Match Strength", "Match Band",
 )
 TECHNICAL_REFERENCE_COLUMNS = (
     "Group", "Canonical Group ID", "Member #", "Part Number", "Source Row",
@@ -63,6 +62,56 @@ TECHNICAL_REFERENCE_COLUMNS = (
     "Support Density", "Lower Quartile Score", "Weakest Member Anchor",
     "Pair Score Minimum", "Pair Score Median", "Pair Score Maximum",
     "Safety Status Crossover", "Safety Status Message",
+)
+TECHNICAL_REFERENCE_HEADER_ROW = 15
+
+MATCH_STRENGTH_OVERVIEW_NOTE = (
+    "Match Strength summarizes deterministic comparison evidence. It is not a "
+    "probability of duplication and does not replace human review."
+)
+MATCH_STRENGTH_TECHNICAL_CONTRACT = (
+    ("Version", "DETERMINISTIC_MATCH_STRENGTH_V2"),
+    (
+        "Two-member rule",
+        "Match Strength = exact persisted deterministic supporting-edge score",
+    ),
+    (
+        "P25",
+        "position = (number_of_supporting_scores - 1) × 0.25; P25 uses "
+        "deterministic linear interpolation at that position.",
+    ),
+    (
+        "Weakest-member anchor",
+        "member_best_support(member) = maximum incident supporting-edge score; "
+        "weakest_member_anchor = minimum member_best_support across members.",
+    ),
+    (
+        "Three-or-more-member formula",
+        "base_strength = min(P25, weakest_member_anchor); support_density = "
+        "supporting_internal_pairs / possible_internal_pairs; Match Strength = "
+        "round_half_even(base_strength × support_density, 2).",
+    ),
+    (
+        "Bands",
+        "High Match 90–100; Moderate Match 60–<90; Borderline Match 0–<60.",
+    ),
+    (
+        "Threshold origin",
+        "The 90 and 60 numeric boundaries come from the existing deterministic "
+        "evaluator's numeric thresholds.",
+    ),
+    (
+        "Evidence Tier authority",
+        "The numeric band does not replace the authoritative signed Evidence Tier. "
+        "A numerically High Match may remain Review Evidence when deterministic "
+        "safety rules require review.",
+    ),
+    ("Created Date", "Created Date is not included in Match Strength."),
+    (
+        "Non-authority boundary",
+        "Match Strength is not duplicate probability, AI confidence, a human "
+        "review decision, or a GF4/GF5 authority input.",
+    ),
 )
 
 # Backward-compatible imports now describe the corresponding client sheets.
@@ -213,16 +262,18 @@ def _write_row(sheet, row_number: int, values, *, wrap_columns=()) -> None:
         )
 
 
-def _write_header(sheet, columns) -> None:
-    _write_row(sheet, 1, columns, wrap_columns=range(1, len(columns) + 1))
-    for cell in sheet[1]:
+def _write_header(sheet, columns, *, row_number: int = 1) -> None:
+    _write_row(
+        sheet, row_number, columns, wrap_columns=range(1, len(columns) + 1)
+    )
+    for cell in sheet[row_number]:
         cell.fill = _HEADER_FILL
         cell.font = _HEADER_FONT
         cell.alignment = Alignment(
             horizontal="center", vertical="center", wrap_text=True
         )
-    sheet.freeze_panes = "A2"
-    sheet.row_dimensions[1].height = 34
+    sheet.freeze_panes = f"A{row_number + 1}"
+    sheet.row_dimensions[row_number].height = 34
     sheet.sheet_view.showGridLines = False
 
 
@@ -503,12 +554,18 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         alignment=Alignment(horizontal="left", vertical="center"),
     )
     for row_number, (label, value) in enumerate((
-        ("High Match", strength_distribution["HIGH_MATCH"]),
-        ("Moderate Match", strength_distribution["MODERATE_MATCH"]),
-        ("Borderline Match", strength_distribution["BORDERLINE_MATCH"]),
+        ("High Match (90–100)", strength_distribution["HIGH_MATCH"]),
+        ("Moderate Match (60–<90)", strength_distribution["MODERATE_MATCH"]),
+        ("Borderline Match (0–<60)", strength_distribution["BORDERLINE_MATCH"]),
         ("Unscored", strength_distribution["UNSCORED"]),
     ), start=52):
         _write_progress_row(sheet, row_number, label, value)
+    _merge_and_write(
+        sheet, "A57:H59", MATCH_STRENGTH_OVERVIEW_NOTE,
+        fill=PatternFill("solid", fgColor=_PALE_GRAY),
+        font=Font(color="5B7894", italic=True, size=9),
+        alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
+    )
     sheet.freeze_panes = "A6"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
@@ -601,7 +658,7 @@ def _write_detailed_data(sheet, groups) -> None:
                 sheet, row_number,
                 (p["label"], p["review_status"], p["evidence"], p["members"],
                  p["sites"], p["human_decision"], p["human_comment"],
-                 *_source_values(member_row), p["match_strength"], p["match_band"]),
+                 *_source_values(member_row)),
                 wrap_columns=(2, 5, 6, 7, 9),
             )
             _style_state(sheet.cell(row_number, 2), p["review_status"])
@@ -610,7 +667,7 @@ def _write_detailed_data(sheet, groups) -> None:
     _set_widths(
         sheet,
         (16, 34, 20, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
-         20, 18, 20, 20, 18, 16, 20),
+         20, 18, 20, 20, 18),
     )
     if sheet.max_row >= 2:
         table = Table(
@@ -625,8 +682,40 @@ def _write_detailed_data(sheet, groups) -> None:
 
 
 def _write_technical_reference(sheet, groups, snapshot) -> None:
-    _write_header(sheet, TECHNICAL_REFERENCE_COLUMNS)
-    row_number = 2
+    sheet.sheet_view.showGridLines = False
+    _merge_and_write(
+        sheet, "A1:H1", "MATCH STRENGTH V2 CONTRACT",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True, size=14),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    for row_number, (label, definition) in enumerate(
+        MATCH_STRENGTH_TECHNICAL_CONTRACT, start=2
+    ):
+        _merge_and_write(
+            sheet, f"A{row_number}:B{row_number}", label,
+            fill=PatternFill("solid", fgColor=_PALE_GRAY),
+            font=Font(color=_NAVY, bold=True, size=9),
+            alignment=Alignment(vertical="center", wrap_text=True),
+        )
+        _merge_and_write(
+            sheet, f"C{row_number}:H{row_number}", definition,
+            fill=PatternFill("solid", fgColor=_WHITE),
+            font=Font(color=_TEXT, size=9),
+            alignment=Alignment(vertical="center", wrap_text=True),
+        )
+        sheet.row_dimensions[row_number].height = 34
+    _merge_and_write(
+        sheet, "A14:H14", "GROUP AUDIT DATA",
+        fill=PatternFill("solid", fgColor="5B7894"),
+        font=Font(color=_WHITE, bold=True, size=10),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    _write_header(
+        sheet, TECHNICAL_REFERENCE_COLUMNS,
+        row_number=TECHNICAL_REFERENCE_HEADER_ROW,
+    )
+    row_number = TECHNICAL_REFERENCE_HEADER_ROW + 1
     for item in groups:
         p = item["presentation"]
         for member_number, member_row in enumerate(item["member_rows"], start=1):
@@ -652,7 +741,8 @@ def _write_technical_reference(sheet, groups, snapshot) -> None:
     )
     if groups:
         sheet.auto_filter.ref = (
-            f"A1:{get_column_letter(len(TECHNICAL_REFERENCE_COLUMNS))}{sheet.max_row}"
+            f"A{TECHNICAL_REFERENCE_HEADER_ROW}:"
+            f"{get_column_letter(len(TECHNICAL_REFERENCE_COLUMNS))}{sheet.max_row}"
         )
 
 

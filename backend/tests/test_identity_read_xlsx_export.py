@@ -27,6 +27,7 @@ from app.services.identity_read_xlsx_export_service import (
     REVIEW_GROUP_COLUMNS,
     SHEET_ORDER,
     TECHNICAL_REFERENCE_COLUMNS,
+    TECHNICAL_REFERENCE_HEADER_ROW,
     WORKBOOK_NOTICE,
     authority_selected_system_groups_to_xlsx,
     concise_reason_for_group_status,
@@ -47,6 +48,16 @@ def _rows(sheet):
 def _dict_rows(sheet):
     headers = tuple(cell.value for cell in sheet[1])
     return [dict(zip(headers, row, strict=True)) for row in _rows(sheet)]
+
+
+def _technical_rows(sheet):
+    headers = tuple(cell.value for cell in sheet[TECHNICAL_REFERENCE_HEADER_ROW])
+    return [
+        dict(zip(headers, row, strict=True))
+        for row in sheet.iter_rows(
+            min_row=TECHNICAL_REFERENCE_HEADER_ROW + 1, values_only=True
+        )
+    ]
 
 
 def _add_scan(db, scan_id=21):
@@ -132,8 +143,11 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
     assert tuple(cell.value for cell in index[1]) == GROUP_INDEX_COLUMNS
     assert tuple(cell.value for cell in flat[1]) == DETAILED_DATA_COLUMNS
-    assert tuple(cell.value for cell in technical[1]) == TECHNICAL_REFERENCE_COLUMNS
-    assert all(sheet.freeze_panes == "A2" for sheet in (review, index, flat, technical))
+    assert tuple(
+        cell.value for cell in technical[TECHNICAL_REFERENCE_HEADER_ROW]
+    ) == TECHNICAL_REFERENCE_COLUMNS
+    assert all(sheet.freeze_panes == "A2" for sheet in (review, index, flat))
+    assert technical.freeze_panes == f"A{TECHNICAL_REFERENCE_HEADER_ROW + 1}"
     assert not flat.merged_cells.ranges
     assert flat.auto_filter.ref is None
     assert flat.tables["SystemGroupData"].ref == (
@@ -142,7 +156,7 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
 
     csv_rows = list(csv.DictReader(io.StringIO(csv_response.text)))
     detail_rows = _dict_rows(flat)
-    tech_rows = _dict_rows(technical)
+    tech_rows = _technical_rows(technical)
     assert len(detail_rows) == len(tech_rows) == len(csv_rows) == group.member_count
     assert {row["Group"] for row in detail_rows} == {"CG-000001"}
     assert {row["Review Status"] for row in detail_rows} == {"Review Deferred"}
@@ -175,6 +189,57 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     )
     assert [row["Member #"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
+    )
+
+
+def test_match_strength_xlsx_presentation_is_group_scoped_and_auditable(db):
+    scan = review_scan(db)
+    workbook = _workbook(authority_selected_system_groups_to_xlsx(db, scan.id))
+
+    overview_text = " ".join(
+        str(cell.value) for row in workbook["Overview"].iter_rows() for cell in row
+        if cell.value is not None
+    )
+    assert "High Match (90–100)" in overview_text
+    assert "Moderate Match (60–<90)" in overview_text
+    assert "Borderline Match (0–<60)" in overview_text
+    assert "not a probability of duplication" in overview_text
+    assert "does not replace human review" in overview_text
+
+    detailed_headers = tuple(cell.value for cell in workbook["Detailed Data"][1])
+    assert "Match Strength" not in detailed_headers
+    assert "Match Band" not in detailed_headers
+    assert detailed_headers == DETAILED_DATA_COLUMNS
+
+    technical_text = " ".join(
+        str(cell.value)
+        for row in workbook["Technical Reference"].iter_rows(
+            min_row=1, max_row=TECHNICAL_REFERENCE_HEADER_ROW - 1
+        )
+        for cell in row if cell.value is not None
+    )
+    for required in (
+        "DETERMINISTIC_MATCH_STRENGTH_V2",
+        "exact persisted deterministic supporting-edge score",
+        "deterministic linear interpolation",
+        "weakest_member_anchor",
+        "support_density",
+        "round_half_even",
+        "High Match 90–100",
+        "90 and 60 numeric boundaries",
+        "authoritative signed Evidence Tier",
+        "Created Date is not included",
+        "not duplicate probability",
+        "AI confidence",
+        "human review decision",
+        "GF4/GF5 authority input",
+    ):
+        assert required in technical_text
+
+    assert tuple(workbook.sheetnames) == SHEET_ORDER
+    assert not any(
+        cell.data_type == "f"
+        for sheet in workbook.worksheets for row in sheet.iter_rows() for cell in row
     )
 
 
@@ -238,7 +303,9 @@ def test_repeated_generation_is_semantically_and_visually_deterministic(db):
         for book in generated
     ]
     assert merges[0] == merges[1] == merges[2]
-    assert generated[0]["Technical Reference"]["I2"].value == reason_for_group_status(
+    assert generated[0]["Technical Reference"][
+        f"I{TECHNICAL_REFERENCE_HEADER_ROW + 1}"
+    ].value == reason_for_group_status(
         "POSSIBLE_DUPLICATE_GROUP_REVIEW"
     )
 
@@ -335,7 +402,7 @@ def test_data_level_projection_is_logically_equivalent(db):
     _, raw_rows = authority_selected_system_group_rows(db, scan.id)
     workbook = _workbook(authority_selected_system_groups_to_xlsx(db, scan.id))
     details = _dict_rows(workbook["Detailed Data"])
-    technical = _dict_rows(workbook["Technical Reference"])
+    technical = _technical_rows(workbook["Technical Reference"])
     assert len(raw_rows) == len(details) == len(technical)
     labels_by_key = {}
     for raw in raw_rows:
@@ -386,7 +453,7 @@ def test_empty_state_is_friendly_and_structurally_valid(db, monkeypatch):
     )
     assert workbook["Group Index"].max_row == 1
     assert workbook["Detailed Data"].max_row == 1
-    assert workbook["Technical Reference"].max_row == 1
+    assert workbook["Technical Reference"].max_row == TECHNICAL_REFERENCE_HEADER_ROW
 
 
 def test_formula_like_inventory_values_remain_literal_and_source_immutable(
@@ -470,7 +537,7 @@ def test_cross_scan_membership_is_not_combined(db, client):
     ).content)
     canonical_ids = {
         row["Canonical Group ID"]
-        for row in _dict_rows(workbook["Technical Reference"])
+        for row in _technical_rows(workbook["Technical Reference"])
     }
     assert canonical_ids == {
         serialize_versioned_identity_group_key(second_group.versioned_group_key)
@@ -500,7 +567,7 @@ def test_no_unsupported_claims_secrets_formulas_or_writeback(db, client):
     forbidden = (
         "ground truth", "api key", "credential", "password", "merge target",
         "likely duplicate", "confirmed duplicate", "high-confidence duplicate",
-        "accuracy", "probability", "confidence %",
+        "accuracy", "confidence %",
     )
     for sheet in workbook.worksheets:
         for row in sheet.iter_rows():
@@ -508,3 +575,8 @@ def test_no_unsupported_claims_secrets_formulas_or_writeback(db, client):
                 assert cell.data_type != "f"
                 if isinstance(cell.value, str):
                     assert not any(term in cell.value.lower() for term in forbidden)
+                    if "probability" in cell.value.lower():
+                        assert (
+                            "not a probability" in cell.value.lower()
+                            or "not duplicate probability" in cell.value.lower()
+                        )
