@@ -270,6 +270,9 @@ def ensure_identity_resolution_tables(engine):
         additions = [
             ("evidence_contract_version", "VARCHAR(80)"),
             ("deterministic_score", "FLOAT"),
+            ("explanation_evidence_json", "TEXT"),
+            ("pair_explanation_contract_version", "VARCHAR(80)"),
+            ("pair_explanation_fingerprint", "VARCHAR(64)"),
         ]
         with engine.begin() as connection:
             for name, ddl in additions:

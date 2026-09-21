@@ -696,6 +696,9 @@ class IdentityResolutionTargetedEvidence(Base):
     generic_only = Column(Boolean)
     evidence_contract_version = Column(String(80), nullable=True)
     deterministic_score = Column(Float, nullable=True)
+    explanation_evidence_json = Column(Text, nullable=True)
+    pair_explanation_contract_version = Column(String(80), nullable=True)
+    pair_explanation_fingerprint = Column(String(64), nullable=True)
 
 
 class IdentityResolutionUnassignedRecord(Base):

@@ -15,7 +15,10 @@ from app.match_strength.contracts import (
     MatchStrengthStatus,
 )
 from app.match_strength.projection import project_match_strength
-from app.resolution.contracts import TARGETED_EVIDENCE_CONTRACT_VERSION
+from app.resolution.contracts import (
+    TARGETED_EVIDENCE_CONTRACT_V2,
+    TARGETED_EVIDENCE_CONTRACT_VERSION,
+)
 
 
 class MatchStrengthProjectionService:
@@ -94,8 +97,10 @@ class MatchStrengthProjectionService:
                     compatible = False
             elif item.evidence_origin == G2V2EvidenceOrigin.TARGETED_RESOLUTION_EVIDENCE:
                 semantics_verified = bool(
-                    item.source_evidence_contract_version
-                    == TARGETED_EVIDENCE_CONTRACT_VERSION
+                    item.source_evidence_contract_version in {
+                        TARGETED_EVIDENCE_CONTRACT_V2,
+                        TARGETED_EVIDENCE_CONTRACT_VERSION,
+                    }
                     and item.evaluator_version == IDENTITY_EVIDENCE_EVALUATOR_VERSION
                 )
             else:

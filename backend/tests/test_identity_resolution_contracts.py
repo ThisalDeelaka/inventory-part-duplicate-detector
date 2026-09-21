@@ -28,6 +28,8 @@ from app.resolution.contracts import (
     TargetedEvidenceReason,
     TargetedEvidenceRequest,
     TargetedEvidenceResult,
+    TARGETED_EVIDENCE_CONTRACT_V2,
+    TARGETED_EVIDENCE_CONTRACT_VERSION,
 )
 from app.resolution.validation import (
     IdentityResolutionValidationError,
@@ -491,15 +493,40 @@ def test_targeted_result_adapts_pure_gf4_shape_without_reclassification():
         evidence_fingerprint="evaluated-1-3",
         generic_evidence_json='{"generic_guard_reason":""}',
         deterministic_score=78.25,
+        component_scores_json=(
+            '{"description_similarity":81.0,"fuzzy_score":79.0,'
+            '"part_no_similarity":76.0,"technical_token_score":72.0,'
+            '"tfidf_score":80.0}'
+        ),
+        rejection_reason="CRITICAL_MISMATCH_SIZE",
+        protected_conflicts_json=(
+            '[{"group":"SIZE","values_a":["10"],"values_b":["20"]}]'
+        ),
+        technical_evidence_json=(
+            '{"lexical_trust_assessment":{"risk_reasons":['
+            '"LEXICAL_SUPPORT_NOT_INDEPENDENT"]},'
+            '"normalized_description_1":"motor 10",'
+            '"normalized_description_2":"motor 20"}'
+        ),
+        uom_context_json=(
+            '{"identity_authority":false,"mapping_quality":"EXACT",'
+            '"penalty":0.0,"reason_code":"UOM_EXACT",'
+            '"relationship":"SAME"}'
+        ),
+        evaluation_context_json=(
+            '{"evaluator_version":"canonical-identity-evaluator-v1",'
+            '"scan_mode":"SAME_SITE_DUPLICATE",'
+            '"selected_fields":["CONTRACT","UNIT_MEAS"]}'
+        ),
     )
     adapted = targeted_result_from_evaluation(request, evaluated)
     assert adapted.edge_class == IdentityEdgeClass.CANNOT_LINK
     assert adapted.evidence_fingerprint == "evaluated-1-3"
     assert adapted.request is request
     assert adapted.deterministic_score == 78.25
-    assert adapted.evidence_contract_version == (
-        "targeted-evidence-v2-score-preserving"
-    )
+    assert adapted.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_VERSION
+    assert adapted.explanation_evidence_json is not None
+    assert adapted.pair_explanation_fingerprint is not None
 
 
 def test_targeted_score_does_not_change_request_or_resolution_fingerprint():
@@ -517,7 +544,7 @@ def test_targeted_score_does_not_change_request_or_resolution_fingerprint():
     )
     score_preserving = replace(
         legacy,
-        evidence_contract_version="targeted-evidence-v2-score-preserving",
+        evidence_contract_version=TARGETED_EVIDENCE_CONTRACT_V2,
         deterministic_score=93.75,
     )
     legacy_result = result(

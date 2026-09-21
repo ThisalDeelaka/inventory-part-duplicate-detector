@@ -25,6 +25,7 @@ from app.resolution.contracts import (
     TargetedEvidenceReason,
     TargetedEvidenceResult,
     TARGETED_EVIDENCE_CONTRACT_V1,
+    TARGETED_EVIDENCE_CONTRACT_V2,
     TARGETED_EVIDENCE_CONTRACT_VERSION,
 )
 from app.resolution.fingerprints import (
@@ -38,6 +39,11 @@ from app.resolution.request_constraints import (
     CONTRACT_GROUP_CONSTRAINT,
     REQUEST_SCOPED_GROUP_CONSTRAINTS,
     contract_group_is_compatible,
+)
+from app.resolution.pair_explanation import (
+    PAIR_EXPLANATION_CONTRACT_VERSION,
+    project_targeted_pair_explanation,
+    serialized_targeted_explanation,
 )
 
 
@@ -197,6 +203,9 @@ def targeted_result_from_evaluation(
         raise IdentityResolutionValidationError(
             "targeted evaluator generic evidence is not valid JSON"
         ) from exc
+    explanation_evidence_json, pair_explanation_fingerprint = (
+        serialized_targeted_explanation(evaluated_relationship, request)
+    )
     return TargetedEvidenceResult(
         request=request,
         edge_class=evaluated_relationship.edge_class,
@@ -207,6 +216,9 @@ def targeted_result_from_evaluation(
         generic_only=bool(generic_evidence.get("generic_guard_reason")),
         evidence_contract_version=TARGETED_EVIDENCE_CONTRACT_VERSION,
         deterministic_score=evaluated_relationship.deterministic_score,
+        explanation_evidence_json=explanation_evidence_json,
+        pair_explanation_contract_version=PAIR_EXPLANATION_CONTRACT_VERSION,
+        pair_explanation_fingerprint=pair_explanation_fingerprint,
     )
 
 
@@ -678,11 +690,15 @@ def validate_resolution_result(
         _require(
             targeted.evidence_contract_version in {
                 TARGETED_EVIDENCE_CONTRACT_V1,
+                TARGETED_EVIDENCE_CONTRACT_V2,
                 TARGETED_EVIDENCE_CONTRACT_VERSION,
             },
             "targeted evidence contract version is unsupported",
         )
-        if targeted.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_VERSION:
+        if targeted.evidence_contract_version in {
+            TARGETED_EVIDENCE_CONTRACT_V2,
+            TARGETED_EVIDENCE_CONTRACT_VERSION,
+        }:
             _require(
                 isinstance(targeted.deterministic_score, (int, float))
                 and not isinstance(targeted.deterministic_score, bool)
@@ -693,6 +709,26 @@ def validate_resolution_result(
             _require(
                 targeted.deterministic_score is None,
                 "legacy targeted evidence cannot claim a deterministic score",
+            )
+        if targeted.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_VERSION:
+            try:
+                explanation = project_targeted_pair_explanation(targeted)
+            except ValueError as exc:
+                raise IdentityResolutionValidationError(str(exc)) from exc
+            _require(
+                explanation.contract_version == PAIR_EXPLANATION_CONTRACT_VERSION,
+                "targeted pair explanation contract version is unsupported",
+            )
+            _require(
+                explanation.rule_decision == targeted.evidence_summary,
+                "targeted evidence summary differs from preserved rule decision",
+            )
+        else:
+            _require(
+                targeted.explanation_evidence_json is None
+                and targeted.pair_explanation_contract_version is None
+                and targeted.pair_explanation_fingerprint is None,
+                "legacy targeted evidence cannot claim rich explanation evidence",
             )
         result_keys.append(targeted.request.request_fingerprint)
     _require(tuple(sorted(result_keys)) == tuple(result_keys),

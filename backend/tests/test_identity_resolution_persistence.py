@@ -17,7 +17,14 @@ from app.repositories.resolution_repository import ResolutionRepository
 from app.resolution.contracts import (
     ResolverConfiguration,
     TARGETED_EVIDENCE_CONTRACT_V1,
+    TARGETED_EVIDENCE_CONTRACT_V2,
     TARGETED_EVIDENCE_CONTRACT_VERSION,
+)
+from app.resolution.pair_explanation import (
+    PAIR_EXPLANATION_CONTRACT_VERSION,
+    PairExplanationAvailability,
+    project_proposal_pair_explanation,
+    project_targeted_pair_explanation,
 )
 from app.services.identity_resolution_service import (
     load_persisted_resolution_result,
@@ -99,19 +106,50 @@ def test_targeted_evidence_is_separate_from_gf4_proposal_evidence(db):
     assert all(
         item.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_VERSION
         and item.deterministic_score is not None
+        and item.explanation_evidence_json is not None
+        and item.pair_explanation_contract_version
+        == PAIR_EXPLANATION_CONTRACT_VERSION
+        and item.pair_explanation_fingerprint is not None
         for item in targeted_rows
     )
     loaded = load_persisted_resolution_result(db, persisted.resolution_run_id)
     assert tuple(
-        (item.evidence_contract_version, item.deterministic_score)
+        (
+            item.evidence_contract_version,
+            item.deterministic_score,
+            item.explanation_evidence_json,
+            item.pair_explanation_contract_version,
+            item.pair_explanation_fingerprint,
+        )
         for item in loaded.targeted_evidence_results
     ) == tuple(
-        (item.evidence_contract_version, item.deterministic_score)
+        (
+            item.evidence_contract_version,
+            item.deterministic_score,
+            item.explanation_evidence_json,
+            item.pair_explanation_contract_version,
+            item.pair_explanation_fingerprint,
+        )
         for item in persisted.result.targeted_evidence_results
+    )
+    assert all(
+        project_targeted_pair_explanation(item).availability
+        == PairExplanationAvailability.COMPLETE
+        for item in loaded.targeted_evidence_results
     )
     assert db.query(IdentityEvidenceEdgeSnapshot).filter_by(
         evidence_run_id=evidence.run.evidence_run_id
     ).count() == 2
+    proposal_row = db.query(IdentityEvidenceEdgeSnapshot).filter_by(
+        evidence_run_id=evidence.run.evidence_run_id
+    ).first()
+    proposal_explanation = project_proposal_pair_explanation(
+        proposal_row,
+        record_reference_1="proposal-left",
+        record_reference_2="proposal-right",
+    )
+    assert proposal_explanation.availability == PairExplanationAvailability.COMPLETE
+    assert proposal_explanation.component_scores
 
     _scan, _discovery, _evidence, multiple = resolve_fixture(db, [
         row("D", "SKF BEARING 6205"), row("E", "SKF BEARING 6205"),
@@ -136,9 +174,17 @@ def test_targeted_score_reload_uses_persisted_value_without_recomputation(db):
         side_effect=AssertionError("reload must not invoke canonical evaluator"),
     ):
         loaded = load_persisted_resolution_result(db, persisted.resolution_run_id)
+        explanations = tuple(
+            project_targeted_pair_explanation(item)
+            for item in loaded.targeted_evidence_results
+        )
     assert tuple(
         item.deterministic_score for item in loaded.targeted_evidence_results
     ) == expected
+    assert all(
+        item.availability == PairExplanationAvailability.COMPLETE
+        for item in explanations
+    )
 
 
 def test_legacy_targeted_row_loads_without_claiming_score(db):
@@ -154,7 +200,10 @@ def test_legacy_targeted_row_loads_without_claiming_score(db):
     assert rows
     db.execute(text(
         "UPDATE identity_resolution_targeted_evidence "
-        "SET evidence_contract_version = NULL, deterministic_score = NULL "
+        "SET evidence_contract_version = NULL, deterministic_score = NULL, "
+        "explanation_evidence_json = NULL, "
+        "pair_explanation_contract_version = NULL, "
+        "pair_explanation_fingerprint = NULL "
         "WHERE resolution_run_id = :run_id AND evaluation_completed = 1"
     ), {"run_id": persisted.resolution_run_id})
     db.commit()
@@ -162,6 +211,40 @@ def test_legacy_targeted_row_loads_without_claiming_score(db):
     assert all(
         item.evidence_contract_version == TARGETED_EVIDENCE_CONTRACT_V1
         and item.deterministic_score is None
+        for item in loaded.targeted_evidence_results
+    )
+    assert all(
+        project_targeted_pair_explanation(item).availability
+        == PairExplanationAvailability.PARTIAL_LEGACY
+        for item in loaded.targeted_evidence_results
+    )
+
+
+def test_v2_targeted_row_keeps_score_but_reports_partial_legacy_explanation(db):
+    _scan, _discovery, _evidence, persisted = resolve_fixture(db, [
+        row("A", "SKF BEARING 6205"),
+        row("B", "SKF BEARING 6205"),
+        row("C", "SKF BEARING 6205"),
+    ], [(0, 1), (1, 2)])
+    db.execute(text(
+        "UPDATE identity_resolution_targeted_evidence "
+        "SET evidence_contract_version = :version, "
+        "explanation_evidence_json = NULL, "
+        "pair_explanation_contract_version = NULL, "
+        "pair_explanation_fingerprint = NULL "
+        "WHERE resolution_run_id = :run_id AND evaluation_completed = 1"
+    ), {
+        "version": TARGETED_EVIDENCE_CONTRACT_V2,
+        "run_id": persisted.resolution_run_id,
+    })
+    db.commit()
+
+    loaded = load_persisted_resolution_result(db, persisted.resolution_run_id)
+
+    assert all(
+        item.deterministic_score is not None
+        and project_targeted_pair_explanation(item).availability
+        == PairExplanationAvailability.PARTIAL_LEGACY
         for item in loaded.targeted_evidence_results
     )
 
@@ -184,11 +267,16 @@ def test_legacy_sqlite_targeted_table_gets_nullable_score_columns():
     }
     assert columns["evidence_contract_version"]["nullable"] is True
     assert columns["deterministic_score"]["nullable"] is True
+    assert columns["explanation_evidence_json"]["nullable"] is True
+    assert columns["pair_explanation_contract_version"]["nullable"] is True
+    assert columns["pair_explanation_fingerprint"]["nullable"] is True
     with engine.connect() as connection:
         assert connection.execute(text(
-            "SELECT evidence_contract_version, deterministic_score "
+            "SELECT evidence_contract_version, deterministic_score, "
+            "explanation_evidence_json, pair_explanation_contract_version, "
+            "pair_explanation_fingerprint "
             "FROM identity_resolution_targeted_evidence WHERE id = 1"
-        )).one() == (None, None)
+        )).one() == (None, None, None, None, None)
 
 
 def test_child_persistence_failure_rolls_back_and_marks_run_failed(db):
