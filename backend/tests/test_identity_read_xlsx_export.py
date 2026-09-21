@@ -183,10 +183,11 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     expected_merges = {
         f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFG"
     }
+    expected_merges.update({
+        f"{letter}2:{letter}{group.member_count + 1}" for letter in ("V", "W")
+    })
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
-    assert not any(
-        merged.min_col >= 8 for merged in review.merged_cells.ranges
-    )
+    assert not any(8 <= merged.min_col <= 21 for merged in review.merged_cells.ranges)
     assert [row["Member #"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
     )
@@ -260,6 +261,8 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     assert member_count >= 3
     assert {str(item) for item in sheet.merged_cells.ranges} == {
         f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFG"
+    } | {
+        f"{letter}2:{letter}{member_count + 1}" for letter in ("V", "W")
     }
     rows = _dict_rows(sheet)
     assert len(rows) == member_count

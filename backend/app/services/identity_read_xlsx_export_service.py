@@ -597,6 +597,10 @@ def _write_group_index(sheet, groups) -> None:
 
 def _write_review_groups(sheet, groups) -> None:
     _write_header(sheet, REVIEW_GROUP_COLUMNS)
+    group_level_columns = tuple(range(1, 8)) + (
+        REVIEW_GROUP_COLUMNS.index("Match Strength") + 1,
+        REVIEW_GROUP_COLUMNS.index("Match Band") + 1,
+    )
     current_row = 2
     if not groups:
         _merge_and_write(
@@ -631,7 +635,7 @@ def _write_review_groups(sheet, groups) -> None:
                     top=_MEDIUM_BLUE if row_number == start_row else _THIN_GRAY,
                     bottom=_MEDIUM_BLUE if row_number == end_row else _THIN_GRAY,
                 )
-        for column_number in range(1, 8):
+        for column_number in group_level_columns:
             if end_row > start_row:
                 sheet.merge_cells(
                     start_row=start_row, start_column=column_number,
