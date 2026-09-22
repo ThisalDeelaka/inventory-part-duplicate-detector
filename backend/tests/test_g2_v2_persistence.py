@@ -1,7 +1,7 @@
 import dataclasses
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import create_engine, event, inspect, text
 
 from app.db.migrations import ensure_g2_v2_projection_tables
 from app.db.models import (
@@ -26,6 +26,7 @@ from app.g2_v2.contracts import G2V2EvidenceOrigin
 from app.resolution.contracts import (
     IdentityGroupHypothesisStatus,
     IdentityValidationMode,
+    TARGETED_EVIDENCE_CONTRACT_VERSION,
 )
 from app.services.group_llm_eligibility import GroupAdvisoryContractService
 from app.services.identity_group_export_service import identity_groups_to_csv
@@ -123,6 +124,35 @@ def test_proposal_and_targeted_evidence_origins_persist_without_upstream_writes(
         G2V2EvidenceOrigin.PROPOSAL_EVIDENCE,
         G2V2EvidenceOrigin.TARGETED_RESOLUTION_EVIDENCE,
     }
+    targeted = [
+        item
+        for group in persisted.manifest.groups
+        for item in group.internal_evidence
+        if item.evidence_origin
+        == G2V2EvidenceOrigin.TARGETED_RESOLUTION_EVIDENCE
+    ]
+    assert targeted
+    assert all(
+        item.source_evidence_contract_version
+        == TARGETED_EVIDENCE_CONTRACT_VERSION
+        and item.deterministic_score is not None
+        for item in targeted
+    )
+    reloaded = load_persisted_g2_v2_manifest(db, persisted.projection_run_id)
+    reloaded_targeted = [
+        item
+        for group in reloaded.groups
+        for item in group.internal_evidence
+        if item.evidence_origin
+        == G2V2EvidenceOrigin.TARGETED_RESOLUTION_EVIDENCE
+    ]
+    assert tuple(
+        (item.evidence_fingerprint, item.deterministic_score)
+        for item in reloaded_targeted
+    ) == tuple(
+        (item.evidence_fingerprint, item.deterministic_score)
+        for item in targeted
+    )
     from app.db.models import IdentityEvidenceEdgeSnapshot, IdentityNeighborProposal
     assert db.query(IdentityEvidenceEdgeSnapshot).filter_by(
         evidence_run_id=evidence.run.evidence_run_id
@@ -130,6 +160,30 @@ def test_proposal_and_targeted_evidence_origins_persist_without_upstream_writes(
     assert db.query(IdentityNeighborProposal).filter_by(
         discovery_run_id=evidence.run.discovery_run_id
     ).count() == before_gf4
+
+
+def test_legacy_sqlite_g2_internal_evidence_gets_nullable_score_columns():
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE g2_v2_internal_evidence (id INTEGER PRIMARY KEY)"
+        ))
+        connection.execute(text(
+            "INSERT INTO g2_v2_internal_evidence (id) VALUES (1)"
+        ))
+    ensure_g2_v2_projection_tables(engine)
+    columns = {
+        item["name"]: item for item in inspect(engine).get_columns(
+            "g2_v2_internal_evidence"
+        )
+    }
+    assert columns["source_evidence_contract_version"]["nullable"] is True
+    assert columns["deterministic_score"]["nullable"] is True
+    with engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT source_evidence_contract_version, deterministic_score "
+            "FROM g2_v2_internal_evidence WHERE id = 1"
+        )).one() == (None, None)
 
 
 def test_progressive_review_persistence_preserves_sparse_coverage(db):

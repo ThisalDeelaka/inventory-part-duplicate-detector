@@ -238,7 +238,8 @@ def test_r6_19_merged_ranges_are_valid_and_non_overlapping(db, client):
     workbook = load_workbook(io.BytesIO(payload), data_only=False)
     ranges = [CellRange(str(item)) for item in workbook["Review Groups"].merged_cells]
     for index, left in enumerate(ranges):
-        assert left.min_row >= 2 and left.min_col <= 7
+        assert left.min_row >= 2
+        assert left.min_col in {*range(1, 8), 22, 23}
         for right in ranges[index + 1:]:
             assert not (
                 left.min_row <= right.max_row and right.min_row <= left.max_row
@@ -275,9 +276,15 @@ def test_r6_22_to_r6_25_api_csv_xlsx_exact_scan_parity(db, client):
     import csv
     csv_rows = list(csv.DictReader(io.StringIO(csv_response.text)))
     workbook = load_workbook(io.BytesIO(xlsx_response.content), data_only=False)
-    headers = [cell.value for cell in workbook["Technical Reference"][1]]
+    from app.services.identity_read_xlsx_export_service import (
+        TECHNICAL_REFERENCE_HEADER_ROW,
+    )
+    headers = [
+        cell.value
+        for cell in workbook["Technical Reference"][TECHNICAL_REFERENCE_HEADER_ROW]
+    ]
     values = [dict(zip(headers, row, strict=True)) for row in workbook["Technical Reference"].iter_rows(
-        min_row=2, values_only=True
+        min_row=TECHNICAL_REFERENCE_HEADER_ROW + 1, values_only=True
     )]
     expected_keys = {
         serialize_versioned_identity_group_key(group.versioned_group_key)

@@ -711,6 +711,11 @@ class IdentityResolutionTargetedEvidence(Base):
     evaluator_version = Column(String(80))
     evidence_fingerprint = Column(String(64))
     generic_only = Column(Boolean)
+    evidence_contract_version = Column(String(80), nullable=True)
+    deterministic_score = Column(Float, nullable=True)
+    explanation_evidence_json = Column(Text, nullable=True)
+    pair_explanation_contract_version = Column(String(80), nullable=True)
+    pair_explanation_fingerprint = Column(String(64), nullable=True)
 
 
 class IdentityResolutionUnassignedRecord(Base):
@@ -848,6 +853,8 @@ class G2V2InternalEvidenceRow(Base):
     evaluator_version = Column(String(80), nullable=False)
     evidence_fingerprint = Column(String(64), nullable=False)
     required_for_validation = Column(Boolean, nullable=False)
+    source_evidence_contract_version = Column(String(80), nullable=True)
+    deterministic_score = Column(Float, nullable=True)
 
 
 class G2V2ConflictSnapshotRow(Base):

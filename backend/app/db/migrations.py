@@ -263,6 +263,26 @@ def ensure_identity_resolution_tables(engine):
         IdentityResolutionUnassignedRecord.__table__,
         IdentityResolutionConstraintInput.__table__,
     ], checkfirst=True)
+    if engine.url.get_backend_name().startswith("sqlite"):
+        existing = {
+            column["name"] for column in inspect(engine).get_columns(
+                "identity_resolution_targeted_evidence"
+            )
+        }
+        additions = [
+            ("evidence_contract_version", "VARCHAR(80)"),
+            ("deterministic_score", "FLOAT"),
+            ("explanation_evidence_json", "TEXT"),
+            ("pair_explanation_contract_version", "VARCHAR(80)"),
+            ("pair_explanation_fingerprint", "VARCHAR(64)"),
+        ]
+        with engine.begin() as connection:
+            for name, ddl in additions:
+                if name not in existing:
+                    connection.execute(text(
+                        f"ALTER TABLE identity_resolution_targeted_evidence "
+                        f"ADD COLUMN {name} {ddl}"
+                    ))
     _ensure_resolver_reference_column_widths(engine)
 
 
@@ -314,6 +334,23 @@ def ensure_g2_v2_projection_tables(engine):
         G2V2DeferredMemberRow.__table__,
         G2V2UnassignedRecordRow.__table__,
     ], checkfirst=True)
+    if engine.url.get_backend_name().startswith("sqlite"):
+        existing = {
+            column["name"] for column in inspect(engine).get_columns(
+                "g2_v2_internal_evidence"
+            )
+        }
+        additions = [
+            ("source_evidence_contract_version", "VARCHAR(80)"),
+            ("deterministic_score", "FLOAT"),
+        ]
+        with engine.begin() as connection:
+            for name, ddl in additions:
+                if name not in existing:
+                    connection.execute(text(
+                        f"ALTER TABLE g2_v2_internal_evidence "
+                        f"ADD COLUMN {name} {ddl}"
+                    ))
 
 
 def ensure_shadow_comparison_tables(engine):

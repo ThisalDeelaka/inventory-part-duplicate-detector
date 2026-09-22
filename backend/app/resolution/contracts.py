@@ -14,6 +14,11 @@ from app.services.canonical_record_service import CanonicalScanRecord
 
 
 RESOLVER_CONTRACT_VERSION = "identity-resolution-contract-v1"
+TARGETED_EVIDENCE_CONTRACT_V1 = "targeted-evidence-v1"
+TARGETED_EVIDENCE_CONTRACT_V2 = "targeted-evidence-v2-score-preserving"
+TARGETED_EVIDENCE_CONTRACT_VERSION = (
+    "targeted-evidence-v3-explanation-preserving"
+)
 DEFAULT_RESOLVER_ALGORITHM_VERSION = (
     "constrained-identity-resolver-v3-request-scoped-site"
 )
@@ -122,6 +127,11 @@ class TargetedEvidenceResult:
     evaluator_version: str
     evidence_fingerprint: str
     generic_only: bool = False
+    evidence_contract_version: str = TARGETED_EVIDENCE_CONTRACT_V1
+    deterministic_score: float | None = None
+    explanation_evidence_json: str | None = None
+    pair_explanation_contract_version: str | None = None
+    pair_explanation_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)

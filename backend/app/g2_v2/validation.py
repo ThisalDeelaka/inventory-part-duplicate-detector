@@ -73,7 +73,9 @@ def _validate_source_result(result):
         )
 
 
-def _validate_group(group, source, records_by_id, source_requests):
+def _validate_group(
+    group, source, records_by_id, source_requests, source_targeted_results
+):
     _require(group.scan_id == source.scan_id, "G2-v2 group crosses scans")
     _require(group.status == source.status, "G2-v2 group status differs from source")
     _require(
@@ -119,6 +121,10 @@ def _validate_group(group, source, records_by_id, source_requests):
         )
 
     evidence_by_pair = {}
+    targeted_by_pair = {
+        _pair(item.request.record_id_1, item.request.record_id_2): item
+        for item in source_targeted_results
+    }
     for evidence in group.internal_evidence:
         _require(
             evidence.group_reference == group.group_reference,
@@ -149,6 +155,29 @@ def _validate_group(group, source, records_by_id, source_requests):
         )
         _require(bool(evidence.evidence_fingerprint), "G2-v2 evidence lacks fingerprint")
         _require(evidence.required_for_validation, "materialized G2-v2 evidence is not required")
+        if evidence.evidence_origin == G2V2EvidenceOrigin.TARGETED_RESOLUTION_EVIDENCE:
+            targeted = targeted_by_pair.get(pair)
+            _require(targeted is not None, "G2-v2 targeted evidence lacks GF-5 source")
+            expected_contract_version = (
+                targeted.evidence_contract_version
+                if targeted.deterministic_score is not None
+                else None
+            )
+            _require(
+                evidence.source_evidence_contract_version
+                == expected_contract_version,
+                "G2-v2 targeted evidence contract version differs from GF-5",
+            )
+            _require(
+                evidence.deterministic_score == targeted.deterministic_score,
+                "G2-v2 targeted deterministic score differs from GF-5",
+            )
+        else:
+            _require(
+                evidence.source_evidence_contract_version is None
+                and evidence.deterministic_score is None,
+                "G2-v2 proposal evidence cannot claim targeted score fields",
+            )
 
     coverage = group.validation_coverage
     possible = group.member_count * (group.member_count - 1) // 2
@@ -372,6 +401,7 @@ def validate_g2_v2_manifest(
         _validate_group(
             group, source_groups[fingerprint], records_by_id,
             persisted_resolution_result.targeted_evidence_requests,
+            persisted_resolution_result.targeted_evidence_results,
         )
         current = {item.record_id for item in group.members}
         _require(not (seen_members & current), "record appears in two accepted G2-v2 groups")

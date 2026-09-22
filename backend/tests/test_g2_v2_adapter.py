@@ -15,6 +15,7 @@ from app.g2_v2.validation import (
     G2V2ManifestValidationError,
     validate_g2_v2_manifest,
 )
+from app.g2_v2.fingerprints import g2_v2_group_fingerprint
 from app.resolution.contracts import (
     BridgeRiskSummary,
     DeferredIdentityReason,
@@ -239,6 +240,34 @@ def test_m3_targeted_bridge_completes_pairwise_evidence():
     assert group.validation_coverage.proposal_evidence_count == 2
     assert group.validation_coverage.targeted_evidence_count == 1
     assert group.validation_coverage.evaluated_internal_pair_count == 3
+
+
+def test_score_preserving_targeted_fields_are_protected_by_group_fingerprint():
+    records = (record(1, "A"), record(2, "B"), record(3, "C"))
+    refs = {item.record_id: item.record_ref_key for item in records}
+    proposals = (
+        proposal(1, 2, IdentityEdgeClass.STRONG_SUPPORT),
+        proposal(2, 3, IdentityEdgeClass.STRONG_SUPPORT),
+    )
+    target = replace(
+        targeted(1, 3, refs, IdentityEdgeClass.STRONG_SUPPORT),
+        evidence_contract_version="targeted-evidence-v2-score-preserving",
+        deterministic_score=93.75,
+    )
+    group_source = hypothesis(records, proposals + (target,))
+    group = build(
+        records, resolution(records, (group_source,), targeted_results=(target,)),
+        proposals, (target,),
+    ).groups[0]
+    changed_evidence = tuple(
+        replace(item, deterministic_score=93.74)
+        if item.evidence_origin == G2V2EvidenceOrigin.TARGETED_RESOLUTION_EVIDENCE
+        else item
+        for item in group.internal_evidence
+    )
+    assert g2_v2_group_fingerprint(group) != g2_v2_group_fingerprint(
+        replace(group, internal_evidence=changed_evidence)
+    )
 
 
 def test_m4_progressive_review_preserves_missing_nonrequired_pairs():

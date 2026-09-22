@@ -28,6 +28,7 @@ from app.services.identity_group_presentation import (
 )
 from app.services.identity_read_service import IdentityReadService
 from app.services.canonical_record_service import load_scan_record_catalog
+from app.match_strength.service import MatchStrengthProjectionService, match_strength_payload
 
 
 SYSTEM_GROUP_EXPORT_FIELDS = [
@@ -42,6 +43,11 @@ SYSTEM_GROUP_EXPORT_FIELDS = [
     "required_validation_evidence_count", "missing_nonrequired_relationship_count",
     "group_evidence_summary", "bridge_risk_summary", "genericity_risk_summary",
     "missing_evidence_summary",
+    "match_strength", "match_band", "match_strength_version",
+    "match_strength_status", "match_strength_unscored_reason",
+    "support_density", "lower_quartile_score", "weakest_member_anchor",
+    "pair_score_min", "pair_score_median", "pair_score_max",
+    "safety_status_crossover", "safety_status_message",
 ]
 
 IDENTITY_CONFLICT_EXPORT_FIELDS = [
@@ -129,10 +135,14 @@ def authority_selected_system_group_rows(db, scan_id: int):
     """Return the authoritative snapshot and shared member-shaped export rows."""
     snapshot = IdentityReadService(db).load_identity_read_snapshot(scan_id)
     base = _projection(snapshot)
+    strengths = MatchStrengthProjectionService(db).project_groups(snapshot.groups)
     rows = []
     for group in snapshot.groups:
         coverage = group.validation_coverage
         group_key = serialize_versioned_identity_group_key(group.versioned_group_key)
+        strength = match_strength_payload(
+            strengths[group.versioned_group_key], group_status=group.status.value
+        )
         for member in group.members:
             rows.append({
                 **base,
@@ -154,6 +164,7 @@ def authority_selected_system_group_rows(db, scan_id: int):
                 "bridge_risk_summary": _json(group.bridge_risk_summary),
                 "genericity_risk_summary": _json(group.genericity_risk_summary),
                 "missing_evidence_summary": _json(group.missing_evidence_summary),
+                **strength,
             })
     return snapshot, tuple(rows)
 

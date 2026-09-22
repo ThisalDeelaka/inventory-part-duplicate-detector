@@ -135,6 +135,8 @@ def _persist_manifest(repository, run, manifest):
             evidence_summary=item.evidence_summary, evaluator_version=item.evaluator_version,
             evidence_fingerprint=item.evidence_fingerprint,
             required_for_validation=item.required_for_validation,
+            source_evidence_contract_version=item.source_evidence_contract_version,
+            deterministic_score=item.deterministic_score,
         ) for item in group.internal_evidence])
     for conflict in manifest.conflicts:
         row = G2V2ConflictSnapshotRow(
@@ -219,6 +221,8 @@ def load_persisted_g2_v2_manifest(db, projection_run_id: int) -> G2V2SnapshotMan
                 evidence_summary=item.evidence_summary, evaluator_version=item.evaluator_version,
                 evidence_fingerprint=item.evidence_fingerprint,
                 required_for_validation=item.required_for_validation,
+                source_evidence_contract_version=item.source_evidence_contract_version,
+                deterministic_score=item.deterministic_score,
             ) for item in evidence_by_group[row.id]),
             validation_coverage=G2V2ValidationCoverage(**coverage),
             group_evidence_summary=_group_evidence(json.loads(row.group_evidence_summary_json)),

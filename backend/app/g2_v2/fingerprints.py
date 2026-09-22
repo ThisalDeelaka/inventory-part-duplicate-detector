@@ -38,12 +38,8 @@ def fingerprint_g2_v2_payload(kind: str, value) -> str:
 
 
 def g2_v2_group_fingerprint(group) -> str:
-    return fingerprint_g2_v2_payload("g2-v2-group", {
-        "group_reference": group.group_reference,
-        "status": group.status,
-        "validation_mode": group.validation_mode,
-        "members": tuple(item.stable_record_reference for item in group.members),
-        "internal_evidence": tuple({
+    def evidence_payload(item):
+        payload = {
             "pair": (
                 item.stable_record_reference_1,
                 item.stable_record_reference_2,
@@ -57,7 +53,23 @@ def g2_v2_group_fingerprint(group) -> str:
             "evaluator_version": item.evaluator_version,
             "evidence_fingerprint": item.evidence_fingerprint,
             "required_for_validation": item.required_for_validation,
-        } for item in group.internal_evidence),
+        }
+        if item.source_evidence_contract_version is not None:
+            payload["source_evidence_contract_version"] = (
+                item.source_evidence_contract_version
+            )
+        if item.deterministic_score is not None:
+            payload["deterministic_score"] = item.deterministic_score
+        return payload
+
+    return fingerprint_g2_v2_payload("g2-v2-group", {
+        "group_reference": group.group_reference,
+        "status": group.status,
+        "validation_mode": group.validation_mode,
+        "members": tuple(item.stable_record_reference for item in group.members),
+        "internal_evidence": tuple(
+            evidence_payload(item) for item in group.internal_evidence
+        ),
         "validation_coverage": group.validation_coverage,
         "group_evidence_summary": group.group_evidence_summary,
         "bridge_risk_summary": group.bridge_risk_summary,
