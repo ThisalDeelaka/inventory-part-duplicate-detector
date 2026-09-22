@@ -193,6 +193,78 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                     include_details=True,
                 ))
             projection_elapsed = time.perf_counter() - projection_started
+            all_pair_details = [
+                pair
+                for model in read_models
+                for pair in model.pair_explanations
+            ]
+            two_member_strong = [
+                model for group, model in zip(snapshot.groups, read_models)
+                if group.member_count == 2
+                and group.status.value == "LIKELY_DUPLICATE_GROUP"
+            ][:5]
+            two_member_review = [
+                model for group, model in zip(snapshot.groups, read_models)
+                if group.member_count == 2
+                and group.status.value == "POSSIBLE_DUPLICATE_GROUP_REVIEW"
+            ][:5]
+            scored_pairs = sorted(
+                (pair for pair in all_pair_details if pair.deterministic_score is not None),
+                key=lambda pair: (pair.deterministic_score, pair.relationship_id),
+            )
+            score_strata = {
+                "lowest_10": scored_pairs[:10],
+                "highest_10": scored_pairs[-10:],
+                "nearest_90_10": sorted(
+                    scored_pairs,
+                    key=lambda pair: (abs(pair.deterministic_score - 90), pair.relationship_id),
+                )[:10],
+                "nearest_60_10": sorted(
+                    scored_pairs,
+                    key=lambda pair: (abs(pair.deterministic_score - 60), pair.relationship_id),
+                )[:10],
+            }
+            rendered_items = [
+                item
+                for pair in all_pair_details
+                for item in (
+                    pair.supporting_items + pair.weakening_items
+                    + pair.contradiction_items + pair.safety_items
+                )
+            ]
+            rendering_inspection = {
+                "strong_two_member_groups": len(two_member_strong),
+                "review_two_member_groups": len(two_member_review),
+                "multi_member_groups": sum(group.member_count >= 3 for group in snapshot.groups),
+                "pairs_with_score": sum(pair.deterministic_score is not None for pair in all_pair_details),
+                "pairs_with_signed_relationship": sum(bool(pair.signed_relationship) for pair in all_pair_details),
+                "pairs_with_supporting_evidence": sum(bool(pair.supporting_items) for pair in all_pair_details),
+                "reason_codes_visible": sum(
+                    len(pair.decision_reason_codes) for pair in all_pair_details
+                ),
+                "evidence_items": len(rendered_items),
+                "evidence_items_with_source_field": sum(
+                    bool(item.source_field) for item in rendered_items
+                ),
+                "unsafe_causal_summary_count": sum(
+                    any(term in model.group_summary.lower() for term in (
+                        "caused the group", "decisive pair", "primary cause"
+                    ))
+                    for model in read_models
+                ),
+                "score_strata_counts": {
+                    key: len(value) for key, value in score_strata.items()
+                },
+                "two_member_examples": [
+                    {
+                        "summary": model.group_summary,
+                        "score": model.relationships[0].deterministic_score,
+                        "relationship": model.relationships[0].signed_relationship,
+                        "reason_codes": list(model.pair_explanations[0].decision_reason_codes),
+                    }
+                    for model in two_member_strong[:2] + two_member_review[:2]
+                ],
+            }
             from app.api.routes_identity_groups import _read_group
             baseline_payloads = [
                 _read_group(
@@ -367,6 +439,7 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                         group.member_count >= 3 for group in snapshot.groups
                     ),
                 },
+                "rendering_inspection": rendering_inspection,
                 "crossover_reason_coverage": {
                     "groups": len(crossovers),
                     "exact": exact_crossover,

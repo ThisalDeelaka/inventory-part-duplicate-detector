@@ -77,12 +77,13 @@ COMPLETE explanations, with 14/14 crossovers. All frozen S0-S10 fingerprints
 matched and provider calls were zero. Full performance/payload and workbook
 figures are recorded by the acceptance harness.
 
-On the final Site-selected run, pure projection of all 208 groups took 0.066
+Across the final repeated Site-selected runs, pure projection of all 208 groups
+took 0.066–0.247
 seconds. The serialized all-group list-item benchmark grew from 988,615 to
 1,319,837 bytes because each item now carries its compact relationship map;
 expanded pair details remain detail-only. The largest fully expanded group
-payload was 64,853 bytes. The fresh XLSX was 200,618 bytes and generated in
-6.839 seconds. No comparable pre-change XLSX timing was captured in the same
+payload was 64,853 bytes. The fresh XLSX was about 200.6 KB and generated in
+6.84–11.09 seconds. No comparable pre-change XLSX timing was captured in the same
 run, so the implementation does not claim an exact generation-time delta.
 
 ## Future optional LLM boundary
