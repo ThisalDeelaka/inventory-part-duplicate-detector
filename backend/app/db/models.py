@@ -10,6 +10,21 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+class CustomField(Base):
+    __tablename__ = "custom_field"
+    __table_args__ = (
+        UniqueConstraint("field_key", name="uq_custom_field_key"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    field_key = Column(String(100), nullable=False, index=True)
+    display_label = Column(String(200), nullable=False)
+    mode = Column(String(20), nullable=False)
+    aliases = Column(Text, default="[]", nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class DuplicateScan(Base):
     __tablename__ = "duplicate_scan"
     id = Column(Integer, primary_key=True)
@@ -23,6 +38,8 @@ class DuplicateScan(Base):
     warnings_count = Column(Integer, default=0)
     rejections_count = Column(Integer, default=0)
     scan_mode = Column(String(60), default="SAME_SITE_DUPLICATE", nullable=False)
+    part_type = Column(String(20), default="INVENTORY", nullable=False)
+    custom_fields_used = Column(Text, default="[]", nullable=False)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at = Column(DateTime(timezone=True))
     model_version = Column(String(50), nullable=False)
@@ -589,7 +606,7 @@ class IdentityResolutionGroupSnapshot(Base):
     id = Column(Integer, primary_key=True)
     resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
-    hypothesis_id = Column(String(64), nullable=False)
+    hypothesis_id = Column(String(128), nullable=False)
     status = Column(String(60), nullable=False, index=True)
     validation_mode = Column(String(40), nullable=False)
     member_count = Column(Integer, nullable=False)
@@ -625,7 +642,7 @@ class IdentityResolutionConflictSnapshot(Base):
     id = Column(Integer, primary_key=True)
     resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
-    conflict_id = Column(String(64), nullable=False)
+    conflict_id = Column(String(128), nullable=False)
     conflict_type = Column(String(80), nullable=False, index=True)
     protected_evidence_references_json = Column(Text, nullable=False)
     source_neighborhood_references_json = Column(Text, nullable=False)
@@ -653,7 +670,7 @@ class IdentityResolutionDeferredSnapshot(Base):
     id = Column(Integer, primary_key=True)
     resolution_run_id = Column(Integer, ForeignKey("identity_resolution_run.id"), nullable=False, index=True)
     scan_id = Column(Integer, ForeignKey("duplicate_scan.id"), nullable=False, index=True)
-    deferred_id = Column(String(64), nullable=False)
+    deferred_id = Column(String(128), nullable=False)
     reason = Column(String(100), nullable=False, index=True)
     unfinished_evidence_summary = Column(Text, nullable=False)
     source_neighborhood_references_json = Column(Text, nullable=False)

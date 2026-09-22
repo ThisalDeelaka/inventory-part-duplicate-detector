@@ -8,7 +8,6 @@ export default function Layout() {
         <nav>
           <NavLink to="/">Dashboard</NavLink>
           <NavLink to="/new-scan">New Scan</NavLink>
-          <NavLink to="/load-test">Load Test</NavLink>
           <NavLink to="/data-security">Data Security</NavLink>
           <NavLink to="/future-ifs">Future IFS Integration</NavLink>
         </nav>

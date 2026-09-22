@@ -19,7 +19,10 @@ from app.services.identity_group_presentation import (
     human_review_presentation,
     system_evidence_tier,
 )
-from app.services.identity_read_export_service import authority_selected_system_group_rows
+from app.services.identity_read_export_service import (
+    authority_selected_reviewed_identity_rows,
+    authority_selected_system_group_rows,
+)
 
 
 WORKBOOK_NOTICE = (
@@ -27,6 +30,11 @@ WORKBOOK_NOTICE = (
     "and do not automatically merge or modify inventory records."
 )
 REPORT_CARRIED_OUT_BY = "IFS APP Test"
+REVIEWED_WORKBOOK_NOTICE = (
+    "This workbook contains only current human-confirmed same-identity sets from "
+    "the exact authority-selected review chain. Rejected, deferred, and superseded "
+    "decisions are excluded. Human decisions are operationally authoritative."
+)
 SHEET_ORDER = (
     "Overview",
     "Review Groups",
@@ -113,6 +121,10 @@ MATCH_STRENGTH_TECHNICAL_CONTRACT = (
         "review decision, or a GF4/GF5 authority input.",
     ),
 )
+REVIEWED_SET_COLUMNS = (
+    "Reviewed Identity Set", "Group Reference", "Review Decision", "Reviewer",
+    "Reviewed At", "Review Comment", "Member Count",
+)
 
 # Backward-compatible imports now describe the corresponding client sheets.
 GROUP_COLUMNS = GROUP_INDEX_COLUMNS
@@ -123,6 +135,11 @@ _SOURCE_COLUMNS = (
     "Commodity Group 01", "Commodity Group 02", "Safety Code",
     "Accounting Group", "Product Code", "Product Family", "Product Category",
     "HSN/SAC Code",
+)
+ALL_REVIEWED_COLUMNS = REVIEWED_SET_COLUMNS + _SOURCE_COLUMNS
+_REVIEWED_WIDTHS = (
+    20, 30, 32, 22, 18, 42, 14,
+    20, 48, 18, 16, 18, 22, 22, 16, 20, 18, 20, 20, 18,
 )
 _MEMBER_FIELD_BY_COLUMN = {
     "Part Number": "part_no",
@@ -801,6 +818,114 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     _write_detailed_data(detailed_data, groups)
     _write_technical_reference(technical, groups, snapshot)
     workbook.active = 0
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _write_reviewed_summary(workbook, scan, snapshot, rows) -> None:
+    sheet = workbook.active
+    sheet.title = "Summary"
+    set_count = len({row["reviewed_identity_set_key"] for row in rows})
+    summary_rows = (
+        ("Reviewed Identity Export", ""),
+        ("Notice", REVIEWED_WORKBOOK_NOTICE),
+        ("Report type", "Reviewed Identity Export"),
+        ("Authority", "Human-confirmed"),
+        ("Human confirmation", "Required and applied"),
+        ("Scan identifier", snapshot.scan_id),
+        ("Scan name", scan.scan_name),
+        ("Scan status", scan.status),
+        ("Input record count", snapshot.canonical_record_count),
+        ("Reviewed identity set count", set_count),
+        ("Reviewed member count", len(rows)),
+        ("Projection contract", snapshot.projection_contract.value),
+        ("Source projection run", snapshot.source_projection_run_id),
+    )
+    for row_number, values in enumerate(summary_rows, start=1):
+        _write_row(sheet, row_number, values)
+    sheet["A1"].font = Font(bold=True, size=16, color="1F4E78")
+    for row_number in range(2, len(summary_rows) + 1):
+        sheet.cell(row_number, 1).font = Font(bold=True)
+    sheet["B2"].alignment = Alignment(wrap_text=True, vertical="top")
+    sheet.column_dimensions["A"].width = 28
+    sheet.column_dimensions["B"].width = 100
+    sheet.freeze_panes = "A2"
+
+
+def _reviewed_set_values(index: int, set_rows: list[dict]) -> tuple:
+    first_row = set_rows[0]
+    decision = first_row["review_decision_type"]
+    label, _ = human_review_presentation({"reviewed": True, "current_decision_type": decision})
+    return (
+        f"RS-{index:06d}",
+        first_row["group_reference"],
+        label,
+        first_row["reviewer"],
+        first_row["reviewed_at"],
+        first_row.get("review_comment") or "",
+        len(set_rows),
+    )
+
+
+def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
+    """Create an in-memory workbook from the exact Reviewed Identity export projection."""
+    snapshot, rows = authority_selected_reviewed_identity_rows(db, scan_id)
+    scan = db.get(DuplicateScan, scan_id)
+
+    rows_by_set: dict[str, list[dict]] = {}
+    set_order: list[str] = []
+    for row in rows:
+        set_key = row["reviewed_identity_set_key"]
+        if set_key not in rows_by_set:
+            rows_by_set[set_key] = []
+            set_order.append(set_key)
+        rows_by_set[set_key].append(row)
+
+    workbook = Workbook()
+    _write_reviewed_summary(workbook, scan, snapshot, rows)
+    sheet = workbook.create_sheet("Reviewed Identity Sets")
+    _write_header(sheet, ALL_REVIEWED_COLUMNS)
+
+    row_number = 2
+    for set_index, set_key in enumerate(set_order, start=1):
+        set_rows = rows_by_set[set_key]
+        set_values = _reviewed_set_values(set_index, set_rows)
+        first_data_row = row_number
+        for member_row in set_rows:
+            _write_row(sheet, row_number, set_values + _source_values(member_row))
+            row_number += 1
+        last_data_row = row_number - 1
+        if last_data_row > first_data_row:
+            for column in range(1, len(REVIEWED_SET_COLUMNS) + 1):
+                sheet.merge_cells(
+                    start_row=first_data_row,
+                    start_column=column,
+                    end_row=last_data_row,
+                    end_column=column,
+                )
+                sheet.cell(first_data_row, column).alignment = Alignment(
+                    vertical="top", wrap_text=column in (3, 6)
+                )
+        fill = _GROUP_FILLS[set_index % len(_GROUP_FILLS)]
+        for row_index in range(first_data_row, last_data_row + 1):
+            for column in range(1, len(REVIEWED_SET_COLUMNS) + 1):
+                sheet.cell(row_index, column).fill = fill
+        _style_state(sheet.cell(first_data_row, 3), set_values[2])
+
+    _set_widths(sheet, _REVIEWED_WIDTHS)
+    last_column = get_column_letter(len(ALL_REVIEWED_COLUMNS))
+    sheet.auto_filter.ref = f"A1:{last_column}{max(1, sheet.max_row)}"
+    if sheet.max_row >= 2:
+        table = Table(
+            displayName="ReviewedIdentitySets", ref=f"A1:{last_column}{sheet.max_row}"
+        )
+        table.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False,
+            showRowStripes=True, showColumnStripes=False,
+        )
+        sheet.add_table(table)
 
     output = BytesIO()
     workbook.save(output)
