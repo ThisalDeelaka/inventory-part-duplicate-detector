@@ -141,6 +141,17 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     flat = workbook["Detailed Data"]
     technical = workbook["Technical Reference"]
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
+    assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
+    assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
+    assert "candidate group" in review.cell(
+        2, REVIEW_GROUP_COLUMNS.index("Why This Group Exists") + 1
+    ).value
+    relationship_text = review.cell(
+        2, REVIEW_GROUP_COLUMNS.index("Relationship Evidence") + 1
+    ).value
+    assert "/100" in relationship_text
+    assert "SUPPORT" in relationship_text
+    assert "caused" not in relationship_text.lower()
     assert tuple(cell.value for cell in index[1]) == GROUP_INDEX_COLUMNS
     assert tuple(cell.value for cell in flat[1]) == DETAILED_DATA_COLUMNS
     assert tuple(
@@ -181,13 +192,13 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
         assert "Stable Record Reference" not in tuple(cell.value for cell in primary[1])
 
     expected_merges = {
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFG"
+        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGHI"
     }
     expected_merges.update({
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in ("V", "W")
+        f"{letter}2:{letter}{group.member_count + 1}" for letter in ("X", "Y")
     })
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
-    assert not any(8 <= merged.min_col <= 21 for merged in review.merged_cells.ranges)
+    assert not any(10 <= merged.min_col <= 23 for merged in review.merged_cells.ranges)
     assert [row["Member #"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
     )
@@ -229,6 +240,11 @@ def test_match_strength_xlsx_presentation_is_group_scoped_and_auditable(db):
         "High Match 90–100",
         "90 and 60 numeric boundaries",
         "authoritative signed Evidence Tier",
+        "deterministic-group-explanation-v1",
+        "deterministic-pair-explanation-read-model-v1",
+        "deterministic-pair-explanation-v1",
+        "PARTIAL_LEGACY",
+        "No evaluator rerun and no LLM/provider call",
         "Created Date is not included",
         "not duplicate probability",
         "AI confidence",
@@ -260,9 +276,9 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     member_count = snapshot.groups[0].member_count
     assert member_count >= 3
     assert {str(item) for item in sheet.merged_cells.ranges} == {
-        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFG"
+        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFGHI"
     } | {
-        f"{letter}2:{letter}{member_count + 1}" for letter in ("V", "W")
+        f"{letter}2:{letter}{member_count + 1}" for letter in ("X", "Y")
     }
     rows = _dict_rows(sheet)
     assert len(rows) == member_count

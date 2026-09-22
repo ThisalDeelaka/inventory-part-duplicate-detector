@@ -14,6 +14,14 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from app.core.constants import FIELD_DEFINITIONS
 from app.db.models import DuplicateScan
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
+from app.identity_read.deterministic_explanations import (
+    project_group_explanation,
+    sources_for_group,
+)
+from app.services.deterministic_explanation_service import (
+    load_pair_explanation_sources,
+)
+from app.match_strength.service import MatchStrengthProjectionService
 from app.services.identity_group_review_service import VersionedIdentityGroupReviewService
 from app.services.identity_group_presentation import (
     human_review_presentation,
@@ -41,6 +49,7 @@ GROUP_INDEX_COLUMNS = (
 )
 REVIEW_GROUP_COLUMNS = (
     "Group", "Review Status", "Evidence", "Group Sites", "Why Suggested",
+    "Why This Group Exists", "Relationship Evidence",
     "Human Decision", "Human Comment", "Member #", "Part Number",
     "Description", "Site", "UOM", "Part Type", "Commodity Group 01",
     "Commodity Group 02", "Safety Code", "Accounting Group", "Product Code",
@@ -63,8 +72,6 @@ TECHNICAL_REFERENCE_COLUMNS = (
     "Pair Score Minimum", "Pair Score Median", "Pair Score Maximum",
     "Safety Status Crossover", "Safety Status Message",
 )
-TECHNICAL_REFERENCE_HEADER_ROW = 15
-
 MATCH_STRENGTH_OVERVIEW_NOTE = (
     "Match Strength summarizes deterministic comparison evidence. It is not a "
     "probability of duplication and does not replace human review."
@@ -112,7 +119,27 @@ MATCH_STRENGTH_TECHNICAL_CONTRACT = (
         "Match Strength is not duplicate probability, AI confidence, a human "
         "review decision, or a GF4/GF5 authority input.",
     ),
+    ("Group explanation version", "deterministic-group-explanation-v1"),
+    ("Pair read-model version", "deterministic-pair-explanation-read-model-v1"),
+    ("Structured evidence source", "deterministic-pair-explanation-v1"),
+    (
+        "Evidence availability",
+        "COMPLETE renders persisted structured facts; PARTIAL_LEGACY shows only facts actually retained and a limited-history notice.",
+    ),
+    (
+        "Safe causal language",
+        "Relationships support the final group; no relationship is described as decisive or as causing the group.",
+    ),
+    (
+        "Reason-code rendering",
+        "Known codes use deterministic centralized wording; unknown codes remain visible verbatim without invented semantics.",
+    ),
+    (
+        "Execution boundary",
+        "No evaluator rerun and no LLM/provider call. Human review remains authoritative.",
+    ),
 )
+TECHNICAL_REFERENCE_HEADER_ROW = len(MATCH_STRENGTH_TECHNICAL_CONTRACT) + 5
 
 # Backward-compatible imports now describe the corresponding client sheets.
 GROUP_COLUMNS = GROUP_INDEX_COLUMNS
@@ -141,11 +168,11 @@ _MEMBER_FIELD_BY_COLUMN = {
 }
 _REASONS = {
     "LIKELY_DUPLICATE_GROUP": (
-        "Stronger deterministic evidence caused the system to suggest this group "
+        "Stronger deterministic evidence supports this system-suggested group "
         "for human review."
     ),
     "POSSIBLE_DUPLICATE_GROUP_REVIEW": (
-        "Deterministic review evidence caused the system to suggest this group; "
+        "Deterministic review evidence supports surfacing this group; "
         "human review is required."
     ),
     "CONFLICT": (
@@ -246,6 +273,27 @@ def _group_presentation(label: str, group, state: dict | None, member_rows) -> d
         "safety_status_crossover": member_rows[0].get("safety_status_crossover") if member_rows else False,
         "safety_status_message": member_rows[0].get("safety_status_message") if member_rows else None,
     }
+
+
+def _relationship_lines(explanation) -> str:
+    lines = []
+    details = {item.relationship_id: item for item in explanation.pair_explanations}
+    for relationship in explanation.relationships:
+        detail = details[relationship.relationship_id]
+        score = (
+            "score not recorded" if relationship.deterministic_score is None
+            else f"{relationship.deterministic_score:.2f}/100"
+        )
+        facts = (
+            detail.safety_items + detail.contradiction_items
+            + detail.weakening_items + detail.supporting_items
+        )[:3]
+        fact_text = "; ".join(item.label for item in facts) or "Persisted relationship state"
+        lines.append(
+            f"{relationship.left_display_identity} ↔ {relationship.right_display_identity} | "
+            f"{score} | {relationship.signed_relationship} | {fact_text}"
+        )
+    return "\n".join(lines)
 
 
 def _source_values(row: dict) -> tuple:
@@ -597,14 +645,16 @@ def _write_group_index(sheet, groups) -> None:
 
 def _write_review_groups(sheet, groups) -> None:
     _write_header(sheet, REVIEW_GROUP_COLUMNS)
-    group_level_columns = tuple(range(1, 8)) + (
+    group_level_columns = tuple(range(1, 10)) + (
         REVIEW_GROUP_COLUMNS.index("Match Strength") + 1,
         REVIEW_GROUP_COLUMNS.index("Match Band") + 1,
     )
     current_row = 2
     if not groups:
         _merge_and_write(
-            sheet, "A2:U3", "No candidate groups were generated for this scan.",
+            sheet,
+            f"A2:{get_column_letter(len(REVIEW_GROUP_COLUMNS))}3",
+            "No candidate groups were generated for this scan.",
             fill=PatternFill("solid", fgColor=_PALE_GRAY),
             font=Font(color=_TEXT, italic=True),
             alignment=Alignment(horizontal="center", vertical="center"),
@@ -618,11 +668,14 @@ def _write_review_groups(sheet, groups) -> None:
             _write_row(
                 sheet, current_row,
                 (p["label"], p["review_status"], p["evidence"], p["sites"],
-                 p["why"], p["human_decision"], p["human_comment"],
+                 p["why"], p["deterministic_group_summary"],
+                 p["relationship_evidence"], p["human_decision"], p["human_comment"],
                  member_number, *source, p["match_strength"], p["match_band"]),
-                wrap_columns=(2, 4, 5, 6, 7, 10),
+                wrap_columns=(2, 4, 5, 6, 7, 8, 9, 12),
             )
-            sheet.row_dimensions[current_row].height = 42
+            sheet.row_dimensions[current_row].height = max(
+                54, min(210, 30 + 18 * max(1, p["relationship_evidence"].count("\n") + 1))
+            )
             current_row += 1
         end_row = current_row - 1
         fill = _GROUP_FILLS[group_index % len(_GROUP_FILLS)]
@@ -647,7 +700,7 @@ def _write_review_groups(sheet, groups) -> None:
         _style_state(sheet.cell(start_row, 2), p["review_status"])
     _set_widths(
         sheet,
-        (16, 34, 20, 22, 42, 32, 42, 10, 20, 48, 18, 14, 18, 22, 22,
+        (16, 34, 20, 22, 38, 58, 72, 32, 42, 10, 20, 48, 18, 14, 18, 22, 22,
          16, 20, 18, 20, 20, 18, 16, 20),
     )
 
@@ -710,7 +763,9 @@ def _write_technical_reference(sheet, groups, snapshot) -> None:
         )
         sheet.row_dimensions[row_number].height = 34
     _merge_and_write(
-        sheet, "A14:H14", "GROUP AUDIT DATA",
+        sheet,
+        f"A{TECHNICAL_REFERENCE_HEADER_ROW - 1}:H{TECHNICAL_REFERENCE_HEADER_ROW - 1}",
+        "GROUP AUDIT DATA",
         fill=PatternFill("solid", fgColor="5B7894"),
         font=Font(color=_WHITE, bold=True, size=10),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -762,14 +817,23 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         rows_by_group.setdefault(row["group_key"], []).append(row)
 
     groups = []
+    strengths = MatchStrengthProjectionService(db).project_groups(snapshot.groups)
+    loaded_explanations = load_pair_explanation_sources(db, snapshot)
     for group_index, group in enumerate(snapshot.groups, start=1):
         canonical_id = serialize_versioned_identity_group_key(group.versioned_group_key)
         member_rows = tuple(rows_by_group.get(canonical_id, ()))
-        groups.append({
-            "presentation": _group_presentation(
+        explanation = project_group_explanation(
+            group, strengths[group.versioned_group_key],
+            sources_for_group(group, loaded_explanations), include_details=True,
+        )
+        presentation = _group_presentation(
                 f"CG-{group_index:06d}", group,
                 review_states.get(canonical_id), member_rows,
-            ),
+            )
+        presentation["deterministic_group_summary"] = explanation.group_summary
+        presentation["relationship_evidence"] = _relationship_lines(explanation)
+        groups.append({
+            "presentation": presentation,
             "member_rows": member_rows,
         })
 
