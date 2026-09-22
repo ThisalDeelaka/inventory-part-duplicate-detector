@@ -267,15 +267,23 @@ def _render_pair(source, evidence, members_by_reference) -> PairExplanationReadM
 
 def _pair_fact_phrases(detail: PairExplanationReadModel) -> tuple[str, ...]:
     """Render a few concrete persisted facts without inferring new evidence."""
+    labels = {
+        "description_similarity": "description similarity",
+        "part_no_similarity": "part-number similarity",
+        "technical_token_score": "technical-term similarity",
+        "tfidf_score": "wording similarity",
+        "fuzzy_score": "wording similarity",
+    }
     phrases = []
     for item in detail.supporting_items:
-        if item.numeric_value is not None and item.numeric_scale == 100.0:
-            phrases.append(f"{item.label.lower()} is {item.numeric_value:.2f}/100")
-        elif item.source_field == "uom_context":
-            if item.code == "UOM_SAME_BASIS":
-                phrases.append("the Inventory UOMs share the same basis")
-            elif "SAME" in item.detail:
-                phrases.append("the Inventory UOMs match")
+        component = item.source_field.removeprefix("component_scores.")
+        label = labels.get(component)
+        if (
+            label is not None
+            and item.numeric_value is not None
+            and item.numeric_scale == 100.0
+        ):
+            phrases.append(f"{label} is {item.numeric_value:.2f}/100")
         if len(phrases) == 2:
             break
     return tuple(dict.fromkeys(phrases))
@@ -287,68 +295,91 @@ def _summary(group, details, supporting, cannot_link, complete) -> str:
     if count == 2:
         detail = details[0] if details else None
         relationship = detail.signed_relationship if detail else "UNKNOWN"
-        if relationship == "STRONG_SUPPORT":
-            opening = (
-                "These two records show strong evidence of representing the same "
-                "inventory item."
-            )
-        elif relationship == "REVIEW_SUPPORT":
-            opening = (
-                "These two records have enough recorded matching evidence to warrant "
-                "review, but the deterministic classification remains Review Support."
-            )
-        else:
-            opening = (
-                "These two records were retained as a candidate group because their "
-                f"persisted relationship is classified as {relationship.replace('_', ' ').title()}."
-            )
         facts = _pair_fact_phrases(detail) if detail else ()
         if facts:
-            opening += " Recorded evidence shows that " + " and ".join(facts) + "."
-        return opening
+            return "These two records were grouped because their " + " and ".join(facts) + "."
+        if relationship in {"STRONG_SUPPORT", "REVIEW_SUPPORT"}:
+            return (
+                "These two records were grouped because the stored comparison "
+                "contains supporting matching information."
+            )
+        return "These two records were retained together for human review."
     if complete and supporting == possible:
         opening = (
-            f"All {count} records have supporting pairwise evidence, so the system "
-            f"retained them as one candidate group. All {possible} possible internal "
-            "relationships support the group."
+            f"All {count} records are connected by supporting pair matches. All "
+            f"{possible} of {possible} possible record-to-record relationships "
+            "support this group."
         )
     else:
         opening = (
-            f"The system retained these {count} records as one candidate group because "
-            f"{supporting} of {possible} possible internal relationships have persisted "
-            "supporting evidence."
+            f"These {count} records were grouped because {supporting} of {possible} "
+            "possible record-to-record relationships contain supporting matching "
+            "information."
         )
     if any(detail.signed_relationship == "REVIEW_SUPPORT" for detail in details):
         opening += (
-            " Human review is still required because one or more relationships remain "
-            "Review Support."
+            " At least one pair still requires review, so the whole group should be "
+            "checked before confirmation."
         )
-    if complete and cannot_link == 0:
-        opening += " No internal cannot-link relationship is recorded."
     return opening
+
+
+_BUSINESS_REVIEW_GUIDANCE = {
+    "DETERMINISTIC_REVIEW_CANDIDATE": (
+        "There is enough matching information to review these records together, "
+        "but not enough for Stronger Evidence. Compare the item details before "
+        "confirming they are the same item."
+    ),
+    "LEXICAL_SUPPORT_NOT_INDEPENDENT": (
+        "The descriptions look similar, but the similarity may come from the same "
+        "wording pattern rather than independent identifying information. Compare "
+        "the item details before confirming."
+    ),
+    "CROSS_FIELD_IDENTITY_INCOHERENCE": (
+        "The descriptions match strongly, but other identity details do not align "
+        "consistently. Compare the differing item details before confirming."
+    ),
+}
+
+
+def business_match_facts(detail: PairExplanationReadModel) -> tuple[str, ...]:
+    """Return bounded, business-readable facts already present in pair evidence."""
+    return _pair_fact_phrases(detail)
+
+
+def business_review_guidance_for_pair(detail: PairExplanationReadModel) -> str:
+    """Translate persisted reason codes into safe reviewer guidance."""
+    for code in (
+        "CROSS_FIELD_IDENTITY_INCOHERENCE",
+        "LEXICAL_SUPPORT_NOT_INDEPENDENT",
+        "DETERMINISTIC_REVIEW_CANDIDATE",
+    ):
+        if code in detail.decision_reason_codes:
+            return _BUSINESS_REVIEW_GUIDANCE[code]
+    if detail.signed_relationship == "STRONG_SUPPORT":
+        return (
+            "Strong matching evidence was found. Confirm that both records represent "
+            "the same inventory item."
+        )
+    return (
+        "Compare the item details before confirming that both records represent the "
+        "same inventory item."
+    )
 
 
 def review_consideration_for_group(explanation: GroupExplanation) -> str:
     """Explain the review boundary from persisted facts, separately from support."""
-    limitations = []
-    for detail in explanation.pair_explanations:
-        for item in (
-            detail.safety_items + detail.contradiction_items + detail.weakening_items
-        ):
-            if item.source_field == "uom_context" and "SAME" in item.detail:
-                continue
-            if item.detail not in limitations:
-                limitations.append(item.detail)
     if explanation.evidence_tier == "Review Evidence":
-        if limitations:
-            return "Human review is required. " + " ".join(limitations[:2])
-        return (
-            "Human review is required because one or more persisted relationships "
-            "remain classified as Review Support."
-        )
+        guidance = tuple(dict.fromkeys(
+            business_review_guidance_for_pair(detail)
+            for detail in explanation.pair_explanations
+        ))
+        if guidance:
+            return " ".join(guidance[:2])
+        return "Compare the item details before confirming this candidate group."
     return (
-        "Review the recorded evidence before confirming this suggestion; the system "
-        "has not confirmed these records as duplicates."
+        "Strong matching evidence was found. Confirm that the records represent the "
+        "same inventory item."
     )
 
 

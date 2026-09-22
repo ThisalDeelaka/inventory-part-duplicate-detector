@@ -112,11 +112,9 @@ def test_group_relationship_and_pair_read_models_are_specific_and_separate_score
     )
     assert result.version == GROUP_EXPLANATION_VERSION
     assert result.relationship_coverage_complete is True
-    assert result.group_summary.startswith(
-        "These two records have enough recorded matching evidence"
-    )
+    assert result.group_summary.startswith("These two records were grouped because")
     assert "description similarity is 92.50/100" in result.group_summary
-    assert "Inventory UOMs share the same basis" in result.group_summary
+    assert "Inventory UOM" not in result.group_summary
     assert result.relationships[0].deterministic_score == 97.5
     assert result.relationships[0].signed_relationship == "REVIEW_SUPPORT"
     detail = result.pair_explanations[0]
@@ -127,8 +125,9 @@ def test_group_relationship_and_pair_read_models_are_specific_and_separate_score
     }
     assert any(item.numeric_value == 92.5 for item in detail.supporting_items)
     consideration = review_consideration_for_group(result)
-    assert "Human review is required" in consideration
-    assert "lexical support is not independent identity evidence" in consideration
+    assert "descriptions match strongly" in consideration
+    assert "other identity details do not align consistently" in consideration
+    assert "persisted evaluator" not in consideration
     assert "caused" not in result.group_summary.lower()
     assert "decisive" not in result.group_summary.lower()
 

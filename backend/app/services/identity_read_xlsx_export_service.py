@@ -15,6 +15,8 @@ from app.core.constants import FIELD_DEFINITIONS
 from app.db.models import DuplicateScan
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
 from app.identity_read.deterministic_explanations import (
+    business_match_facts,
+    business_review_guidance_for_pair,
     project_group_explanation,
     review_consideration_for_group,
     sources_for_group,
@@ -44,11 +46,11 @@ SHEET_ORDER = (
     "Technical Reference",
 )
 GROUP_INDEX_COLUMNS = (
-    "Group", "Evidence", "Match Strength", "Match Band", "Members", "Sites",
+    "Group", "Evidence Tier", "Match Strength", "Match Band", "Members", "Sites",
     "Review Consideration", "Human Decision", "Human Comment",
 )
 REVIEW_GROUP_COLUMNS = (
-    "Group", "Evidence", "Match Strength", "Match Band", "Group Sites",
+    "Group", "Evidence Tier", "Match Strength", "Match Band", "Group Sites",
     "Review Consideration", "Why This Group Exists", "Relationship Evidence",
     "Human Decision", "Human Comment", "Member #", "Part Number",
     "Description", "Site", "UOM", "Part Type", "Commodity Group 01",
@@ -56,7 +58,7 @@ REVIEW_GROUP_COLUMNS = (
     "Product Family", "Product Category", "HSN/SAC Code",
 )
 DETAILED_DATA_COLUMNS = (
-    "Group", "Evidence", "Members", "Group Sites",
+    "Group", "Members", "Group Sites",
     "Human Decision", "Human Comment", "Part Number", "Description", "Site",
     "Inventory UOM", "Part Type", "Commodity Group 01", "Commodity Group 02",
     "Safety Code", "Accounting Group", "Product Code", "Product Family",
@@ -136,6 +138,10 @@ MATCH_STRENGTH_TECHNICAL_CONTRACT = (
     (
         "Execution boundary",
         "No evaluator rerun and no LLM/provider call. Human review remains authoritative.",
+    ),
+    (
+        "Business-facing labels",
+        "Evidence Tier and Match Band wording in Review Groups and Group Index is presentation-only; internal values and contracts are unchanged.",
     ),
 )
 TECHNICAL_REFERENCE_HEADER_ROW = len(MATCH_STRENGTH_TECHNICAL_CONTRACT) + 5
@@ -229,6 +235,12 @@ def _sites(member_rows) -> str:
 
 def _group_presentation(label: str, group, state: dict | None, member_rows) -> dict:
     _review_state, human_decision = human_review_presentation(state)
+    raw_match_band = member_rows[0].get("match_band") if member_rows else None
+    display_match_band = {
+        "HIGH_MATCH": "High Match",
+        "MODERATE_MATCH": "Moderate Match",
+        "BORDERLINE_MATCH": "Borderline Match",
+    }.get(raw_match_band, raw_match_band)
     return {
         "label": label,
         "canonical_id": serialize_versioned_identity_group_key(group.versioned_group_key),
@@ -239,7 +251,8 @@ def _group_presentation(label: str, group, state: dict | None, member_rows) -> d
         "human_decision": human_decision,
         "human_comment": (state or {}).get("comment") or "",
         "match_strength": member_rows[0].get("match_strength") if member_rows else None,
-        "match_band": member_rows[0].get("match_band") if member_rows else None,
+        "match_band": display_match_band,
+        "match_band_code": raw_match_band,
         "match_strength_version": member_rows[0].get("match_strength_version") if member_rows else None,
         "match_strength_status": member_rows[0].get("match_strength_status") if member_rows else None,
         "match_strength_unscored_reason": member_rows[0].get("match_strength_unscored_reason") if member_rows else None,
@@ -255,7 +268,7 @@ def _group_presentation(label: str, group, state: dict | None, member_rows) -> d
 
 
 def _relationship_lines(explanation) -> str:
-    lines = []
+    blocks = []
     details = {item.relationship_id: item for item in explanation.pair_explanations}
     for relationship in explanation.relationships:
         detail = details[relationship.relationship_id]
@@ -263,31 +276,31 @@ def _relationship_lines(explanation) -> str:
             "score not recorded" if relationship.deterministic_score is None
             else f"{relationship.deterministic_score:.2f}/100"
         )
-        support = detail.supporting_items[:2]
-        limitations = (
-            detail.safety_items + detail.contradiction_items + detail.weakening_items
-        )[:2]
+        support_label = {
+            "STRONG_SUPPORT": "Strong Support",
+            "REVIEW_SUPPORT": "Review Support",
+        }.get(
+            relationship.signed_relationship,
+            relationship.signed_relationship.replace("_", " ").title(),
+        )
+        facts = business_match_facts(detail)
         sections = [
             f"{relationship.left_display_identity} ↔ {relationship.right_display_identity}",
-            score,
-            relationship.signed_relationship.replace("_", " ").title(),
+            f"Pair match: {score} · {support_label}",
+            "What matched: " + (
+                "; ".join(facts)
+                if facts else "Supporting matching information is recorded."
+            ),
+            "What to check: " + business_review_guidance_for_pair(detail),
         ]
-        if support:
-            sections.append("Evidence: " + "; ".join(
-                f"{item.label} {item.numeric_value:.2f}/100"
-                if item.numeric_value is not None else item.label
-                for item in support
-            ))
-        if limitations:
-            sections.append(
-                "Review consideration: " + "; ".join(item.label for item in limitations)
-            )
         if detail.decision_reason_codes:
-            sections.append("Technical: " + ", ".join(detail.decision_reason_codes))
+            sections.append(
+                "Technical code: " + ", ".join(detail.decision_reason_codes)
+            )
         if detail.availability_message:
             sections.append(detail.availability_message)
-        lines.append(" | ".join(sections))
-    return "\n".join(lines)
+        blocks.append("\n".join(sections))
+    return "\n\n".join(blocks)
 
 
 def _source_values(row: dict) -> tuple:
@@ -694,16 +707,16 @@ def _write_detailed_data(sheet, groups) -> None:
         for member_row in item["member_rows"]:
             _write_row(
                 sheet, row_number,
-                (p["label"], p["evidence"], p["members"], p["sites"],
+                (p["label"], p["members"], p["sites"],
                  p["human_decision"], p["human_comment"],
                  *_source_values(member_row)),
-                wrap_columns=(2, 4, 5, 6, 8),
+                wrap_columns=(3, 4, 5, 7),
             )
             sheet.row_dimensions[row_number].height = 36
             row_number += 1
     _set_widths(
         sheet,
-        (16, 20, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
+        (16, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
          20, 18, 20, 20),
     )
     if sheet.max_row >= 2:
@@ -829,7 +842,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     for item in groups:
         presentation = item["presentation"]
         key = (
-            presentation["match_band"]
+            presentation["match_band_code"]
             if presentation["match_strength_status"] == "SCORED"
             else "UNSCORED"
         )

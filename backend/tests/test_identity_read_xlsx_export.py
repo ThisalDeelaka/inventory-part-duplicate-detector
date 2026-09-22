@@ -142,17 +142,23 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
     assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
     assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
-    assert "enough recorded matching evidence" in review.cell(
+    assert "were grouped because" in review.cell(
         2, REVIEW_GROUP_COLUMNS.index("Why This Group Exists") + 1
     ).value
     review_consideration = review.cell(
         2, REVIEW_GROUP_COLUMNS.index("Review Consideration") + 1
     ).value
-    assert "Human review is required" in review_consideration
+    assert "Compare the" in review_consideration
     relationship_text = review.cell(
         2, REVIEW_GROUP_COLUMNS.index("Relationship Evidence") + 1
     ).value
     assert "/100" in relationship_text
+    assert "Pair match:" in relationship_text
+    assert "What matched:" in relationship_text
+    assert "What to check:" in relationship_text
+    assert "Technical code:" in relationship_text
+    assert "Fuzzy lexical score" not in relationship_text
+    assert "Inventory UOM relationship" not in relationship_text
     assert "Review Support" in relationship_text
     assert "caused" not in relationship_text.lower()
     assert tuple(cell.value for cell in index[1]) == GROUP_INDEX_COLUMNS
@@ -176,12 +182,13 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert len(detail_rows) == len(tech_rows) == len(csv_rows) == group.member_count
     assert {row["Group"] for row in detail_rows} == {"CG-000001"}
     assert "Review Status" not in detail_rows[0]
-    assert {row["Evidence"] for row in detail_rows} == {"Review Evidence"}
+    assert "Evidence" not in detail_rows[0]
+    assert "Evidence Tier" not in detail_rows[0]
     assert {row["Human Decision"] for row in detail_rows} == {
         "Deferred for later review"
     }
     assert {row["Human Comment"] for row in detail_rows} == {long_comment}
-    assert flat["F"][1].alignment.wrap_text is True
+    assert flat["E"][1].alignment.wrap_text is True
     assert max(flat.row_dimensions[row].height for row in range(2, flat.max_row + 1)) <= 42
 
     canonical = serialize_versioned_identity_group_key(group.versioned_group_key)
@@ -221,6 +228,8 @@ def test_match_strength_xlsx_presentation_is_group_scoped_and_auditable(db):
     assert "does not replace human review" in overview_text
 
     detailed_headers = tuple(cell.value for cell in workbook["Detailed Data"][1])
+    assert "Evidence" not in detailed_headers
+    assert "Evidence Tier" not in detailed_headers
     assert "Match Strength" not in detailed_headers
     assert "Match Band" not in detailed_headers
     assert detailed_headers == DETAILED_DATA_COLUMNS
@@ -297,12 +306,12 @@ def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, cl
     assert {row["Human Decision"] for row in rows} == {"Not yet reviewed"}
     assert all("Why Suggested" not in row for row in rows)
     assert all(
-        row["Review Consideration"].startswith("Human review is required")
+        "enough matching information to review these records together"
+        in row["Review Consideration"]
         for row in rows
     )
     assert all(
-        "persisted evaluator classified this relationship as requiring human review"
-        in row["Review Consideration"]
+        "persisted evaluator" not in row["Review Consideration"]
         for row in rows
     )
     overview = workbook["Overview"]
@@ -506,7 +515,7 @@ def test_formula_like_inventory_values_remain_literal_and_source_immutable(
     response = client.get("/api/scans/21/identity-read/system-groups/export.xlsx")
     assert response.status_code == 200
     row = _workbook(response.content)["Detailed Data"][2]
-    for index, expected in ((6, "=1+1"), (7, "+ABC"), (8, "-XYZ"), (9, "@PART")):
+    for index, expected in ((5, "=1+1"), (6, "+ABC"), (7, "-XYZ"), (8, "@PART")):
         assert row[index].value == expected
         assert row[index].data_type == "s"
     assert original_member.part_no != changed_member.part_no
