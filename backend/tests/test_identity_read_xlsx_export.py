@@ -30,7 +30,6 @@ from app.services.identity_read_xlsx_export_service import (
     TECHNICAL_REFERENCE_HEADER_ROW,
     WORKBOOK_NOTICE,
     authority_selected_system_groups_to_xlsx,
-    concise_reason_for_group_status,
     reason_for_group_status,
 )
 from test_group_first_backend_inversion import authoritative_group, review_scan
@@ -143,21 +142,27 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
     assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
     assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
-    assert "candidate group" in review.cell(
+    assert "enough recorded matching evidence" in review.cell(
         2, REVIEW_GROUP_COLUMNS.index("Why This Group Exists") + 1
     ).value
+    review_consideration = review.cell(
+        2, REVIEW_GROUP_COLUMNS.index("Review Consideration") + 1
+    ).value
+    assert "Human review is required" in review_consideration
     relationship_text = review.cell(
         2, REVIEW_GROUP_COLUMNS.index("Relationship Evidence") + 1
     ).value
     assert "/100" in relationship_text
-    assert "SUPPORT" in relationship_text
+    assert "Review Support" in relationship_text
     assert "caused" not in relationship_text.lower()
     assert tuple(cell.value for cell in index[1]) == GROUP_INDEX_COLUMNS
     assert tuple(cell.value for cell in flat[1]) == DETAILED_DATA_COLUMNS
     assert tuple(
         cell.value for cell in technical[TECHNICAL_REFERENCE_HEADER_ROW]
     ) == TECHNICAL_REFERENCE_COLUMNS
-    assert all(sheet.freeze_panes == "A2" for sheet in (review, index, flat))
+    assert review.freeze_panes == "F2"
+    assert index.freeze_panes == "E2"
+    assert flat.freeze_panes == "A2"
     assert technical.freeze_panes == f"A{TECHNICAL_REFERENCE_HEADER_ROW + 1}"
     assert not flat.merged_cells.ranges
     assert flat.auto_filter.ref is None
@@ -170,13 +175,13 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     tech_rows = _technical_rows(technical)
     assert len(detail_rows) == len(tech_rows) == len(csv_rows) == group.member_count
     assert {row["Group"] for row in detail_rows} == {"CG-000001"}
-    assert {row["Review Status"] for row in detail_rows} == {"Review Deferred"}
+    assert "Review Status" not in detail_rows[0]
     assert {row["Evidence"] for row in detail_rows} == {"Review Evidence"}
     assert {row["Human Decision"] for row in detail_rows} == {
         "Deferred for later review"
     }
     assert {row["Human Comment"] for row in detail_rows} == {long_comment}
-    assert flat["G"][1].alignment.wrap_text is True
+    assert flat["F"][1].alignment.wrap_text is True
     assert max(flat.row_dimensions[row].height for row in range(2, flat.max_row + 1)) <= 42
 
     canonical = serialize_versioned_identity_group_key(group.versioned_group_key)
@@ -192,13 +197,10 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
         assert "Stable Record Reference" not in tuple(cell.value for cell in primary[1])
 
     expected_merges = {
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGHI"
+        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGHIJ"
     }
-    expected_merges.update({
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in ("X", "Y")
-    })
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
-    assert not any(10 <= merged.min_col <= 23 for merged in review.merged_cells.ranges)
+    assert not any(11 <= merged.min_col <= 24 for merged in review.merged_cells.ranges)
     assert [row["Member #"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
     )
@@ -276,9 +278,7 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     member_count = snapshot.groups[0].member_count
     assert member_count >= 3
     assert {str(item) for item in sheet.merged_cells.ranges} == {
-        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFGHI"
-    } | {
-        f"{letter}2:{letter}{member_count + 1}" for letter in ("X", "Y")
+        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFGHIJ"
     }
     rows = _dict_rows(sheet)
     assert len(rows) == member_count
@@ -293,11 +293,18 @@ def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, cl
         f"/api/scans/{scan.id}/identity-read/system-groups/export.xlsx"
     ).content)
     rows = _dict_rows(workbook["Group Index"])
-    assert {row["Review Status"] for row in rows} == {"Requires Human Review"}
+    assert all("Review Status" not in row for row in rows)
     assert {row["Human Decision"] for row in rows} == {"Not yet reviewed"}
-    assert {row["Why Suggested"] for row in rows} == {
-        concise_reason_for_group_status("POSSIBLE_DUPLICATE_GROUP_REVIEW")
-    }
+    assert all("Why Suggested" not in row for row in rows)
+    assert all(
+        row["Review Consideration"].startswith("Human review is required")
+        for row in rows
+    )
+    assert all(
+        "persisted evaluator classified this relationship as requiring human review"
+        in row["Review Consideration"]
+        for row in rows
+    )
     overview = workbook["Overview"]
     assert overview["A29"].value == "Reviewed"
     assert overview["G29"].value == "0 of 1"
@@ -499,7 +506,7 @@ def test_formula_like_inventory_values_remain_literal_and_source_immutable(
     response = client.get("/api/scans/21/identity-read/system-groups/export.xlsx")
     assert response.status_code == 200
     row = _workbook(response.content)["Detailed Data"][2]
-    for index, expected in ((7, "=1+1"), (8, "+ABC"), (9, "-XYZ"), (10, "@PART")):
+    for index, expected in ((6, "=1+1"), (7, "+ABC"), (8, "-XYZ"), (9, "@PART")):
         assert row[index].value == expected
         assert row[index].data_type == "s"
     assert original_member.part_no != changed_member.part_no

@@ -61,11 +61,22 @@ The group list shows “Why this group exists.” Group detail shows a relations
 list with collapsed pair details by default; no network graph or raw JSON is
 used. Two-member groups have one row, while the current largest group has ten.
 
-The XLSX remains exactly five sheets with zero formulas. `Review Groups` adds
-`Why This Group Exists` and wrapped multiline `Relationship Evidence` columns.
-`Group Index` remains compact and `Detailed Data` remains record-oriented.
-`Technical Reference` documents these contracts, availability semantics,
-reason rendering, safe causal language, and the no-evaluator/no-LLM boundary.
+The XLSX remains exactly five sheets with zero formulas. `Review Groups` keeps
+the compact group context (`Group`, `Evidence`, `Match Strength`, `Match Band`,
+and `Group Sites`) frozen on the left, followed by `Review Consideration`,
+`Why This Group Exists`, and wrapped multiline `Relationship Evidence`.
+`Group Index` freezes its first four compact context columns. `Detailed Data`
+remains record-oriented and does not contain Match Strength or Match Band.
+
+The former `Why Suggested` column repeated the explanation without adding a
+distinct reviewer action. It is therefore repurposed as `Review Consideration`
+and now contains only persisted reasons that keep a group under human review,
+or a bounded reminder that human review remains authoritative. Export-only
+`Review Status` columns were removed; `Human Decision` and `Human Comment`
+remain unchanged. Exact reason codes stay available in `Relationship Evidence`
+technical details. `Technical Reference` documents the contracts, availability
+semantics, reason rendering, safe causal language, and no-evaluator/no-LLM
+boundary.
 
 ## Acceptance
 

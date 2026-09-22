@@ -106,6 +106,10 @@ _REASON_RENDERERS = {
         "safety", "Lexical support is not independent",
         "The persisted classifier requires review because lexical support is not independent identity evidence.",
     ),
+    "DETERMINISTIC_REVIEW_CANDIDATE": (
+        "safety", "Deterministic review classification",
+        "The persisted evaluator classified this relationship as requiring human review.",
+    ),
     "CROSS_FIELD_IDENTITY_INCOHERENCE": (
         "safety", "Cross-field identity incoherence",
         "The persisted classifier found identity-relevant fields that do not form a coherent strong identity signal.",
@@ -261,26 +265,90 @@ def _render_pair(source, evidence, members_by_reference) -> PairExplanationReadM
     )
 
 
-def _summary(group, strength, supporting, cannot_link, complete) -> str:
+def _pair_fact_phrases(detail: PairExplanationReadModel) -> tuple[str, ...]:
+    """Render a few concrete persisted facts without inferring new evidence."""
+    phrases = []
+    for item in detail.supporting_items:
+        if item.numeric_value is not None and item.numeric_scale == 100.0:
+            phrases.append(f"{item.label.lower()} is {item.numeric_value:.2f}/100")
+        elif item.source_field == "uom_context":
+            if item.code == "UOM_SAME_BASIS":
+                phrases.append("the Inventory UOMs share the same basis")
+            elif "SAME" in item.detail:
+                phrases.append("the Inventory UOMs match")
+        if len(phrases) == 2:
+            break
+    return tuple(dict.fromkeys(phrases))
+
+
+def _summary(group, details, supporting, cannot_link, complete) -> str:
     count = group.member_count
     possible = count * (count - 1) // 2
-    score = getattr(strength, "match_strength", None)
-    score_text = f" Match Strength: {score:.2f} / 100." if score is not None else ""
-    tier = "Stronger Evidence" if _value(group.status) == "LIKELY_DUPLICATE_GROUP" else "Review Evidence"
     if count == 2:
-        return (
-            f"This 2-record candidate group is supported by {supporting} deterministic relationship."
-            f"{score_text} Evidence Tier: {tier}. See the pair evidence below for exact matching and classification reasons."
+        detail = details[0] if details else None
+        relationship = detail.signed_relationship if detail else "UNKNOWN"
+        if relationship == "STRONG_SUPPORT":
+            opening = (
+                "These two records show strong evidence of representing the same "
+                "inventory item."
+            )
+        elif relationship == "REVIEW_SUPPORT":
+            opening = (
+                "These two records have enough recorded matching evidence to warrant "
+                "review, but the deterministic classification remains Review Support."
+            )
+        else:
+            opening = (
+                "These two records were retained as a candidate group because their "
+                f"persisted relationship is classified as {relationship.replace('_', ' ').title()}."
+            )
+        facts = _pair_fact_phrases(detail) if detail else ()
+        if facts:
+            opening += " Recorded evidence shows that " + " and ".join(facts) + "."
+        return opening
+    if complete and supporting == possible:
+        opening = (
+            f"All {count} records have supporting pairwise evidence, so the system "
+            f"retained them as one candidate group. All {possible} possible internal "
+            "relationships support the group."
         )
-    coverage = (
-        f"supporting evidence on all {possible} possible internal relationships"
-        if complete and supporting == possible
-        else f"{supporting} supporting relationships among {possible} possible internal pairs"
-    )
-    no_conflict = " No internal cannot-link relationship is recorded." if complete and cannot_link == 0 else ""
+    else:
+        opening = (
+            f"The system retained these {count} records as one candidate group because "
+            f"{supporting} of {possible} possible internal relationships have persisted "
+            "supporting evidence."
+        )
+    if any(detail.signed_relationship == "REVIEW_SUPPORT" for detail in details):
+        opening += (
+            " Human review is still required because one or more relationships remain "
+            "Review Support."
+        )
+    if complete and cannot_link == 0:
+        opening += " No internal cannot-link relationship is recorded."
+    return opening
+
+
+def review_consideration_for_group(explanation: GroupExplanation) -> str:
+    """Explain the review boundary from persisted facts, separately from support."""
+    limitations = []
+    for detail in explanation.pair_explanations:
+        for item in (
+            detail.safety_items + detail.contradiction_items + detail.weakening_items
+        ):
+            if item.source_field == "uom_context" and "SAME" in item.detail:
+                continue
+            if item.detail not in limitations:
+                limitations.append(item.detail)
+    if explanation.evidence_tier == "Review Evidence":
+        if limitations:
+            return "Human review is required. " + " ".join(limitations[:2])
+        return (
+            "Human review is required because one or more persisted relationships "
+            "remain classified as Review Support."
+        )
     return (
-        f"This {count}-record candidate group has {coverage}.{score_text} Evidence Tier: {tier}."
-        f"{no_conflict} Review the pair relationships below for exact evidence and classification controls."
+        "Review the recorded evidence before confirming this suggestion; the system "
+        "has not confirmed these records as duplicates."
     )
 
 
@@ -331,7 +399,9 @@ def project_group_explanation(group, strength, pair_sources: dict[str, Determini
         cannot_link_relationships=cannot_link,
         other_relationships=len(maps) - supporting - cannot_link,
         relationship_coverage_complete=complete,
-        group_summary=_summary(group, strength, supporting, cannot_link, complete),
+        group_summary=_summary(
+            group, tuple(pair_details), supporting, cannot_link, complete
+        ),
         relationships=tuple(maps),
         pair_explanations=tuple(pair_details) if include_details else (),
     )

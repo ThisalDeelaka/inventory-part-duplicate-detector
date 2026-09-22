@@ -16,6 +16,7 @@ from app.db.models import DuplicateScan
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
 from app.identity_read.deterministic_explanations import (
     project_group_explanation,
+    review_consideration_for_group,
     sources_for_group,
 )
 from app.services.deterministic_explanation_service import (
@@ -43,21 +44,19 @@ SHEET_ORDER = (
     "Technical Reference",
 )
 GROUP_INDEX_COLUMNS = (
-    "Group", "Review Status", "Evidence", "Members", "Sites",
-    "Why Suggested", "Human Decision", "Human Comment", "Match Strength",
-    "Match Band",
+    "Group", "Evidence", "Match Strength", "Match Band", "Members", "Sites",
+    "Review Consideration", "Human Decision", "Human Comment",
 )
 REVIEW_GROUP_COLUMNS = (
-    "Group", "Review Status", "Evidence", "Group Sites", "Why Suggested",
-    "Why This Group Exists", "Relationship Evidence",
+    "Group", "Evidence", "Match Strength", "Match Band", "Group Sites",
+    "Review Consideration", "Why This Group Exists", "Relationship Evidence",
     "Human Decision", "Human Comment", "Member #", "Part Number",
     "Description", "Site", "UOM", "Part Type", "Commodity Group 01",
     "Commodity Group 02", "Safety Code", "Accounting Group", "Product Code",
     "Product Family", "Product Category", "HSN/SAC Code",
-    "Match Strength", "Match Band",
 )
 DETAILED_DATA_COLUMNS = (
-    "Group", "Review Status", "Evidence", "Members", "Group Sites",
+    "Group", "Evidence", "Members", "Group Sites",
     "Human Decision", "Human Comment", "Part Number", "Description", "Site",
     "Inventory UOM", "Part Type", "Commodity Group 01", "Commodity Group 02",
     "Safety Code", "Accounting Group", "Product Code", "Product Family",
@@ -182,22 +181,10 @@ _REASONS = {
         "Identity evaluation is incomplete or deferred; no same-identity conclusion is implied."
     ),
 }
-_SHORT_REASONS = {
-    "LIKELY_DUPLICATE_GROUP": "Multiple deterministic identity signals support review.",
-    "POSSIBLE_DUPLICATE_GROUP_REVIEW": (
-        "Some identity signals match; manual assessment is needed."
-    ),
-    "CONFLICT": "Identity signals conflict; manual assessment is needed.",
-    "DEFERRED": "Identity evaluation is incomplete; manual assessment is needed.",
-}
-
 _NAVY = "1F4E78"
 _PALE_BLUE = "EAF3F8"
 _PALE_GRAY = "F3F5F7"
 _PALE_GOLD = "FFF2CC"
-_PALE_GREEN = "E2F0D9"
-_PALE_RED = "FCE4D6"
-_PALE_PURPLE = "E4DFEC"
 _WHITE = "FFFFFF"
 _TEXT = "243746"
 _HEADER_FILL = PatternFill("solid", fgColor=_NAVY)
@@ -231,12 +218,6 @@ def reason_for_group_status(status: str) -> str:
     )
 
 
-def concise_reason_for_group_status(status: str) -> str:
-    return _SHORT_REASONS.get(
-        status, "System suggestion requires manual identity assessment."
-    )
-
-
 def _sites(member_rows) -> str:
     values = sorted({
         str(row.get("site_or_contract") or "").strip()
@@ -247,15 +228,13 @@ def _sites(member_rows) -> str:
 
 
 def _group_presentation(label: str, group, state: dict | None, member_rows) -> dict:
-    review_state, human_decision = human_review_presentation(state)
+    _review_state, human_decision = human_review_presentation(state)
     return {
         "label": label,
         "canonical_id": serialize_versioned_identity_group_key(group.versioned_group_key),
-        "review_status": review_state,
         "evidence": system_evidence_tier(group.status.value),
         "members": group.member_count,
         "sites": _sites(member_rows),
-        "why": concise_reason_for_group_status(group.status.value),
         "original_reason": reason_for_group_status(group.status.value),
         "human_decision": human_decision,
         "human_comment": (state or {}).get("comment") or "",
@@ -284,15 +263,30 @@ def _relationship_lines(explanation) -> str:
             "score not recorded" if relationship.deterministic_score is None
             else f"{relationship.deterministic_score:.2f}/100"
         )
-        facts = (
-            detail.safety_items + detail.contradiction_items
-            + detail.weakening_items + detail.supporting_items
-        )[:3]
-        fact_text = "; ".join(item.label for item in facts) or "Persisted relationship state"
-        lines.append(
-            f"{relationship.left_display_identity} ↔ {relationship.right_display_identity} | "
-            f"{score} | {relationship.signed_relationship} | {fact_text}"
-        )
+        support = detail.supporting_items[:2]
+        limitations = (
+            detail.safety_items + detail.contradiction_items + detail.weakening_items
+        )[:2]
+        sections = [
+            f"{relationship.left_display_identity} ↔ {relationship.right_display_identity}",
+            score,
+            relationship.signed_relationship.replace("_", " ").title(),
+        ]
+        if support:
+            sections.append("Evidence: " + "; ".join(
+                f"{item.label} {item.numeric_value:.2f}/100"
+                if item.numeric_value is not None else item.label
+                for item in support
+            ))
+        if limitations:
+            sections.append(
+                "Review consideration: " + "; ".join(item.label for item in limitations)
+            )
+        if detail.decision_reason_codes:
+            sections.append("Technical: " + ", ".join(detail.decision_reason_codes))
+        if detail.availability_message:
+            sections.append(detail.availability_message)
+        lines.append(" | ".join(sections))
     return "\n".join(lines)
 
 
@@ -328,16 +322,6 @@ def _write_header(sheet, columns, *, row_number: int = 1) -> None:
 def _set_widths(sheet, widths) -> None:
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
-
-
-def _style_state(cell, review_status: str) -> None:
-    color = {
-        "Human Confirmed Same-Identity Group": _PALE_GREEN,
-        "Human Rejected Candidate": _PALE_RED,
-        "Review Deferred": _PALE_PURPLE,
-    }.get(review_status, _PALE_GOLD)
-    cell.fill = PatternFill("solid", fgColor=color)
-    cell.font = Font(bold=True, color=_TEXT)
 
 
 def _merge_and_write(sheet, cell_range: str, value, *, fill, font, alignment) -> None:
@@ -629,14 +613,14 @@ def _write_group_index(sheet, groups) -> None:
         p = item["presentation"]
         _write_row(
             sheet, row_number,
-            (p["label"], p["review_status"], p["evidence"], p["members"],
-             p["sites"], p["why"], p["human_decision"], p["human_comment"],
-             p["match_strength"], p["match_band"]),
-            wrap_columns=(2, 5, 6, 7, 8),
+            (p["label"], p["evidence"], p["match_strength"], p["match_band"],
+             p["members"], p["sites"], p["review_consideration"],
+             p["human_decision"], p["human_comment"]),
+            wrap_columns=(2, 4, 6, 7, 8, 9),
         )
-        _style_state(sheet.cell(row_number, 2), p["review_status"])
         sheet.row_dimensions[row_number].height = 36
-    _set_widths(sheet, (16, 34, 20, 11, 22, 45, 32, 45, 16, 20))
+    _set_widths(sheet, (16, 20, 16, 20, 11, 22, 58, 32, 45))
+    sheet.freeze_panes = "E2"
     if groups:
         sheet.auto_filter.ref = (
             f"A1:{get_column_letter(len(GROUP_INDEX_COLUMNS))}{sheet.max_row}"
@@ -645,10 +629,7 @@ def _write_group_index(sheet, groups) -> None:
 
 def _write_review_groups(sheet, groups) -> None:
     _write_header(sheet, REVIEW_GROUP_COLUMNS)
-    group_level_columns = tuple(range(1, 10)) + (
-        REVIEW_GROUP_COLUMNS.index("Match Strength") + 1,
-        REVIEW_GROUP_COLUMNS.index("Match Band") + 1,
-    )
+    group_level_columns = tuple(range(1, 11))
     current_row = 2
     if not groups:
         _merge_and_write(
@@ -667,11 +648,11 @@ def _write_review_groups(sheet, groups) -> None:
             source = _source_values(member_row)
             _write_row(
                 sheet, current_row,
-                (p["label"], p["review_status"], p["evidence"], p["sites"],
-                 p["why"], p["deterministic_group_summary"],
-                 p["relationship_evidence"], p["human_decision"], p["human_comment"],
-                 member_number, *source, p["match_strength"], p["match_band"]),
-                wrap_columns=(2, 4, 5, 6, 7, 8, 9, 12),
+                (p["label"], p["evidence"], p["match_strength"], p["match_band"],
+                 p["sites"], p["review_consideration"],
+                 p["deterministic_group_summary"], p["relationship_evidence"],
+                 p["human_decision"], p["human_comment"], member_number, *source),
+                wrap_columns=(2, 4, 5, 6, 7, 8, 9, 10, 13),
             )
             sheet.row_dimensions[current_row].height = max(
                 54, min(210, 30 + 18 * max(1, p["relationship_evidence"].count("\n") + 1))
@@ -697,12 +678,12 @@ def _write_review_groups(sheet, groups) -> None:
             sheet.cell(start_row, column_number).alignment = Alignment(
                 vertical="center", wrap_text=True
             )
-        _style_state(sheet.cell(start_row, 2), p["review_status"])
     _set_widths(
         sheet,
-        (16, 34, 20, 22, 38, 58, 72, 32, 42, 10, 20, 48, 18, 14, 18, 22, 22,
-         16, 20, 18, 20, 20, 18, 16, 20),
+        (16, 20, 16, 20, 22, 58, 58, 72, 32, 42, 10, 20, 48, 18, 14, 18, 22,
+         22, 16, 20, 18, 20, 20, 18),
     )
+    sheet.freeze_panes = "F2"
 
 
 def _write_detailed_data(sheet, groups) -> None:
@@ -713,18 +694,17 @@ def _write_detailed_data(sheet, groups) -> None:
         for member_row in item["member_rows"]:
             _write_row(
                 sheet, row_number,
-                (p["label"], p["review_status"], p["evidence"], p["members"],
-                 p["sites"], p["human_decision"], p["human_comment"],
+                (p["label"], p["evidence"], p["members"], p["sites"],
+                 p["human_decision"], p["human_comment"],
                  *_source_values(member_row)),
-                wrap_columns=(2, 5, 6, 7, 9),
+                wrap_columns=(2, 4, 5, 6, 8),
             )
-            _style_state(sheet.cell(row_number, 2), p["review_status"])
             sheet.row_dimensions[row_number].height = 36
             row_number += 1
     _set_widths(
         sheet,
-        (16, 34, 20, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
-         20, 18, 20, 20, 18),
+        (16, 20, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
+         20, 18, 20, 20),
     )
     if sheet.max_row >= 2:
         table = Table(
@@ -829,8 +809,11 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         presentation = _group_presentation(
                 f"CG-{group_index:06d}", group,
                 review_states.get(canonical_id), member_rows,
-            )
+        )
         presentation["deterministic_group_summary"] = explanation.group_summary
+        presentation["review_consideration"] = review_consideration_for_group(
+            explanation
+        )
         presentation["relationship_evidence"] = _relationship_lines(explanation)
         groups.append({
             "presentation": presentation,
