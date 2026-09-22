@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import sqlite3
 import tempfile
+import time
 from collections import Counter
+from io import BytesIO
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from openpyxl import load_workbook
 
 from app.benchmarks.acceptance_provenance import request_provenance
 from app.benchmarks.match_strength_v2_shadow import (
@@ -27,12 +31,19 @@ from app.db.models import (
 )
 from app.g2_v2.contracts import G2V2EvidenceOrigin
 from app.match_strength.service import MatchStrengthProjectionService
+from app.identity_read.deterministic_explanations import (
+    project_group_explanation,
+)
 from app.resolution.pair_explanation import (
     PairExplanationAvailability,
     project_proposal_pair_explanation,
     project_targeted_pair_explanation,
 )
 from app.services.identity_read_service import IdentityReadService
+from app.services.identity_read_xlsx_export_service import (
+    SHEET_ORDER,
+    authority_selected_system_groups_to_xlsx,
+)
 from app.services.identity_resolution_service import load_persisted_resolution_result
 from app.services.scan_runner import ScanRunner
 
@@ -161,6 +172,57 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
             strengths = MatchStrengthProjectionService(session).project_groups(
                 snapshot.groups
             )
+            projection_started = time.perf_counter()
+            read_models = []
+            for group in snapshot.groups:
+                sources = {}
+                for item in group.internal_evidence:
+                    if item.evidence_origin == G2V2EvidenceOrigin.PROPOSAL_EVIDENCE:
+                        source = proposals[item.evidence_fingerprint]
+                        sources[item.evidence_fingerprint] = project_proposal_pair_explanation(
+                            source,
+                            record_reference_1=item.stable_record_reference_1,
+                            record_reference_2=item.stable_record_reference_2,
+                        )
+                    else:
+                        sources[item.evidence_fingerprint] = project_targeted_pair_explanation(
+                            targeted[item.evidence_fingerprint]
+                        )
+                read_models.append(project_group_explanation(
+                    group, strengths[group.versioned_group_key], sources,
+                    include_details=True,
+                ))
+            projection_elapsed = time.perf_counter() - projection_started
+            from app.api.routes_identity_groups import _read_group
+            baseline_payloads = [
+                _read_group(
+                    group, match_strength=strengths[group.versioned_group_key]
+                )
+                for group in snapshot.groups
+            ]
+            explanation_payloads = [
+                _read_group(
+                    group, match_strength=strengths[group.versioned_group_key],
+                    deterministic_explanation=replace(
+                        read_model, pair_explanations=()
+                    ),
+                )
+                for group, read_model in zip(snapshot.groups, read_models)
+            ]
+            payload_before = len(json.dumps(baseline_payloads, sort_keys=True))
+            payload_after = len(json.dumps(explanation_payloads, sort_keys=True))
+            largest_group_payload = max(
+                (
+                    len(json.dumps(_read_group(
+                        group,
+                        match_strength=strengths[group.versioned_group_key],
+                        deterministic_explanation=read_model,
+                        detail=True,
+                    ), sort_keys=True))
+                    for group, read_model in zip(snapshot.groups, read_models)
+                ),
+                default=0,
+            )
             bands = Counter(
                 result.match_band.value if result.match_band else "UNSCORED"
                 for result in strengths.values()
@@ -212,6 +274,33 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                     "visible_projection_contract": "G2_V2",
                 },
             )
+            xlsx_result = None
+            if mode == "site_selected":
+                xlsx_started = time.perf_counter()
+                workbook_bytes = authority_selected_system_groups_to_xlsx(
+                    session, scan.id
+                )
+                xlsx_seconds = time.perf_counter() - xlsx_started
+                workbook = load_workbook(BytesIO(workbook_bytes), data_only=False)
+                formula_count = sum(
+                    cell.data_type == "f"
+                    for sheet in workbook.worksheets
+                    for row in sheet.iter_rows()
+                    for cell in row
+                )
+                review_sheet = workbook["Review Groups"]
+                xlsx_result = {
+                    "seconds": round(xlsx_seconds, 6),
+                    "bytes": len(workbook_bytes),
+                    "sheets": list(workbook.sheetnames),
+                    "sheet_order_matches": tuple(workbook.sheetnames) == SHEET_ORDER,
+                    "formula_count": formula_count,
+                    "review_group_rows": review_sheet.max_row - 1,
+                    "maximum_row_height": max(
+                        (review_sheet.row_dimensions[index].height or 15)
+                        for index in range(2, review_sheet.max_row + 1)
+                    ),
+                }
             result = {
                 "request_fingerprint": request["sha256"],
                 "request_fingerprint_matches": (
@@ -243,6 +332,17 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                     "borderline": bands["BORDERLINE_MATCH"],
                 },
                 "explanation_coverage": {
+                    "group_summaries": len(read_models),
+                    "relationship_map_entries": sum(
+                        len(item.relationships) for item in read_models
+                    ),
+                    "rendered_pair_explanations": sum(
+                        len(item.pair_explanations) for item in read_models
+                    ),
+                    "projection_seconds": round(projection_elapsed, 6),
+                    "list_payload_bytes_before": payload_before,
+                    "list_payload_bytes_after": payload_after,
+                    "largest_group_payload_bytes": largest_group_payload,
                     "relationships": relationship_count,
                     "full": coverage["COMPLETE"],
                     "partial": coverage["PARTIAL_LEGACY"],
@@ -275,6 +375,7 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                 },
                 "semantic_stage_matches": stage_matches,
                 "semantic_fingerprints": current_stages,
+                "xlsx": xlsx_result,
             }
         finally:
             session.close()
