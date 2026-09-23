@@ -295,3 +295,48 @@ def project_proposal_pair_explanation(
         expected_explanation_fingerprint=None,
         complete=True,
     )
+
+
+def project_legacy_pair_explanation(source) -> DeterministicPairExplanationV1:
+    """Project only facts retained on an older relationship snapshot."""
+    required = (
+        "record_id_1", "record_id_2", "edge_class", "reason_codes",
+        "evidence_summary", "evaluator_version", "deterministic_score",
+        "evidence_origin",
+    )
+    if not all(hasattr(source, name) for name in required):
+        return DeterministicPairExplanationV1(
+            record_id_1=int(getattr(source, "record_id_1", 0)),
+            record_id_2=int(getattr(source, "record_id_2", 0)),
+            record_reference_1=source.stable_record_reference_1,
+            record_reference_2=source.stable_record_reference_2,
+            deterministic_score=getattr(source, "deterministic_score", None),
+            signed_relationship=getattr(source, "edge_class", "UNKNOWN"),
+            component_scores={}, classification_reason_codes=(),
+            rule_decision="", rejection_reason="", protected_conflicts=(),
+            generic_evidence={}, technical_evidence={}, uom_context={},
+            evaluation_context={}, evaluator_version="",
+            source_evidence_fingerprint=source.evidence_fingerprint,
+            source_kind="LEGACY_SNAPSHOT", source_request_fingerprint=None,
+            availability=PairExplanationAvailability.PARTIAL_LEGACY,
+            missing_fields=_RICH_FIELDS,
+            contract_version=PAIR_EXPLANATION_CONTRACT_VERSION,
+            explanation_fingerprint=f"legacy-{source.evidence_fingerprint}",
+        )
+    return _projection(
+        record_id_1=source.record_id_1,
+        record_id_2=source.record_id_2,
+        record_reference_1=source.stable_record_reference_1,
+        record_reference_2=source.stable_record_reference_2,
+        deterministic_score=source.deterministic_score,
+        signed_relationship=source.edge_class,
+        reason_codes=tuple(source.reason_codes),
+        evidence_summary=source.evidence_summary,
+        evaluator_version=source.evaluator_version,
+        evidence_fingerprint=source.evidence_fingerprint,
+        source_kind=str(getattr(source.evidence_origin, "value", source.evidence_origin)),
+        source_request_fingerprint=None,
+        explanation_evidence_json=None,
+        expected_explanation_fingerprint=None,
+        complete=False,
+    )

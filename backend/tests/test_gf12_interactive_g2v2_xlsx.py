@@ -239,7 +239,7 @@ def test_r6_19_merged_ranges_are_valid_and_non_overlapping(db, client):
     ranges = [CellRange(str(item)) for item in workbook["Review Groups"].merged_cells]
     for index, left in enumerate(ranges):
         assert left.min_row >= 2
-        assert left.min_col in {*range(1, 8), 22, 23}
+        assert left.min_col in set(range(1, 11))
         for right in ranges[index + 1:]:
             assert not (
                 left.min_row <= right.max_row and right.min_row <= left.max_row

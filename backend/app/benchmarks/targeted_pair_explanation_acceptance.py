@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import sqlite3
 import tempfile
+import time
 from collections import Counter
+from io import BytesIO
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from openpyxl import load_workbook
 
 from app.benchmarks.acceptance_provenance import request_provenance
 from app.benchmarks.match_strength_v2_shadow import (
@@ -27,12 +31,19 @@ from app.db.models import (
 )
 from app.g2_v2.contracts import G2V2EvidenceOrigin
 from app.match_strength.service import MatchStrengthProjectionService
+from app.identity_read.deterministic_explanations import (
+    project_group_explanation,
+)
 from app.resolution.pair_explanation import (
     PairExplanationAvailability,
     project_proposal_pair_explanation,
     project_targeted_pair_explanation,
 )
 from app.services.identity_read_service import IdentityReadService
+from app.services.identity_read_xlsx_export_service import (
+    SHEET_ORDER,
+    authority_selected_system_groups_to_xlsx,
+)
 from app.services.identity_resolution_service import load_persisted_resolution_result
 from app.services.scan_runner import ScanRunner
 
@@ -161,6 +172,129 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
             strengths = MatchStrengthProjectionService(session).project_groups(
                 snapshot.groups
             )
+            projection_started = time.perf_counter()
+            read_models = []
+            for group in snapshot.groups:
+                sources = {}
+                for item in group.internal_evidence:
+                    if item.evidence_origin == G2V2EvidenceOrigin.PROPOSAL_EVIDENCE:
+                        source = proposals[item.evidence_fingerprint]
+                        sources[item.evidence_fingerprint] = project_proposal_pair_explanation(
+                            source,
+                            record_reference_1=item.stable_record_reference_1,
+                            record_reference_2=item.stable_record_reference_2,
+                        )
+                    else:
+                        sources[item.evidence_fingerprint] = project_targeted_pair_explanation(
+                            targeted[item.evidence_fingerprint]
+                        )
+                read_models.append(project_group_explanation(
+                    group, strengths[group.versioned_group_key], sources,
+                    include_details=True,
+                ))
+            projection_elapsed = time.perf_counter() - projection_started
+            all_pair_details = [
+                pair
+                for model in read_models
+                for pair in model.pair_explanations
+            ]
+            two_member_strong = [
+                model for group, model in zip(snapshot.groups, read_models)
+                if group.member_count == 2
+                and group.status.value == "LIKELY_DUPLICATE_GROUP"
+            ][:5]
+            two_member_review = [
+                model for group, model in zip(snapshot.groups, read_models)
+                if group.member_count == 2
+                and group.status.value == "POSSIBLE_DUPLICATE_GROUP_REVIEW"
+            ][:5]
+            scored_pairs = sorted(
+                (pair for pair in all_pair_details if pair.deterministic_score is not None),
+                key=lambda pair: (pair.deterministic_score, pair.relationship_id),
+            )
+            score_strata = {
+                "lowest_10": scored_pairs[:10],
+                "highest_10": scored_pairs[-10:],
+                "nearest_90_10": sorted(
+                    scored_pairs,
+                    key=lambda pair: (abs(pair.deterministic_score - 90), pair.relationship_id),
+                )[:10],
+                "nearest_60_10": sorted(
+                    scored_pairs,
+                    key=lambda pair: (abs(pair.deterministic_score - 60), pair.relationship_id),
+                )[:10],
+            }
+            rendered_items = [
+                item
+                for pair in all_pair_details
+                for item in (
+                    pair.supporting_items + pair.weakening_items
+                    + pair.contradiction_items + pair.safety_items
+                )
+            ]
+            rendering_inspection = {
+                "strong_two_member_groups": len(two_member_strong),
+                "review_two_member_groups": len(two_member_review),
+                "multi_member_groups": sum(group.member_count >= 3 for group in snapshot.groups),
+                "pairs_with_score": sum(pair.deterministic_score is not None for pair in all_pair_details),
+                "pairs_with_signed_relationship": sum(bool(pair.signed_relationship) for pair in all_pair_details),
+                "pairs_with_supporting_evidence": sum(bool(pair.supporting_items) for pair in all_pair_details),
+                "reason_codes_visible": sum(
+                    len(pair.decision_reason_codes) for pair in all_pair_details
+                ),
+                "evidence_items": len(rendered_items),
+                "evidence_items_with_source_field": sum(
+                    bool(item.source_field) for item in rendered_items
+                ),
+                "unsafe_causal_summary_count": sum(
+                    any(term in model.group_summary.lower() for term in (
+                        "caused the group", "decisive pair", "primary cause"
+                    ))
+                    for model in read_models
+                ),
+                "score_strata_counts": {
+                    key: len(value) for key, value in score_strata.items()
+                },
+                "two_member_examples": [
+                    {
+                        "summary": model.group_summary,
+                        "score": model.relationships[0].deterministic_score,
+                        "relationship": model.relationships[0].signed_relationship,
+                        "reason_codes": list(model.pair_explanations[0].decision_reason_codes),
+                    }
+                    for model in two_member_strong[:2] + two_member_review[:2]
+                ],
+            }
+            from app.api.routes_identity_groups import _read_group
+            baseline_payloads = [
+                _read_group(
+                    group, match_strength=strengths[group.versioned_group_key]
+                )
+                for group in snapshot.groups
+            ]
+            explanation_payloads = [
+                _read_group(
+                    group, match_strength=strengths[group.versioned_group_key],
+                    deterministic_explanation=replace(
+                        read_model, pair_explanations=()
+                    ),
+                )
+                for group, read_model in zip(snapshot.groups, read_models)
+            ]
+            payload_before = len(json.dumps(baseline_payloads, sort_keys=True))
+            payload_after = len(json.dumps(explanation_payloads, sort_keys=True))
+            largest_group_payload = max(
+                (
+                    len(json.dumps(_read_group(
+                        group,
+                        match_strength=strengths[group.versioned_group_key],
+                        deterministic_explanation=read_model,
+                        detail=True,
+                    ), sort_keys=True))
+                    for group, read_model in zip(snapshot.groups, read_models)
+                ),
+                default=0,
+            )
             bands = Counter(
                 result.match_band.value if result.match_band else "UNSCORED"
                 for result in strengths.values()
@@ -212,6 +346,33 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                     "visible_projection_contract": "G2_V2",
                 },
             )
+            xlsx_result = None
+            if mode == "site_selected":
+                xlsx_started = time.perf_counter()
+                workbook_bytes = authority_selected_system_groups_to_xlsx(
+                    session, scan.id
+                )
+                xlsx_seconds = time.perf_counter() - xlsx_started
+                workbook = load_workbook(BytesIO(workbook_bytes), data_only=False)
+                formula_count = sum(
+                    cell.data_type == "f"
+                    for sheet in workbook.worksheets
+                    for row in sheet.iter_rows()
+                    for cell in row
+                )
+                review_sheet = workbook["Review Groups"]
+                xlsx_result = {
+                    "seconds": round(xlsx_seconds, 6),
+                    "bytes": len(workbook_bytes),
+                    "sheets": list(workbook.sheetnames),
+                    "sheet_order_matches": tuple(workbook.sheetnames) == SHEET_ORDER,
+                    "formula_count": formula_count,
+                    "review_group_rows": review_sheet.max_row - 1,
+                    "maximum_row_height": max(
+                        (review_sheet.row_dimensions[index].height or 15)
+                        for index in range(2, review_sheet.max_row + 1)
+                    ),
+                }
             result = {
                 "request_fingerprint": request["sha256"],
                 "request_fingerprint_matches": (
@@ -243,6 +404,17 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                     "borderline": bands["BORDERLINE_MATCH"],
                 },
                 "explanation_coverage": {
+                    "group_summaries": len(read_models),
+                    "relationship_map_entries": sum(
+                        len(item.relationships) for item in read_models
+                    ),
+                    "rendered_pair_explanations": sum(
+                        len(item.pair_explanations) for item in read_models
+                    ),
+                    "projection_seconds": round(projection_elapsed, 6),
+                    "list_payload_bytes_before": payload_before,
+                    "list_payload_bytes_after": payload_after,
+                    "largest_group_payload_bytes": largest_group_payload,
                     "relationships": relationship_count,
                     "full": coverage["COMPLETE"],
                     "partial": coverage["PARTIAL_LEGACY"],
@@ -267,6 +439,7 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                         group.member_count >= 3 for group in snapshot.groups
                     ),
                 },
+                "rendering_inspection": rendering_inspection,
                 "crossover_reason_coverage": {
                     "groups": len(crossovers),
                     "exact": exact_crossover,
@@ -275,6 +448,7 @@ def _run_mode(repository_root: Path, records, mode: str, settings: dict) -> dict
                 },
                 "semantic_stage_matches": stage_matches,
                 "semantic_fingerprints": current_stages,
+                "xlsx": xlsx_result,
             }
         finally:
             session.close()

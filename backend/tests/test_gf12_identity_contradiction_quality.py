@@ -267,6 +267,10 @@ def test_no_demo_specific_hard_coding_and_only_bounded_production_files_changed(
     ).stdout.splitlines()
     assert set(changed) <= {
         "backend/app/api/routes_identity_groups.py",
+            "backend/app/benchmarks/targeted_pair_explanation_acceptance.py",
+            "backend/app/identity_read/deterministic_explanations.py",
+            "backend/app/resolution/pair_explanation.py",
+            "backend/app/services/deterministic_explanation_service.py",
             "backend/app/engine/identity_discriminator.py",
             "backend/app/engine/identity_evidence_evaluator.py",
             "backend/app/engine/functional_location_facet.py",

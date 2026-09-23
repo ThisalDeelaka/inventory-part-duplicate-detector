@@ -1,5 +1,19 @@
 # Group-first inventory identity project SSOT
 
+## Deterministic group and pair explanations
+
+`DETERMINISTIC_EXPLANATION_READ_MODEL_V1_VERIFIED`: the authoritative G2-v2
+read path now projects persisted GF4/GF5 facts into a Group Summary,
+Relationship Map, and expandable Pair Explanation. The versioned contracts are
+`deterministic-group-explanation-v1` and
+`deterministic-pair-explanation-read-model-v1`, sourced from
+`deterministic-pair-explanation-v1`. The layer is presentation-only, preserves
+numeric score separately from signed relationship, fails unknown codes safe,
+supports `PARTIAL_LEGACY`, and performs no evaluator or provider call. The UI
+uses deterministic evidence rather than raw JSON; the five-sheet, zero-formula
+XLSX includes group and relationship explanations. See
+`docs/DETERMINISTIC_GROUP_PAIR_EXPLANATION_V1.md`.
+
 ## Selected Site is a request-scoped group constraint
 
 `REQUEST_SCOPED_SITE_CONSTRAINT_VERIFIED`: selecting Site (`CONTRACT`) now

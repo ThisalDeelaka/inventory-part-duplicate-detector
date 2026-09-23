@@ -223,6 +223,7 @@ class IdentityReadGroupResponse(BaseModel):
     pair_score_max: float | None = None
     safety_status_crossover: bool = False
     safety_status_message: str | None = None
+    deterministic_explanation: dict[str, Any] | None = None
 
 
 class IdentityReadGroupDetailResponse(IdentityReadGroupResponse):

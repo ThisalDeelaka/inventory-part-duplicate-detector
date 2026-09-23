@@ -22,6 +22,11 @@ import {
   summarizeReviewedExportAvailability,
 } from '../utils/identityExportUi'
 import { scanStatusLabel } from '../utils/productJourneyUi'
+import {
+  relationshipLabel,
+  relationshipScoreLabel,
+  visibleEvidenceSections,
+} from '../utils/deterministicExplanationUi'
 
 const memberReference = member => member.stable_record_reference || member.record_ref_key
 
@@ -65,7 +70,6 @@ function MemberTable({ members }) {
 
 function EvidenceSummary({ detail }) {
   const coverage = detail.validation_coverage || {}
-  const evidence = detail.internal_evidence || []
   return <section aria-label="Validation coverage and evidence">
     <h3>Validation coverage</h3>
     <p><b>{validationModeLabel(detail.validation_mode)}</b></p>
@@ -76,12 +80,46 @@ function EvidenceSummary({ detail }) {
       <span>Neutral: {coverage.non_groupable_count || 0}</span>
       <span>Required evidence: {coverage.required_validation_evidence_count || 0}</span>
     </div>
-    <details><summary>Advanced relationship evidence ({evidence.length} evaluated)</summary>
-      {!evidence.length ? <p className="empty">No evaluated relationship evidence is present.</p> :
-        <pre className="evidence-json">{JSON.stringify(evidence, null, 2)}</pre>}
-    </details>
     {detail.validation_mode === 'PROGRESSIVE_TARGETED' &&
       <small>Only actual evaluated evidence is shown. Missing non-required relationships are not synthesized.</small>}
+  </section>
+}
+
+function EvidenceItems({ title, items }) {
+  if (!items?.length) return null
+  return <section><h5>{title}</h5><ul>{items.map((item, index) =>
+    <li key={`${item.code}-${index}`}><b>{item.label}:</b> {item.detail}
+      {(item.left_value || item.right_value) && <small className="evidence-values">Left: {item.left_value || 'not recorded'} · Right: {item.right_value || 'not recorded'}</small>}
+    </li>)}</ul></section>
+}
+
+function DeterministicExplanation({ explanation, compact = false }) {
+  if (!explanation) return null
+  return <section className="deterministic-explanation" aria-label="Deterministic group explanation">
+    <h3>Why this group exists</h3>
+    <p>{explanation.group_summary}</p>
+    {!compact && <><h3>Relationship Evidence</h3>
+      <div className="relationship-list">{(explanation.relationships || []).map(relationship => {
+        const detail = (explanation.pair_explanations || []).find(item => item.relationship_id === relationship.relationship_id)
+        return <details key={relationship.relationship_id} className="relationship-evidence">
+          <summary><b>{relationship.left_display_identity}</b> ↔ <b>{relationship.right_display_identity}</b>
+            {' · '}{relationshipScoreLabel(relationship.deterministic_score)}
+            {' · '}{relationshipLabel(relationship.signed_relationship)}
+          </summary>
+          {detail && <div>
+            {detail.availability_message && <p className="warning">{detail.availability_message}</p>}
+            {visibleEvidenceSections(detail).map(([title, items]) =>
+              <EvidenceItems key={title} title={title} items={items} />)}
+            <section><h5>Decision</h5><p>{detail.decision_summary}</p>
+              {!!detail.decision_reason_codes?.length && <p><b>Recorded reason codes:</b> {detail.decision_reason_codes.join(', ')}</p>}
+            </section>
+            <details><summary>Technical / provenance details</summary>
+              <small>Evidence origin: {detail.evidence_origin} · Evaluator: {detail.evaluator_version} · Evidence contract: {detail.evidence_version}</small>
+            </details>
+          </div>}
+        </details>
+      })}</div>
+    </>}
   </section>
 }
 
@@ -114,7 +152,7 @@ function GroupDetail({ scanId, detail, onReviewSaved }) {
       <p><b>Projection-safe identity:</b> <code>{detail.versioned_group_key}</code></p>
       <MemberTable members={detail.members || []} />
     </section>
-    <SystemExplanation explanation={detail.system_explanation} heading="Why the system suggested this group" />
+    <DeterministicExplanation explanation={detail.deterministic_explanation} />
     <EvidenceSummary detail={detail} />
     <GroupReviewPanel scanId={scanId} detail={detail} onSaved={onReviewSaved} />
     <AdvisoryEligibility scanId={scanId} detail={detail} />
@@ -136,7 +174,7 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
       <p><b>System evidence tier:</b> {groupEvidenceTierLabel(group.group_status)}</p>
       <MatchStrength group={group} />
       <p><b>Validation:</b> {validationModeLabel(group.validation_mode)}</p>
-      <SystemExplanation explanation={group.system_explanation} compact />
+      <DeterministicExplanation explanation={group.deterministic_explanation} compact />
       <p><b>Human authority:</b> {groupReviewLabel(group.review_state)}</p>
       <div className="member-preview" aria-label={`${group.group_size}-record identity-set preview`}>
         {(group.member_preview || []).map(member => <span key={member.stable_record_reference}><b>{member.part_no}</b> — {member.description}<small>{member.contract || 'No site / contract'} · {member.uom || 'No UOM'}</small></span>)}
