@@ -162,6 +162,19 @@ def bounded_column_samples(
 
 XLSX_EXTENSIONS = (".xlsx",)
 
+# ERP exports (e.g. from Windows/Excel) are frequently Windows-1252 rather than
+# UTF-8; cp1252 decodes any byte value so it's tried last as a safe fallback.
+CSV_TEXT_ENCODINGS = ("utf-8-sig", "cp1252")
+
+
+def _decode_csv_bytes(content: bytes) -> str:
+    for encoding in CSV_TEXT_ENCODINGS:
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="replace")
+
 
 def _parse_upload_dataframe(filename: str | None, content: bytes) -> pd.DataFrame:
     """Parse an uploaded CSV or XLSX file into a DataFrame, so both formats share the same downstream flow."""
@@ -169,7 +182,8 @@ def _parse_upload_dataframe(filename: str | None, content: bytes) -> pd.DataFram
     try:
         if is_xlsx:
             return pd.read_excel(io.BytesIO(content), dtype=str, engine="openpyxl")
-        return pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=True)
+        text = _decode_csv_bytes(content)
+        return pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=True)
     except Exception as exc:
         kind = "XLSX" if is_xlsx else "CSV"
         raise HTTPException(400, f"Unable to parse {kind} file: {exc}") from exc
