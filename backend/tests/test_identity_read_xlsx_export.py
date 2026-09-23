@@ -155,8 +155,8 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert "/100" in relationship_text
     assert "Pair match:" in relationship_text
     assert "What matched:" in relationship_text
-    assert "What to check:" in relationship_text
-    assert "Technical code:" in relationship_text
+    assert "What to check:" not in relationship_text
+    assert "Technical code:" not in relationship_text
     assert "Fuzzy lexical score" not in relationship_text
     assert "Inventory UOM relationship" not in relationship_text
     assert "Review Support" in relationship_text
@@ -208,7 +208,7 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     }
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
     assert not any(11 <= merged.min_col <= 24 for merged in review.merged_cells.ranges)
-    assert [row["Member #"] for row in _dict_rows(review)] == list(
+    assert [row["Member Position"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
     )
 
@@ -291,7 +291,7 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     }
     rows = _dict_rows(sheet)
     assert len(rows) == member_count
-    assert [row["Member #"] for row in rows] == list(range(1, member_count + 1))
+    assert [row["Member Position"] for row in rows] == list(range(1, member_count + 1))
     assert len({row["Part Number"] for row in rows}) == member_count
     assert not workbook["Detailed Data"].merged_cells.ranges
 
@@ -357,7 +357,7 @@ def test_overview_uses_persisted_scan_metadata_and_ui_ordered_condition_labels(d
         authority_selected_system_groups_to_xlsx(db, scan.id)
     )["Overview"]
     assert overview["A7"].value == "14 Sep 2026, 12:34"
-    assert overview["A11"].value == "Site • Inventory UOM"
+    assert overview["A11"].value == "Site\nInventory UOM"
     assert overview["E7"].value == 5327
     assert overview["E11"].value == "IFS APP Test"
 

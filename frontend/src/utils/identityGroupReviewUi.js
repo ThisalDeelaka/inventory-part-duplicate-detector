@@ -224,15 +224,21 @@ export function versionedReviewPreview(input) {
 }
 
 export function reviewSaveErrorState(status) {
-  if (Number(status) === 409) return {
+  const code = Number(status)
+  if (code === 409) return {
     reload: true,
     resubmit: false,
     message: 'Decision not saved because another review became current. The latest decision was reloaded; check it before trying again.',
   }
-  if (Number(status) === 422) return {
+  if (code === 422) return {
     reload: false,
     resubmit: false,
     message: 'Decision not saved. Check the selected records, identity sets, and reviewer details, then try again.',
+  }
+  if (Number.isFinite(code) && code > 0) return {
+    reload: false,
+    resubmit: false,
+    message: `Decision not saved. The review service reported an error (HTTP ${code}). Try again, and contact support if it continues.`,
   }
   return {
     reload: false,

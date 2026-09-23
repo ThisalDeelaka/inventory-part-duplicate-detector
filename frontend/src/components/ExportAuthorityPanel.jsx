@@ -10,11 +10,8 @@ export default function ExportAuthorityPanel({
   onDownload,
   onRefreshReviewedState,
 }) {
-  const reviewedDisabled = (
-    reviewedState?.status !== 'ready'
-    || !reviewedState.has_confirmed_sets
-    || Boolean(busyKind)
-  )
+  const reviewedAvailable = reviewedState?.status === 'ready' && reviewedState.has_confirmed_sets
+  const reviewedDisabled = !reviewedAvailable || Boolean(busyKind)
   return <section className="panel export-authority" aria-labelledby="export-authority-heading" aria-busy={Boolean(busyKind)}>
     <div><p className="eyebrow">Export authority</p><h2 id="export-authority-heading">Choose the result you need</h2></div>
     <div className="export-authority-grid">
@@ -24,26 +21,26 @@ export default function ExportAuthorityPanel({
         <p>Contains system-suggested same-identity candidates for analysis and review. Every suggestion requires human review.</p>
         <small>No records are automatically merged, deleted, or changed in IFS.</small>
         <div className="actions">
-          <button type="button" disabled={Boolean(busyKind)} onClick={() => onDownload('system-csv', targets.systemGroups)}>
-            {busyKind === 'system-csv' ? 'Preparing system CSV…' : 'Export system suggestions as CSV'}
-          </button>
           <button type="button" disabled={Boolean(busyKind)} onClick={() => onDownload('system-xlsx', targets.systemGroupsExcel)}>
             {busyKind === 'system-xlsx' ? 'Preparing system Excel…' : 'Export system suggestions as Excel'}
+          </button>
+          <button type="button" disabled={Boolean(busyKind)} onClick={() => onDownload('system-csv', targets.systemGroups)}>
+            {busyKind === 'system-csv' ? 'Preparing system CSV…' : 'Export system suggestions as CSV'}
           </button>
         </div>
       </article>
 
-      <article className="export-authority-card reviewed-export-card" aria-labelledby="reviewed-export-heading">
+      <article className={`export-authority-card reviewed-export-card ${reviewedAvailable ? 'is-available' : 'is-unavailable'}`} aria-labelledby="reviewed-export-heading">
         <p className="authority-label">Reviewed decisions</p>
         <h3 id="reviewed-export-heading">Reviewed Identity Export</h3>
         <p>Contains only current human-confirmed same-identity sets. Human decisions are operationally authoritative.</p>
         <small>{reviewedExportGuidance(reviewedState)}</small>
         <div className="actions">
-          <button type="button" disabled={reviewedDisabled} onClick={() => onDownload('reviewed', targets.reviewedIdentities)}>
-            {busyKind === 'reviewed' ? 'Preparing reviewed CSV…' : 'Export human-confirmed identity sets (CSV)'}
-          </button>
           <button type="button" disabled={reviewedDisabled} onClick={() => onDownload('reviewed-xlsx', targets.reviewedIdentitiesExcel)}>
             {busyKind === 'reviewed-xlsx' ? 'Preparing reviewed Excel…' : 'Export human-confirmed identity sets (Excel)'}
+          </button>
+          <button type="button" disabled={reviewedDisabled} onClick={() => onDownload('reviewed', targets.reviewedIdentities)}>
+            {busyKind === 'reviewed' ? 'Preparing reviewed CSV…' : 'Export human-confirmed identity sets (CSV)'}
           </button>
           {reviewedState?.status === 'error' && <button type="button" className="secondary" disabled={Boolean(busyKind)} onClick={onRefreshReviewedState}>
             Reload reviewed export availability
