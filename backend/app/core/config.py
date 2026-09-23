@@ -2,7 +2,12 @@ import os
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
+
+# Load .env from the backend directory (parent of app/)
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 
 
 class Settings(BaseModel):

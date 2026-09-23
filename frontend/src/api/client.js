@@ -54,6 +54,10 @@ async function llmJson(path, options = {}) {
 
 export const getLlmStatus = () => llmJson('/api/llm/status')
 
+export const listCustomFields = () => api.get('/api/config/custom-fields')
+export const createCustomField = payload => api.postJson('/api/config/custom-fields', payload)
+export const deleteCustomField = id => api.json(`/api/config/custom-fields/${id}`, { method: 'DELETE' })
+
 export function requestColumnSuggestion(sourceColumn, sampleValues) {
   const samples = cleanColumnSamples(sampleValues)
   if (!String(sourceColumn).trim() || !samples.length) {
@@ -139,6 +143,9 @@ export const api = {
   },
   baseUrl: API,
   getLlmStatus,
+  listCustomFields,
+  createCustomField,
+  deleteCustomField,
   requestColumnSuggestion,
   interpretDifficultValue,
   requestCandidateAdvisory,

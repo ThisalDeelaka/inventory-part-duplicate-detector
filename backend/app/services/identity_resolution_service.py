@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import defaultdict
 from dataclasses import asdict, dataclass
@@ -64,6 +65,9 @@ from app.services.canonical_record_service import load_scan_record_catalog
 from app.services.identity_evidence_service import load_identity_evidence
 from app.services.identity_group_review_service import IdentityGroupReviewService
 from app.services.identity_neighborhood_service import load_identity_neighborhoods
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_RESOLVER_CONFIGURATION = ResolverConfiguration(
@@ -455,6 +459,7 @@ def resolve_and_persist_identity_groups(
         db.commit()
         return PersistedIdentityResolution(run_id, "COMPLETED", False, reloaded)
     except Exception as error:
+        logger.exception("identity resolution failed for scan_id=%r run_id=%r", scan_id, run_id)
         db.rollback()
         run = db.get(type(run), run_id)
         if run is not None and run.status == "RUNNING":

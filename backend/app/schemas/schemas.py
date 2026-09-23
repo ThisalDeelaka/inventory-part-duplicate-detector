@@ -19,6 +19,23 @@ class FeedbackResponse(BaseModel):
     created_at: datetime
 
 
+class CustomFieldCreate(BaseModel):
+    display_label: str = Field(min_length=1, max_length=200)
+    mode: str = Field(pattern="^(SUPPORTING|STRICT)$")
+    source_column: str | None = None
+
+
+class CustomFieldResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    field_key: str
+    display_label: str
+    mode: str
+    aliases: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+
 class LoadTestRequest(BaseModel):
     record_count: int = Field(default=500, ge=10, le=20000)
     duplicate_rate: float = Field(default=0.15, ge=0, le=0.8)
