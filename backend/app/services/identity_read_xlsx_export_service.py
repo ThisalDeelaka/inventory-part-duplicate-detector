@@ -9,6 +9,7 @@ from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from app.core.constants import FIELD_DEFINITIONS
@@ -16,7 +17,6 @@ from app.db.models import DuplicateScan
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
 from app.identity_read.deterministic_explanations import (
     business_match_facts,
-    business_review_guidance_for_pair,
     project_group_explanation,
     review_consideration_for_group,
     sources_for_group,
@@ -31,7 +31,6 @@ from app.services.identity_group_presentation import (
     system_evidence_tier,
 )
 from app.services.identity_read_export_service import (
-    authority_selected_reviewed_identity_rows,
     authority_selected_system_group_rows,
 )
 
@@ -57,23 +56,16 @@ GROUP_INDEX_COLUMNS = (
     "Group", "Evidence Tier", "Match Strength", "Match Band", "Members", "Sites",
     "Review Consideration", "Human Decision", "Human Comment",
 )
-REVIEW_GROUP_COLUMNS = (
+_REVIEW_GROUP_PREFIX_COLUMNS = (
     "Group", "Evidence Tier", "Match Strength", "Match Band", "Group Sites",
     "Review Consideration", "Why This Group Exists", "Relationship Evidence",
-    "Human Decision", "Human Comment", "Member #", "Part Number",
-    "Description", "Site", "UOM", "Part Type", "Commodity Group 01",
-    "Commodity Group 02", "Safety Code", "Accounting Group", "Product Code",
-    "Product Family", "Product Category", "HSN/SAC Code",
+    "Human Decision", "Human Comment", "Member Position",
 )
-DETAILED_DATA_COLUMNS = (
-    "Group", "Members", "Group Sites",
-    "Human Decision", "Human Comment", "Part Number", "Description", "Site",
-    "Inventory UOM", "Part Type", "Commodity Group 01", "Commodity Group 02",
-    "Safety Code", "Accounting Group", "Product Code", "Product Family",
-    "Product Category", "HSN/SAC Code",
+_DETAILED_DATA_PREFIX_COLUMNS = (
+    "Group", "Members", "Group Sites", "Human Decision", "Human Comment",
 )
 TECHNICAL_REFERENCE_COLUMNS = (
-    "Group", "Canonical Group ID", "Member #", "Part Number", "Source Row",
+    "Group", "Canonical Group ID", "Member Position", "Part Number", "Source Row",
     "Stable Record Reference", "Projection Contract", "Source Projection Run",
     "Original System Reason",
     "Match Strength Version", "Match Strength Status", "Unscored Reason",
@@ -153,25 +145,12 @@ MATCH_STRENGTH_TECHNICAL_CONTRACT = (
     ),
 )
 TECHNICAL_REFERENCE_HEADER_ROW = len(MATCH_STRENGTH_TECHNICAL_CONTRACT) + 5
-REVIEWED_SET_COLUMNS = (
-    "Reviewed Identity Set", "Group Reference", "Review Decision", "Reviewer",
-    "Reviewed At", "Review Comment", "Member Count",
-)
-
-# Backward-compatible imports now describe the corresponding client sheets.
-GROUP_COLUMNS = GROUP_INDEX_COLUMNS
-ALL_COLUMNS = DETAILED_DATA_COLUMNS
 
 _SOURCE_COLUMNS = (
     "Part Number", "Description", "Site", "Inventory UOM", "Part Type",
     "Commodity Group 01", "Commodity Group 02", "Safety Code",
     "Accounting Group", "Product Code", "Product Family", "Product Category",
     "HSN/SAC Code",
-)
-ALL_REVIEWED_COLUMNS = REVIEWED_SET_COLUMNS + _SOURCE_COLUMNS
-_REVIEWED_WIDTHS = (
-    20, 30, 32, 22, 18, 42, 14,
-    20, 48, 18, 16, 18, 22, 22, 16, 20, 18, 20, 20, 18,
 )
 _MEMBER_FIELD_BY_COLUMN = {
     "Part Number": "part_no",
@@ -188,6 +167,67 @@ _MEMBER_FIELD_BY_COLUMN = {
     "Product Category": "product_category",
     "HSN/SAC Code": "hsn_sac",
 }
+# Duplicate-checking condition field codes are optional and user-selectable;
+# columns without an entry here (Part Number, Description, Part Type) are
+# always shown and are never reordered by selection.
+_SOURCE_COLUMN_FIELD_CODE = {
+    "Site": "CONTRACT",
+    "Inventory UOM": "UNIT_MEAS",
+    "Commodity Group 01": "PRIME_COMMODITY",
+    "Commodity Group 02": "SECOND_COMMODITY",
+    "Safety Code": "HAZARD_CODE",
+    "Accounting Group": "ACCOUNTING_GROUP",
+    "Product Code": "PART_PRODUCT_CODE",
+    "Product Family": "PART_PRODUCT_FAMILY",
+    "Product Category": "PRODUCT_CATEGORY_ID",
+    "HSN/SAC Code": "HSN_SAC_CODE",
+}
+_SOURCE_COLUMN_WIDTHS = {
+    "Part Number": 18, "Description": 38, "Site": 13, "Inventory UOM": 13,
+    "Part Type": 13, "Commodity Group 01": 17, "Commodity Group 02": 17,
+    "Safety Code": 13, "Accounting Group": 16, "Product Code": 15,
+    "Product Family": 16, "Product Category": 16, "HSN/SAC Code": 15,
+}
+_SOURCE_COLUMN_FIXED_PREFIX = ("Part Number", "Description")
+
+
+def _decode_selected_field_codes(selected_fields_json) -> set[str]:
+    try:
+        decoded = json.loads(selected_fields_json or "[]")
+    except (TypeError, json.JSONDecodeError):
+        decoded = []
+    if not isinstance(decoded, list):
+        decoded = []
+    return {str(value).strip().upper() for value in decoded if str(value).strip()}
+
+
+def _ordered_source_columns(selected_fields_json) -> tuple[str, ...]:
+    """Selected duplicate-checking condition columns first, then the rest."""
+    selected = _decode_selected_field_codes(selected_fields_json)
+    reorderable = [
+        column for column in _SOURCE_COLUMNS
+        if column not in _SOURCE_COLUMN_FIXED_PREFIX
+    ]
+    chosen = [
+        column for column in reorderable
+        if _SOURCE_COLUMN_FIELD_CODE.get(column) in selected
+    ]
+    remaining = [column for column in reorderable if column not in chosen]
+    return _SOURCE_COLUMN_FIXED_PREFIX + tuple(chosen) + tuple(remaining)
+
+
+def _review_group_columns(source_columns) -> tuple:
+    return _REVIEW_GROUP_PREFIX_COLUMNS + tuple(source_columns)
+
+
+def _detailed_data_columns(source_columns) -> tuple:
+    return _DETAILED_DATA_PREFIX_COLUMNS + tuple(source_columns)
+
+
+# Canonical layouts (no duplicate-checking columns selected beyond the base
+# order) — kept as plain tuples for callers that want the default shape.
+REVIEW_GROUP_COLUMNS = _review_group_columns(_SOURCE_COLUMNS)
+DETAILED_DATA_COLUMNS = _detailed_data_columns(_SOURCE_COLUMNS)
 _REASONS = {
     "LIKELY_DUPLICATE_GROUP": (
         "Stronger deterministic evidence supports this system-suggested group "
@@ -220,6 +260,19 @@ _THIN_GRAY = Side(style="thin", color="B7C9D6")
 _MEDIUM_BLUE = Side(style="medium", color="6C8FA5")
 _BORDER = Border(
     left=_THIN_GRAY, right=_THIN_GRAY, top=_THIN_GRAY, bottom=_THIN_GRAY
+)
+_MATCH_BAND_STYLES = {
+    "High Match": (PatternFill("solid", fgColor="C6EFCE"), "1E7145"),
+    "Moderate Match": (PatternFill("solid", fgColor="FFEB9C"), "9C6500"),
+    "Borderline Match": (PatternFill("solid", fgColor="FFC7CE"), "9C0006"),
+}
+_HUMAN_DECISION_OPTIONS = (
+    "Not yet reviewed",
+    "Confirmed all records as one identity",
+    "Confirmed selected records as one identity",
+    "Split into separate identity sets",
+    "Rejected and kept separate",
+    "Deferred for later review",
 )
 
 
@@ -308,20 +361,15 @@ def _relationship_lines(explanation) -> str:
                 "; ".join(facts)
                 if facts else "Supporting matching information is recorded."
             ),
-            "What to check: " + business_review_guidance_for_pair(detail),
         ]
-        if detail.decision_reason_codes:
-            sections.append(
-                "Technical code: " + ", ".join(detail.decision_reason_codes)
-            )
         if detail.availability_message:
             sections.append(detail.availability_message)
         blocks.append("\n".join(sections))
     return "\n\n".join(blocks)
 
 
-def _source_values(row: dict) -> tuple:
-    return tuple(row.get(_MEMBER_FIELD_BY_COLUMN[column]) for column in _SOURCE_COLUMNS)
+def _source_values(row: dict, source_columns=_SOURCE_COLUMNS) -> tuple:
+    return tuple(row.get(_MEMBER_FIELD_BY_COLUMN[column]) for column in source_columns)
 
 
 def _write_row(sheet, row_number: int, values, *, wrap_columns=()) -> None:
@@ -345,13 +393,38 @@ def _write_header(sheet, columns, *, row_number: int = 1) -> None:
             horizontal="center", vertical="center", wrap_text=True
         )
     sheet.freeze_panes = f"A{row_number + 1}"
-    sheet.row_dimensions[row_number].height = 34
+    sheet.row_dimensions[row_number].height = 30
     sheet.sheet_view.showGridLines = False
 
 
 def _set_widths(sheet, widths) -> None:
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
+
+
+def _apply_match_band_style(cell, match_band: str | None) -> None:
+    style = _MATCH_BAND_STYLES.get(match_band)
+    if not style:
+        return
+    fill, font_color = style
+    cell.fill = fill
+    cell.font = Font(color=font_color, bold=True)
+
+
+def _add_human_decision_dropdown(sheet, column_letter: str, first_row: int, last_row: int) -> None:
+    if last_row < first_row:
+        return
+    validation = DataValidation(
+        type="list",
+        formula1='"' + ",".join(_HUMAN_DECISION_OPTIONS) + '"',
+        allow_blank=True,
+    )
+    validation.promptTitle = "Human Decision"
+    validation.prompt = "Select the recorded human decision for this group."
+    validation.errorTitle = "Not a listed decision"
+    validation.error = "Choose one of the listed human decisions."
+    sheet.add_data_validation(validation)
+    validation.add(f"{column_letter}{first_row}:{column_letter}{last_row}")
 
 
 def _merge_and_write(sheet, cell_range: str, value, *, fill, font, alignment) -> None:
@@ -385,17 +458,9 @@ def _write_kpi(sheet, columns: str, label: str, value, *, start_row: int) -> Non
     )
 
 
-def selected_condition_labels(selected_fields_json: str) -> str:
+def selected_condition_label_list(selected_fields_json: str) -> list[str]:
     """Return persisted selected fields in stable UI order with safe fallbacks."""
-    try:
-        decoded = json.loads(selected_fields_json or "[]")
-    except (TypeError, json.JSONDecodeError):
-        decoded = []
-    if not isinstance(decoded, list):
-        decoded = []
-    selected = {
-        str(value).strip().upper() for value in decoded if str(value).strip()
-    }
+    selected = _decode_selected_field_codes(selected_fields_json)
     labels_by_field = {
         item["field"]: item["display"]
         for item in FIELD_DEFINITIONS
@@ -410,7 +475,12 @@ def selected_condition_labels(selected_fields_json: str) -> str:
         field.replace("_", " ").title()
         for field in sorted(selected - labels_by_field.keys())
     )
-    return " • ".join(ordered) or "None selected"
+    return ordered
+
+
+def selected_condition_labels(selected_fields_json: str) -> str:
+    """One condition per line, for neatly stacked display in a wrapped cell."""
+    return "\n".join(selected_condition_label_list(selected_fields_json)) or "None selected"
 
 
 def format_scan_datetime(value) -> str:
@@ -440,6 +510,23 @@ def _write_info_card(
     )
 
 
+def _write_footer_metadata(sheet, metadata, *, start_row: int) -> None:
+    """Report Details / Technical Footer rows, sized for easy reading."""
+    for row_number, (label, value) in enumerate(metadata, start=start_row):
+        _merge_and_write(
+            sheet, f"A{row_number}:B{row_number}", label,
+            fill=PatternFill("solid", fgColor=_PALE_GRAY),
+            font=Font(color=_NAVY, bold=True, size=11),
+            alignment=Alignment(vertical="center"),
+        )
+        _merge_and_write(
+            sheet, f"C{row_number}:H{row_number}", value,
+            fill=PatternFill("solid", fgColor=_WHITE),
+            font=Font(color=_TEXT, bold=True, size=11),
+            alignment=Alignment(vertical="center", wrap_text=True),
+        )
+
+
 def _write_progress_row(sheet, row_number: int, label: str, value) -> None:
     _merge_and_write(
         sheet, f"A{row_number}:F{row_number}", label,
@@ -453,6 +540,19 @@ def _write_progress_row(sheet, row_number: int, label: str, value) -> None:
         font=Font(color=_NAVY, bold=True, size=12),
         alignment=Alignment(horizontal="right", vertical="center"),
     )
+
+
+def _write_conditions_card(sheet, columns: str, selected_fields_json, *, start_row: int) -> None:
+    """Duplicate-checking conditions info card: one condition per line, sized to fit."""
+    labels = selected_condition_label_list(selected_fields_json)
+    text = "\n".join(labels) or "None selected"
+    _write_info_card(
+        sheet, columns, "Duplicate-checking Conditions", text, start_row=start_row,
+    )
+    line_count = max(1, len(labels))
+    row_height = max(16, 15 * ((line_count + 1) // 2) + 6)
+    sheet.row_dimensions[start_row + 1].height = row_height
+    sheet.row_dimensions[start_row + 2].height = row_height
 
 
 def _write_overview(workbook, scan, snapshot, review_states, strength_distribution) -> None:
@@ -490,10 +590,7 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
     _write_info_card(
         sheet, "E:H", "Records Analysed", record_count, start_row=6,
     )
-    _write_info_card(
-        sheet, "A:D", "Duplicate-checking Conditions",
-        selected_condition_labels(scan.selected_fields), start_row=10,
-    )
+    _write_conditions_card(sheet, "A:D", scan.selected_fields, start_row=10)
     _write_info_card(
         sheet, "E:H", "Carried Out By", REPORT_CARRIED_OUT_BY, start_row=10,
     )
@@ -586,6 +683,7 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
     metadata = (
         ("Scan ID", snapshot.scan_id),
         ("Scan Name", scan.scan_name),
+        ("Part Type", scan.part_type),
         ("Scan Status", scan.status),
         ("Projection Contract", snapshot.projection_contract.value),
         ("Source Projection Run", snapshot.source_projection_run_id),
@@ -596,19 +694,7 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         font=Font(color=_WHITE, bold=True, size=10),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
-    for row_number, (label, value) in enumerate(metadata, start=45):
-        _merge_and_write(
-            sheet, f"A{row_number}:B{row_number}", label,
-            fill=PatternFill("solid", fgColor=_PALE_GRAY),
-            font=Font(color="5B7894", bold=True, size=9),
-            alignment=Alignment(vertical="center"),
-        )
-        _merge_and_write(
-            sheet, f"C{row_number}:H{row_number}", value,
-            fill=PatternFill("solid", fgColor=_WHITE),
-            font=Font(color="5B7894", size=9),
-            alignment=Alignment(vertical="center", wrap_text=True),
-        )
+    _write_footer_metadata(sheet, metadata, start_row=45)
     _merge_and_write(
         sheet, "A51:H51", "DETERMINISTIC MATCH STRENGTH",
         fill=PatternFill("solid", fgColor=_NAVY),
@@ -632,9 +718,8 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    for row_number in (1, 2, 3, 7, 8, 11, 12, 16, 17, 20, 21, 25, 26, 35, 36):
+    for row_number in (1, 2, 3, 7, 8, 16, 17, 20, 21, 25, 26, 35, 36):
         sheet.row_dimensions[row_number].height = 24
-    sheet.row_dimensions[11].height = 32
 
 
 def _write_group_index(sheet, groups) -> None:
@@ -648,23 +733,26 @@ def _write_group_index(sheet, groups) -> None:
              p["human_decision"], p["human_comment"]),
             wrap_columns=(2, 4, 6, 7, 8, 9),
         )
-        sheet.row_dimensions[row_number].height = 36
-    _set_widths(sheet, (16, 20, 16, 20, 11, 22, 58, 32, 45))
+        _apply_match_band_style(sheet.cell(row_number, 4), p["match_band"])
+        sheet.row_dimensions[row_number].height = 26
+    _set_widths(sheet, (14, 16, 13, 15, 10, 18, 40, 26, 32))
     sheet.freeze_panes = "E2"
     if groups:
         sheet.auto_filter.ref = (
             f"A1:{get_column_letter(len(GROUP_INDEX_COLUMNS))}{sheet.max_row}"
         )
+        _add_human_decision_dropdown(sheet, "H", 2, sheet.max_row)
 
 
-def _write_review_groups(sheet, groups) -> None:
-    _write_header(sheet, REVIEW_GROUP_COLUMNS)
+def _write_review_groups(sheet, groups, source_columns=_SOURCE_COLUMNS) -> None:
+    columns = _review_group_columns(source_columns)
+    _write_header(sheet, columns)
     group_level_columns = tuple(range(1, 11))
     current_row = 2
     if not groups:
         _merge_and_write(
             sheet,
-            f"A2:{get_column_letter(len(REVIEW_GROUP_COLUMNS))}3",
+            f"A2:{get_column_letter(len(columns))}3",
             "No candidate groups were generated for this scan.",
             fill=PatternFill("solid", fgColor=_PALE_GRAY),
             font=Font(color=_TEXT, italic=True),
@@ -675,7 +763,7 @@ def _write_review_groups(sheet, groups) -> None:
         member_rows = item["member_rows"]
         start_row = current_row
         for member_number, member_row in enumerate(member_rows, start=1):
-            source = _source_values(member_row)
+            source = _source_values(member_row, source_columns)
             _write_row(
                 sheet, current_row,
                 (p["label"], p["evidence"], p["match_strength"], p["match_band"],
@@ -685,13 +773,13 @@ def _write_review_groups(sheet, groups) -> None:
                 wrap_columns=(2, 4, 5, 6, 7, 8, 9, 10, 13),
             )
             sheet.row_dimensions[current_row].height = max(
-                54, min(210, 30 + 18 * max(1, p["relationship_evidence"].count("\n") + 1))
+                40, min(160, 24 + 15 * max(1, p["relationship_evidence"].count("\n") + 1))
             )
             current_row += 1
         end_row = current_row - 1
         fill = _GROUP_FILLS[group_index % len(_GROUP_FILLS)]
         for row_number in range(start_row, end_row + 1):
-            for column_number in range(1, len(REVIEW_GROUP_COLUMNS) + 1):
+            for column_number in range(1, len(columns) + 1):
                 cell = sheet.cell(row_number, column_number)
                 cell.fill = fill
                 cell.border = Border(
@@ -708,16 +796,20 @@ def _write_review_groups(sheet, groups) -> None:
             sheet.cell(start_row, column_number).alignment = Alignment(
                 vertical="center", wrap_text=True
             )
+        _apply_match_band_style(sheet.cell(start_row, 4), p["match_band"])
+    prefix_widths = (14, 16, 13, 15, 18, 42, 42, 40, 28, 32, 12)
     _set_widths(
         sheet,
-        (16, 20, 16, 20, 22, 58, 58, 72, 32, 42, 10, 20, 48, 18, 14, 18, 22,
-         22, 16, 20, 18, 20, 20, 18),
+        prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
     )
     sheet.freeze_panes = "F2"
+    if groups:
+        _add_human_decision_dropdown(sheet, "I", 2, sheet.max_row)
 
 
-def _write_detailed_data(sheet, groups) -> None:
-    _write_header(sheet, DETAILED_DATA_COLUMNS)
+def _write_detailed_data(sheet, groups, source_columns=_SOURCE_COLUMNS) -> None:
+    columns = _detailed_data_columns(source_columns)
+    _write_header(sheet, columns)
     row_number = 2
     for item in groups:
         p = item["presentation"]
@@ -726,26 +818,27 @@ def _write_detailed_data(sheet, groups) -> None:
                 sheet, row_number,
                 (p["label"], p["members"], p["sites"],
                  p["human_decision"], p["human_comment"],
-                 *_source_values(member_row)),
+                 *_source_values(member_row, source_columns)),
                 wrap_columns=(3, 4, 5, 7),
             )
-            sheet.row_dimensions[row_number].height = 36
+            sheet.row_dimensions[row_number].height = 26
             row_number += 1
+    prefix_widths = (14, 10, 18, 28, 32)
     _set_widths(
         sheet,
-        (16, 11, 22, 32, 42, 20, 48, 18, 16, 18, 22, 22, 16,
-         20, 18, 20, 20),
+        prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
     )
     if sheet.max_row >= 2:
         table = Table(
             displayName="SystemGroupData",
-            ref=f"A1:{get_column_letter(len(DETAILED_DATA_COLUMNS))}{sheet.max_row}",
+            ref=f"A1:{get_column_letter(len(columns))}{sheet.max_row}",
         )
         table.tableStyleInfo = TableStyleInfo(
             name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False,
             showRowStripes=True, showColumnStripes=False,
         )
         sheet.add_table(table)
+        _add_human_decision_dropdown(sheet, "D", 2, sheet.max_row)
 
 
 def _write_technical_reference(sheet, groups, snapshot) -> None:
@@ -865,6 +958,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         )
         strength_distribution[key] += 1
 
+    source_columns = _ordered_source_columns(scan.selected_fields)
     workbook = Workbook()
     _write_overview(
         workbook, scan, snapshot, review_states, strength_distribution
@@ -873,9 +967,9 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     group_index = workbook.create_sheet("Group Index")
     detailed_data = workbook.create_sheet("Detailed Data")
     technical = workbook.create_sheet("Technical Reference")
-    _write_review_groups(review_groups, groups)
+    _write_review_groups(review_groups, groups, source_columns)
     _write_group_index(group_index, groups)
-    _write_detailed_data(detailed_data, groups)
+    _write_detailed_data(detailed_data, groups, source_columns)
     _write_technical_reference(technical, groups, snapshot)
     workbook.active = 0
 
@@ -884,108 +978,242 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     return output.getvalue()
 
 
-def _write_reviewed_summary(workbook, scan, snapshot, rows) -> None:
+_CONFIRMED_DECISION_TYPES = {
+    "CONFIRM_ALL_AS_ONE", "CONFIRM_SELECTED", "SPLIT_PARTITIONS",
+}
+
+
+def _write_reviewed_overview(
+    workbook, scan, snapshot, groups, strength_distribution,
+    confirmed_same_count, split_count,
+) -> None:
     sheet = workbook.active
-    sheet.title = "Summary"
-    set_count = len({row["reviewed_identity_set_key"] for row in rows})
-    summary_rows = (
-        ("Reviewed Identity Export", ""),
-        ("Notice", REVIEWED_WORKBOOK_NOTICE),
-        ("Report type", "Reviewed Identity Export"),
-        ("Authority", "Human-confirmed"),
-        ("Human confirmation", "Required and applied"),
-        ("Scan identifier", snapshot.scan_id),
-        ("Scan name", scan.scan_name),
-        ("Scan status", scan.status),
-        ("Input record count", snapshot.canonical_record_count),
-        ("Reviewed identity set count", set_count),
-        ("Reviewed member count", len(rows)),
-        ("Projection contract", snapshot.projection_contract.value),
-        ("Source projection run", snapshot.source_projection_run_id),
+    sheet.title = "Overview"
+    sheet.sheet_view.showGridLines = False
+    _set_widths(sheet, (14,) * 8)
+    _merge_and_write(
+        sheet, "A1:H2", "Reviewed Identity Export",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True, size=20),
+        alignment=Alignment(horizontal="center", vertical="center"),
     )
-    for row_number, values in enumerate(summary_rows, start=1):
-        _write_row(sheet, row_number, values)
-    sheet["A1"].font = Font(bold=True, size=16, color="1F4E78")
-    for row_number in range(2, len(summary_rows) + 1):
-        sheet.cell(row_number, 1).font = Font(bold=True)
-    sheet["B2"].alignment = Alignment(wrap_text=True, vertical="top")
-    sheet.column_dimensions["A"].width = 28
-    sheet.column_dimensions["B"].width = 100
-    sheet.freeze_panes = "A2"
-
-
-def _reviewed_set_values(index: int, set_rows: list[dict]) -> tuple:
-    first_row = set_rows[0]
-    decision = first_row["review_decision_type"]
-    label, _ = human_review_presentation({"reviewed": True, "current_decision_type": decision})
-    return (
-        f"RS-{index:06d}",
-        first_row["group_reference"],
-        label,
-        first_row["reviewer"],
-        first_row["reviewed_at"],
-        first_row.get("review_comment") or "",
-        len(set_rows),
+    _merge_and_write(
+        sheet, "A3:H3", "Human-confirmed same-identity groups, operationally authoritative",
+        fill=PatternFill("solid", fgColor="5B7894"),
+        font=Font(color=_WHITE, italic=True, size=11),
+        alignment=Alignment(horizontal="center", vertical="center"),
     )
+    _merge_and_write(
+        sheet, "A5:H5", "SCAN INFORMATION",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    executed_at = scan.completed_at or scan.started_at
+    record_count = (
+        scan.total_records
+        if scan.total_records is not None
+        else snapshot.canonical_record_count
+    )
+    _write_info_card(
+        sheet, "A:D", "Scan Date", format_scan_datetime(executed_at), start_row=6,
+    )
+    _write_info_card(
+        sheet, "E:H", "Records Analysed", record_count, start_row=6,
+    )
+    _write_conditions_card(sheet, "A:D", scan.selected_fields, start_row=10)
+    _write_info_card(
+        sheet, "E:H", "Carried Out By", REPORT_CARRIED_OUT_BY, start_row=10,
+    )
+
+    _merge_and_write(
+        sheet, "A14:H14", "FINDINGS AT A GLANCE",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    stronger_evidence = sum(
+        1 for item in groups if item["presentation"]["evidence"] == "Stronger Evidence"
+    )
+    review_evidence = sum(
+        1 for item in groups if item["presentation"]["evidence"] == "Review Evidence"
+    )
+    members_in_groups = sum(item["presentation"]["members"] for item in groups)
+    outside_export = max(0, (snapshot.canonical_record_count or 0) - members_in_groups)
+    for columns, label, value in (
+        ("A:B", "Reviewed Identity Groups", len(groups)),
+        ("C:E", "Stronger Evidence", stronger_evidence),
+        ("F:H", "Review Evidence", review_evidence),
+    ):
+        _write_kpi(sheet, columns, label, value, start_row=15)
+    for columns, label, value in (
+        ("A:D", "Records in Reviewed Groups", members_in_groups),
+        ("E:H", "Records Outside This Export", outside_export),
+    ):
+        _write_kpi(sheet, columns, label, value, start_row=19)
+
+    _merge_and_write(
+        sheet, "A23:H23", "REVIEW DECISION BREAKDOWN",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    _write_kpi(
+        sheet, "A:D", "Confirmed as Same Identity", confirmed_same_count, start_row=24,
+    )
+    _write_kpi(
+        sheet, "E:H", "Split into Identity Sets", split_count, start_row=24,
+    )
+
+    _merge_and_write(
+        sheet, "A28:H29",
+        REVIEWED_WORKBOOK_NOTICE,
+        fill=PatternFill("solid", fgColor=_PALE_GOLD),
+        font=Font(color=_TEXT, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
+    )
+    _merge_and_write(
+        sheet, "A31:H31", "HOW TO USE THIS WORKBOOK",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    _merge_and_write(
+        sheet, "A32:H34",
+        "1. Open Review Groups and inspect each human-confirmed group.\n"
+        "2. The Human Decision column shows the recorded reviewer decision for "
+        "each group.\n"
+        "3. Use Detailed Data when additional record-level information is required.",
+        fill=PatternFill("solid", fgColor=_WHITE),
+        font=Font(color=_TEXT),
+        alignment=Alignment(horizontal="left", vertical="top", wrap_text=True),
+    )
+    metadata = (
+        ("Scan ID", snapshot.scan_id),
+        ("Scan Name", scan.scan_name),
+        ("Part Type", scan.part_type),
+        ("Scan Status", scan.status),
+        ("Projection Contract", snapshot.projection_contract.value),
+        ("Source Projection Run", snapshot.source_projection_run_id),
+    )
+    _merge_and_write(
+        sheet, "A36:H36", "REPORT DETAILS / TECHNICAL FOOTER",
+        fill=PatternFill("solid", fgColor="5B7894"),
+        font=Font(color=_WHITE, bold=True, size=10),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    _write_footer_metadata(sheet, metadata, start_row=37)
+    _merge_and_write(
+        sheet, "A43:H43", "DETERMINISTIC MATCH STRENGTH",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    for row_number, (label, value) in enumerate((
+        ("High Match (90–100)", strength_distribution["HIGH_MATCH"]),
+        ("Moderate Match (60–<90)", strength_distribution["MODERATE_MATCH"]),
+        ("Borderline Match (0–<60)", strength_distribution["BORDERLINE_MATCH"]),
+        ("Unscored", strength_distribution["UNSCORED"]),
+    ), start=44):
+        _write_progress_row(sheet, row_number, label, value)
+    _merge_and_write(
+        sheet, "A49:H51", MATCH_STRENGTH_OVERVIEW_NOTE,
+        fill=PatternFill("solid", fgColor=_PALE_GRAY),
+        font=Font(color="5B7894", italic=True, size=9),
+        alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
+    )
+    sheet.freeze_panes = "A6"
+    sheet.page_setup.orientation = "landscape"
+    sheet.page_setup.fitToWidth = 1
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    for row_number in (1, 2, 3, 7, 8, 16, 17, 20, 21, 25, 26, 28, 29):
+        sheet.row_dimensions[row_number].height = 24
 
 
 def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
-    """Create an in-memory workbook from the exact Reviewed Identity export projection."""
-    snapshot, rows = authority_selected_reviewed_identity_rows(db, scan_id)
+    """Create a client workbook, in the same layout as the System Group export,
+    scoped to only human-confirmed same-identity groups."""
+    snapshot, export_rows = authority_selected_system_group_rows(db, scan_id)
     scan = db.get(DuplicateScan, scan_id)
+    review_states = VersionedIdentityGroupReviewService(db).current_states_for_snapshot(
+        snapshot
+    )
+    rows_by_group = {}
+    for row in export_rows:
+        rows_by_group.setdefault(row["group_key"], []).append(row)
 
-    rows_by_set: dict[str, list[dict]] = {}
-    set_order: list[str] = []
-    for row in rows:
-        set_key = row["reviewed_identity_set_key"]
-        if set_key not in rows_by_set:
-            rows_by_set[set_key] = []
-            set_order.append(set_key)
-        rows_by_set[set_key].append(row)
+    def _state_for(group):
+        canonical_id = serialize_versioned_identity_group_key(group.versioned_group_key)
+        return review_states.get(canonical_id) or {}
 
+    confirmed_groups = [
+        group for group in snapshot.groups
+        if _state_for(group).get("current_decision_type") in _CONFIRMED_DECISION_TYPES
+    ]
+    confirmed_same_count = sum(
+        1 for group in confirmed_groups
+        if _state_for(group).get("current_decision_type")
+        in ("CONFIRM_ALL_AS_ONE", "CONFIRM_SELECTED")
+    )
+    split_count = sum(
+        1 for group in confirmed_groups
+        if _state_for(group).get("current_decision_type") == "SPLIT_PARTITIONS"
+    )
+
+    groups = []
+    strengths = MatchStrengthProjectionService(db).project_groups(confirmed_groups)
+    loaded_explanations = load_pair_explanation_sources(db, snapshot)
+    for group_index, group in enumerate(confirmed_groups, start=1):
+        canonical_id = serialize_versioned_identity_group_key(group.versioned_group_key)
+        member_rows = tuple(rows_by_group.get(canonical_id, ()))
+        explanation = project_group_explanation(
+            group, strengths[group.versioned_group_key],
+            sources_for_group(group, loaded_explanations), include_details=True,
+        )
+        presentation = _group_presentation(
+                f"RS-{group_index:06d}", group,
+                review_states.get(canonical_id), member_rows,
+        )
+        presentation["deterministic_group_summary"] = explanation.group_summary
+        presentation["review_consideration"] = review_consideration_for_group(
+            explanation
+        )
+        presentation["relationship_evidence"] = _relationship_lines(explanation)
+        groups.append({
+            "presentation": presentation,
+            "member_rows": member_rows,
+        })
+
+    strength_distribution = {
+        "HIGH_MATCH": 0,
+        "MODERATE_MATCH": 0,
+        "BORDERLINE_MATCH": 0,
+        "UNSCORED": 0,
+    }
+    for item in groups:
+        presentation = item["presentation"]
+        key = (
+            presentation["match_band_code"]
+            if presentation["match_strength_status"] == "SCORED"
+            else "UNSCORED"
+        )
+        strength_distribution[key] += 1
+
+    source_columns = _ordered_source_columns(scan.selected_fields)
     workbook = Workbook()
-    _write_reviewed_summary(workbook, scan, snapshot, rows)
-    sheet = workbook.create_sheet("Reviewed Identity Sets")
-    _write_header(sheet, ALL_REVIEWED_COLUMNS)
-
-    row_number = 2
-    for set_index, set_key in enumerate(set_order, start=1):
-        set_rows = rows_by_set[set_key]
-        set_values = _reviewed_set_values(set_index, set_rows)
-        first_data_row = row_number
-        for member_row in set_rows:
-            _write_row(sheet, row_number, set_values + _source_values(member_row))
-            row_number += 1
-        last_data_row = row_number - 1
-        if last_data_row > first_data_row:
-            for column in range(1, len(REVIEWED_SET_COLUMNS) + 1):
-                sheet.merge_cells(
-                    start_row=first_data_row,
-                    start_column=column,
-                    end_row=last_data_row,
-                    end_column=column,
-                )
-                sheet.cell(first_data_row, column).alignment = Alignment(
-                    vertical="top", wrap_text=column in (3, 6)
-                )
-        fill = _GROUP_FILLS[set_index % len(_GROUP_FILLS)]
-        for row_index in range(first_data_row, last_data_row + 1):
-            for column in range(1, len(REVIEWED_SET_COLUMNS) + 1):
-                sheet.cell(row_index, column).fill = fill
-        _style_state(sheet.cell(first_data_row, 3), set_values[2])
-
-    _set_widths(sheet, _REVIEWED_WIDTHS)
-    last_column = get_column_letter(len(ALL_REVIEWED_COLUMNS))
-    sheet.auto_filter.ref = f"A1:{last_column}{max(1, sheet.max_row)}"
-    if sheet.max_row >= 2:
-        table = Table(
-            displayName="ReviewedIdentitySets", ref=f"A1:{last_column}{sheet.max_row}"
-        )
-        table.tableStyleInfo = TableStyleInfo(
-            name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False,
-            showRowStripes=True, showColumnStripes=False,
-        )
-        sheet.add_table(table)
+    _write_reviewed_overview(
+        workbook, scan, snapshot, groups, strength_distribution,
+        confirmed_same_count, split_count,
+    )
+    review_groups = workbook.create_sheet("Review Groups")
+    group_index_sheet = workbook.create_sheet("Group Index")
+    detailed_data = workbook.create_sheet("Detailed Data")
+    technical = workbook.create_sheet("Technical Reference")
+    _write_review_groups(review_groups, groups, source_columns)
+    _write_group_index(group_index_sheet, groups)
+    _write_detailed_data(detailed_data, groups, source_columns)
+    _write_technical_reference(technical, groups, snapshot)
+    workbook.active = 0
 
     output = BytesIO()
     workbook.save(output)

@@ -110,7 +110,7 @@ export default function GroupReviewPanel({ scanId, detail, onSaved = () => {} })
     setBusy(true)
     setFeedback(null)
     try {
-      const saved = await api.createIdentityGroupReview(
+      const saved = await api.createVersionedGroupReview(
         scanId, detail.versioned_group_key, buildVersionedGroupReviewPayload(input)
       )
       const localItems = [

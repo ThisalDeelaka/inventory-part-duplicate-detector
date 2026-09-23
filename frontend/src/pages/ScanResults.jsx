@@ -170,7 +170,13 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
       <div className="group-head"><div><p className="eyebrow">System-suggested candidate group</p>
         <h2>{groupAuthorityLabel(group.group_status, group.review_state)}</h2>
         <small>{group.group_size} records · {validationCoverageLabel(group.validation_coverage)}</small>
-      </div><span className={`badge group-status ${group.group_status}`}>{groupReviewAuthorityLabel(group.review_state)}</span></div>
+      </div>
+      <div className="group-head-actions">
+        <span className={`badge group-status ${group.group_status}`}>{groupReviewAuthorityLabel(group.review_state)}</span>
+        <button type="button" className="secondary group-detail-toggle" aria-expanded={expanded} onClick={() => toggleDetail(key, expanded)}>
+          {expanded ? 'Close identity-set details' : `Open all ${group.group_size} members`}
+        </button>
+      </div></div>
       <p><b>System evidence tier:</b> {groupEvidenceTierLabel(group.group_status)}</p>
       <MatchStrength group={group} />
       <p><b>Validation:</b> {validationModeLabel(group.validation_mode)}</p>
@@ -181,9 +187,6 @@ function IdentityGroups({ scanId, result, detailByKey, loadingKey, detailError, 
         {group.group_size > (group.member_preview || []).length && <span>+ {group.group_size - group.member_preview.length} more member(s)</span>}
       </div>
       <p>This is an advisory 2..N member candidate group. No records are automatically merged, deleted, or changed in IFS.</p>
-      <button type="button" className="link" aria-expanded={expanded} onClick={() => toggleDetail(key, expanded)}>
-        {expanded ? 'Close identity-set details' : `Open all ${group.group_size} members`}
-      </button>
       {expanded && <div>{loadingKey === key && <p>Loading identity-set detail…</p>}
         {detailError?.id === key && <p className="error" role="alert">{detailError.message}</p>}
         {detail && <GroupDetail scanId={scanId} detail={detail} onReviewSaved={onReviewSaved} />}

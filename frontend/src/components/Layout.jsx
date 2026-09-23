@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import sebsaLogo from '../assets/sebsa-logo.png'
 
 export default function Layout() {
   return (
@@ -12,7 +13,7 @@ export default function Layout() {
           <NavLink to="/future-ifs">Future IFS Integration</NavLink>
         </nav>
         <div className="notice">
-          <span className="sebsa-mark">SEBSA</span>
+          <img className="sebsa-mark" src={sebsaLogo} alt="SEBSA" />
           AI-assisted candidate detection.<br />Human review is required.
         </div>
       </aside>
