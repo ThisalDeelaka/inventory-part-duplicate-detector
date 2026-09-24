@@ -56,20 +56,30 @@ GROUP_INDEX_COLUMNS = (
     "Group", "Evidence Tier", "Match Strength", "Match Band", "Members", "Sites",
     "Review Consideration", "Human Decision", "Human Comment",
 )
-_REVIEW_GROUP_PREFIX_COLUMNS = (
+# Review Groups layout: group-level columns (merged per group), then pair-level
+# columns (one row per supporting pair), then member-level columns (merged per
+# member): Member Number, the source fields, and the per-member review columns.
+_REVIEW_GROUP_GROUP_COLUMNS = (
     "Group", "Evidence Tier", "Match Strength", "Match Band", "Group Sites",
     "Review Consideration", "Why This Group Exists", "Relationship Evidence",
-    "Human Decision", "Human Comment", "Member Position",
 )
 _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS = (
     "Part Relationships", "Pair Match Scores",
     "Description Similarity", "Wording Similarity",
 )
+_REVIEW_GROUP_MEMBER_NUMBER_COLUMN = "Member Number"
+_REVIEW_GROUP_MEMBER_REVIEW_COLUMNS = ("Human Decision", "Human Comment")
+# Columns before the first source column (group + pair columns + Member Number).
+_REVIEW_GROUP_PREFIX_LENGTH = (
+    len(_REVIEW_GROUP_GROUP_COLUMNS)
+    + len(_REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS)
+    + 1
+)
 _DETAILED_DATA_PREFIX_COLUMNS = (
     "Group", "Members", "Group Sites", "Human Decision", "Human Comment",
 )
 TECHNICAL_REFERENCE_COLUMNS = (
-    "Group", "Canonical Group ID", "Member Position", "Part Number", "Source Row",
+    "Group", "Canonical Group ID", "Member Number", "Part Number", "Source Row",
     "Stable Record Reference", "Projection Contract", "Source Projection Run",
     "Original System Reason",
     "Match Strength Version", "Match Strength Status", "Unscored Reason",
@@ -172,9 +182,10 @@ _MEMBER_FIELD_BY_COLUMN = {
     "HSN/SAC Code": "hsn_sac",
 }
 # Duplicate-checking condition field codes are optional and user-selectable;
-# columns without an entry here (Part Number, Description, Part Type) are
-# always shown and are never reordered by selection.
+# Part Number and Description are mandatory, always shown, and never reordered
+# by selection.
 _SOURCE_COLUMN_FIELD_CODE = {
+    "Part Type": "TYPE_CODE",
     "Site": "CONTRACT",
     "Inventory UOM": "UNIT_MEAS",
     "Commodity Group 01": "PRIME_COMMODITY",
@@ -222,9 +233,11 @@ def _ordered_source_columns(selected_fields_json) -> tuple[str, ...]:
 
 def _review_group_columns(source_columns) -> tuple:
     return (
-        _REVIEW_GROUP_PREFIX_COLUMNS
-        + tuple(source_columns)
+        _REVIEW_GROUP_GROUP_COLUMNS
         + _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS
+        + (_REVIEW_GROUP_MEMBER_NUMBER_COLUMN,)
+        + tuple(source_columns)
+        + _REVIEW_GROUP_MEMBER_REVIEW_COLUMNS
     )
 
 
@@ -274,9 +287,8 @@ _MATCH_BAND_STYLES = {
     "Moderate Match": (PatternFill("solid", fgColor="FFEB9C"), "9C6500"),
     "Borderline Match": (PatternFill("solid", fgColor="FFC7CE"), "9C0006"),
 }
-_DISABLED_HEADER_FILL = PatternFill("solid", fgColor="7F8B96")
-_DISABLED_CELL_FILL = PatternFill("solid", fgColor="ECEEF1")
-_DISABLED_FONT = Font(color="8A94A0")
+_SELECTED_HEADER_FILL = PatternFill("solid", fgColor="548235")
+_SELECTED_CELL_FILL = PatternFill("solid", fgColor="C6EFCE")
 _HUMAN_DECISION_OPTIONS = (
     "Not yet reviewed",
     "Confirmed all records as one identity",
@@ -285,6 +297,7 @@ _HUMAN_DECISION_OPTIONS = (
     "Rejected and kept separate",
     "Deferred for later review",
 )
+_MEMBER_ROLE_OPTIONS = ("Original Part", "Duplicate Part", "Valid Duplicate")
 
 
 def write_spreadsheet_safe_cell(cell, value) -> None:
@@ -389,8 +402,15 @@ def _pair_component_score(detail, component: str) -> str:
     return "Not available"
 
 
-def _member_pair_columns(explanation) -> dict[str, tuple[tuple[str, ...], ...]]:
-    """Project one persisted supporting pair row onto each stable endpoint."""
+def _member_pair_columns(
+    explanation, part_numbers=None,
+) -> dict[str, tuple[tuple[str, ...], ...]]:
+    """Project one persisted supporting pair row onto each stable endpoint.
+
+    Part Relationships shows part numbers only; the persisted display identity
+    (part number and description) is the fallback when a part number is missing.
+    """
+    part_numbers = part_numbers or {}
     incident: dict[str, list[tuple[str, ...]]] = {}
     supporting = {"STRONG_SUPPORT", "REVIEW_SUPPORT"}
     details = {
@@ -417,18 +437,24 @@ def _member_pair_columns(explanation) -> dict[str, tuple[tuple[str, ...], ...]]:
             detail, "description_similarity"
         )
         wording_similarity = _pair_component_score(detail, "fuzzy_score")
+        left_label = part_numbers.get(
+            relationship.left_record_reference
+        ) or relationship.left_display_identity
+        right_label = part_numbers.get(
+            relationship.right_record_reference
+        ) or relationship.right_display_identity
         endpoints = (
             (
                 relationship.left_record_reference,
                 relationship.right_record_reference,
-                relationship.left_display_identity,
-                relationship.right_display_identity,
+                left_label,
+                right_label,
             ),
             (
                 relationship.right_record_reference,
                 relationship.left_record_reference,
-                relationship.right_display_identity,
-                relationship.left_display_identity,
+                right_label,
+                left_label,
             ),
         )
         for own_reference, other_reference, own_display, other_display in endpoints:
@@ -443,6 +469,14 @@ def _member_pair_columns(explanation) -> dict[str, tuple[tuple[str, ...], ...]]:
     return {
         reference: tuple(item[2:] for item in sorted(items))
         for reference, items in incident.items()
+    }
+
+
+def _part_numbers_by_reference(member_rows) -> dict[str, str]:
+    return {
+        row.get("stable_record_reference"): str(row.get("part_no") or "").strip()
+        for row in member_rows
+        if row.get("stable_record_reference")
     }
 
 
@@ -480,28 +514,29 @@ def _set_widths(sheet, widths) -> None:
         sheet.column_dimensions[get_column_letter(index)].width = width
 
 
-def _unselected_source_columns(selected_fields_json) -> frozenset[str]:
-    """Condition columns the scan did not use for matching (shown greyed out)."""
+def _selected_source_columns(selected_fields_json) -> frozenset[str]:
+    """Condition columns the scan used for matching (highlighted green).
+
+    Part Number and Description are mandatory conditions, so they are always
+    included alongside the user-selected ones.
+    """
     selected = _decode_selected_field_codes(selected_fields_json)
-    return frozenset(
+    return frozenset(_SOURCE_COLUMN_FIXED_PREFIX) | frozenset(
         column for column, code in _SOURCE_COLUMN_FIELD_CODE.items()
-        if code not in selected
+        if code in selected
     )
 
 
-def _apply_disabled_column_styles(
-    sheet, source_columns, disabled_columns, *, prefix_length: int, last_row: int,
+def _apply_selected_column_styles(
+    sheet, source_columns, selected_columns, *, prefix_length: int, last_row: int,
 ) -> None:
     for offset, column in enumerate(source_columns, start=1):
-        if column not in disabled_columns:
+        if column not in selected_columns:
             continue
         column_number = prefix_length + offset
-        header = sheet.cell(1, column_number)
-        header.fill = _DISABLED_HEADER_FILL
+        sheet.cell(1, column_number).fill = _SELECTED_HEADER_FILL
         for row_number in range(2, last_row + 1):
-            cell = sheet.cell(row_number, column_number)
-            cell.fill = _DISABLED_CELL_FILL
-            cell.font = _DISABLED_FONT
+            sheet.cell(row_number, column_number).fill = _SELECTED_CELL_FILL
 
 
 def _apply_match_band_style(cell, match_band: str | None) -> None:
@@ -513,20 +548,39 @@ def _apply_match_band_style(cell, match_band: str | None) -> None:
     cell.font = Font(color=font_color, bold=True)
 
 
-def _add_human_decision_dropdown(sheet, column_letter: str, first_row: int, last_row: int) -> None:
+def _add_dropdown(
+    sheet, column_letter: str, first_row: int, last_row: int, options,
+    *, prompt: str, error: str,
+) -> None:
     if last_row < first_row:
         return
     validation = DataValidation(
         type="list",
-        formula1='"' + ",".join(_HUMAN_DECISION_OPTIONS) + '"',
+        formula1='"' + ",".join(options) + '"',
         allow_blank=True,
     )
     validation.promptTitle = "Human Decision"
-    validation.prompt = "Select the recorded human decision for this group."
+    validation.prompt = prompt
     validation.errorTitle = "Not a listed decision"
-    validation.error = "Choose one of the listed human decisions."
+    validation.error = error
     sheet.add_data_validation(validation)
     validation.add(f"{column_letter}{first_row}:{column_letter}{last_row}")
+
+
+def _add_human_decision_dropdown(sheet, column_letter: str, first_row: int, last_row: int) -> None:
+    _add_dropdown(
+        sheet, column_letter, first_row, last_row, _HUMAN_DECISION_OPTIONS,
+        prompt="Select the recorded human decision for this group.",
+        error="Choose one of the listed human decisions.",
+    )
+
+
+def _add_member_decision_dropdown(sheet, column_letter: str, first_row: int, last_row: int) -> None:
+    _add_dropdown(
+        sheet, column_letter, first_row, last_row, _MEMBER_ROLE_OPTIONS,
+        prompt="Mark this part as Original Part, Duplicate Part or Valid Duplicate.",
+        error="Choose Original Part, Duplicate Part or Valid Duplicate.",
+    )
 
 
 def _merge_and_write(sheet, cell_range: str, value, *, fill, font, alignment) -> None:
@@ -627,6 +681,42 @@ def _write_footer_metadata(sheet, metadata, *, start_row: int) -> None:
             font=Font(color=_TEXT, bold=True, size=11),
             alignment=Alignment(vertical="center", wrap_text=True),
         )
+
+
+def _write_column_colour_key(sheet, start_row: int) -> None:
+    """Explain the header colours used on Review Groups and Detailed Data."""
+    _merge_and_write(
+        sheet, f"A{start_row}:H{start_row}", "COLUMN COLOUR KEY",
+        fill=PatternFill("solid", fgColor=_NAVY),
+        font=Font(color=_WHITE, bold=True),
+        alignment=Alignment(horizontal="left", vertical="center"),
+    )
+    for row_number, (swatch_fill, label, meaning) in enumerate((
+        (
+            _SELECTED_HEADER_FILL, "Green",
+            "Duplicate-checking condition columns. Part Number and Description are "
+            "always included; the other fields are those selected for this scan. "
+            "All are compared when the candidate groups are generated.",
+        ),
+        (
+            _HEADER_FILL, "Blue",
+            "All other columns. These show group details, record information and "
+            "review columns, and were not used as duplicate-checking conditions.",
+        ),
+    ), start=start_row + 1):
+        _merge_and_write(
+            sheet, f"A{row_number}:B{row_number}", label,
+            fill=swatch_fill,
+            font=Font(color=_WHITE, bold=True),
+            alignment=Alignment(horizontal="center", vertical="center"),
+        )
+        _merge_and_write(
+            sheet, f"C{row_number}:H{row_number}", meaning,
+            fill=PatternFill("solid", fgColor=_WHITE),
+            font=Font(color=_TEXT),
+            alignment=Alignment(vertical="center", wrap_text=True),
+        )
+        sheet.row_dimensions[row_number].height = 32
 
 
 def _write_progress_row(sheet, row_number: int, label: str, value) -> None:
@@ -816,6 +906,7 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         font=Font(color="5B7894", italic=True, size=9),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
+    _write_column_colour_key(sheet, 61)
     sheet.freeze_panes = "A6"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
@@ -847,14 +938,22 @@ def _write_group_index(sheet, groups) -> None:
 
 
 def _write_review_groups(
-    sheet, groups, source_columns=_SOURCE_COLUMNS, disabled_columns=frozenset(),
+    sheet, groups, source_columns=_SOURCE_COLUMNS, selected_columns=frozenset(),
 ) -> None:
     columns = _review_group_columns(source_columns)
     _write_header(sheet, columns)
-    group_level_columns = tuple(range(1, 11))
+    group_level_columns = tuple(range(1, len(_REVIEW_GROUP_GROUP_COLUMNS) + 1))
     member_level_columns = tuple(
-        range(11, len(_REVIEW_GROUP_PREFIX_COLUMNS) + len(source_columns) + 1)
+        range(_REVIEW_GROUP_PREFIX_LENGTH, len(columns) + 1)
     )
+    pair_start_column = len(_REVIEW_GROUP_GROUP_COLUMNS) + 1
+    pair_columns = tuple(range(
+        pair_start_column,
+        pair_start_column + len(_REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS),
+    ))
+    description_column = _REVIEW_GROUP_PREFIX_LENGTH + 2
+    decision_column = len(columns) - 1
+    comment_column = len(columns)
     current_row = 2
     if not groups:
         _merge_and_write(
@@ -878,19 +977,20 @@ def _write_review_groups(
             )
             member_start_row = current_row
             for pair_row in pair_rows:
+                # Human Decision / Human Comment are per member and start blank
+                # so each part can be marked individually.
                 _write_row(
                     sheet, current_row,
                     (
                         p["label"], p["evidence"], p["match_strength"],
                         p["match_band"], p["sites"], p["review_consideration"],
                         p["deterministic_group_summary"],
-                        p["relationship_evidence"], p["human_decision"],
-                        p["human_comment"], member_number, *source, *pair_row,
+                        p["relationship_evidence"],
+                        *pair_row, member_number, *source, "", "",
                     ),
                     wrap_columns=(
-                        2, 4, 5, 6, 7, 8, 9, 10, 13,
-                        len(columns) - 3, len(columns) - 2,
-                        len(columns) - 1, len(columns),
+                        2, 4, 5, 6, 7, 8, *pair_columns, description_column,
+                        decision_column, comment_column,
                     ),
                 )
                 relationship_text = pair_row[0]
@@ -930,25 +1030,30 @@ def _write_review_groups(
                     vertical="center", wrap_text=True
                 )
         _apply_match_band_style(sheet.cell(start_row, 4), p["match_band"])
-    prefix_widths = (14, 16, 13, 15, 18, 42, 42, 40, 28, 32, 12)
+    group_widths = (14, 16, 13, 15, 18, 42, 42, 40)
+    pair_widths = (42, 18, 18, 18)
     _set_widths(
         sheet,
-        prefix_widths
+        group_widths
+        + pair_widths
+        + (12,)
         + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns)
-        + (42, 18, 18, 18),
+        + (28, 32),
     )
     sheet.freeze_panes = "F2"
-    _apply_disabled_column_styles(
-        sheet, source_columns, disabled_columns,
-        prefix_length=len(_REVIEW_GROUP_PREFIX_COLUMNS),
+    _apply_selected_column_styles(
+        sheet, source_columns, selected_columns,
+        prefix_length=_REVIEW_GROUP_PREFIX_LENGTH,
         last_row=sheet.max_row if groups else 1,
     )
     if groups:
-        _add_human_decision_dropdown(sheet, "I", 2, sheet.max_row)
+        _add_member_decision_dropdown(
+            sheet, get_column_letter(decision_column), 2, sheet.max_row
+        )
 
 
 def _write_detailed_data(
-    sheet, groups, source_columns=_SOURCE_COLUMNS, disabled_columns=frozenset(),
+    sheet, groups, source_columns=_SOURCE_COLUMNS, selected_columns=frozenset(),
 ) -> None:
     columns = _detailed_data_columns(source_columns)
     _write_header(sheet, columns)
@@ -970,8 +1075,8 @@ def _write_detailed_data(
         sheet,
         prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
     )
-    _apply_disabled_column_styles(
-        sheet, source_columns, disabled_columns,
+    _apply_selected_column_styles(
+        sheet, source_columns, selected_columns,
         prefix_length=len(_DETAILED_DATA_PREFIX_COLUMNS), last_row=sheet.max_row,
     )
     if sheet.max_row >= 2:
@@ -1087,7 +1192,9 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         groups.append({
             "presentation": presentation,
             "member_rows": member_rows,
-            "member_pair_columns": _member_pair_columns(explanation),
+            "member_pair_columns": _member_pair_columns(
+                explanation, _part_numbers_by_reference(member_rows)
+            ),
         })
 
     strength_distribution = {
@@ -1106,7 +1213,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         strength_distribution[key] += 1
 
     source_columns = _ordered_source_columns(scan.selected_fields)
-    disabled_columns = _unselected_source_columns(scan.selected_fields)
+    selected_columns = _selected_source_columns(scan.selected_fields)
     workbook = Workbook()
     _write_overview(
         workbook, scan, snapshot, review_states, strength_distribution
@@ -1115,9 +1222,9 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     group_index = workbook.create_sheet("Group Index")
     detailed_data = workbook.create_sheet("Detailed Data")
     technical = workbook.create_sheet("Technical Reference")
-    _write_review_groups(review_groups, groups, source_columns, disabled_columns)
+    _write_review_groups(review_groups, groups, source_columns, selected_columns)
     _write_group_index(group_index, groups)
-    _write_detailed_data(detailed_data, groups, source_columns, disabled_columns)
+    _write_detailed_data(detailed_data, groups, source_columns, selected_columns)
     _write_technical_reference(technical, groups, snapshot)
     workbook.active = 0
 
@@ -1270,6 +1377,7 @@ def _write_reviewed_overview(
         font=Font(color="5B7894", italic=True, size=9),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
+    _write_column_colour_key(sheet, 53)
     sheet.freeze_panes = "A6"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
@@ -1330,7 +1438,9 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
         groups.append({
             "presentation": presentation,
             "member_rows": member_rows,
-            "member_pair_columns": _member_pair_columns(explanation),
+            "member_pair_columns": _member_pair_columns(
+                explanation, _part_numbers_by_reference(member_rows)
+            ),
         })
 
     strength_distribution = {
@@ -1349,7 +1459,7 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
         strength_distribution[key] += 1
 
     source_columns = _ordered_source_columns(scan.selected_fields)
-    disabled_columns = _unselected_source_columns(scan.selected_fields)
+    selected_columns = _selected_source_columns(scan.selected_fields)
     workbook = Workbook()
     _write_reviewed_overview(
         workbook, scan, snapshot, groups, strength_distribution,
@@ -1359,9 +1469,9 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
     group_index_sheet = workbook.create_sheet("Group Index")
     detailed_data = workbook.create_sheet("Detailed Data")
     technical = workbook.create_sheet("Technical Reference")
-    _write_review_groups(review_groups, groups, source_columns, disabled_columns)
+    _write_review_groups(review_groups, groups, source_columns, selected_columns)
     _write_group_index(group_index_sheet, groups)
-    _write_detailed_data(detailed_data, groups, source_columns, disabled_columns)
+    _write_detailed_data(detailed_data, groups, source_columns, selected_columns)
     _write_technical_reference(technical, groups, snapshot)
     workbook.active = 0
 
