@@ -615,3 +615,23 @@ def test_no_unsupported_claims_secrets_formulas_or_writeback(db, client):
                             "not a probability" in cell.value.lower()
                             or "not duplicate probability" in cell.value.lower()
                         )
+
+
+def test_unselected_matching_columns_are_greyed_out(db):
+    scan = review_scan(db)
+    scan.selected_fields = json.dumps(["CONTRACT", "UNIT_MEAS"])
+    db.commit()
+    workbook = _workbook(authority_selected_system_groups_to_xlsx(db, scan.id))
+    for sheet_name in ("Review Groups", "Detailed Data"):
+        sheet = workbook[sheet_name]
+        headers = {cell.value: cell for cell in sheet[1]}
+        for selected in ("Part Number", "Description", "Site", "Inventory UOM", "Part Type"):
+            assert headers[selected].fill.fgColor.rgb.endswith("1F4E78")
+        for unselected in ("Commodity Group 01", "Safety Code", "HSN/SAC Code"):
+            header = headers[unselected]
+            assert header.fill.fgColor.rgb.endswith("7F8B96")
+            data_cell = sheet.cell(2, header.column)
+            assert data_cell.fill.fgColor.rgb.endswith("ECEEF1")
+            assert data_cell.font.color.rgb.endswith("8A94A0")
+        site = sheet.cell(2, headers["Site"].column)
+        assert not site.fill.fgColor.rgb.endswith("ECEEF1")

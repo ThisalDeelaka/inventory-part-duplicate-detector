@@ -266,6 +266,9 @@ _MATCH_BAND_STYLES = {
     "Moderate Match": (PatternFill("solid", fgColor="FFEB9C"), "9C6500"),
     "Borderline Match": (PatternFill("solid", fgColor="FFC7CE"), "9C0006"),
 }
+_DISABLED_HEADER_FILL = PatternFill("solid", fgColor="7F8B96")
+_DISABLED_CELL_FILL = PatternFill("solid", fgColor="ECEEF1")
+_DISABLED_FONT = Font(color="8A94A0")
 _HUMAN_DECISION_OPTIONS = (
     "Not yet reviewed",
     "Confirmed all records as one identity",
@@ -400,6 +403,30 @@ def _write_header(sheet, columns, *, row_number: int = 1) -> None:
 def _set_widths(sheet, widths) -> None:
     for index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
+
+
+def _unselected_source_columns(selected_fields_json) -> frozenset[str]:
+    """Condition columns the scan did not use for matching (shown greyed out)."""
+    selected = _decode_selected_field_codes(selected_fields_json)
+    return frozenset(
+        column for column, code in _SOURCE_COLUMN_FIELD_CODE.items()
+        if code not in selected
+    )
+
+
+def _apply_disabled_column_styles(
+    sheet, source_columns, disabled_columns, *, prefix_length: int, last_row: int,
+) -> None:
+    for offset, column in enumerate(source_columns, start=1):
+        if column not in disabled_columns:
+            continue
+        column_number = prefix_length + offset
+        header = sheet.cell(1, column_number)
+        header.fill = _DISABLED_HEADER_FILL
+        for row_number in range(2, last_row + 1):
+            cell = sheet.cell(row_number, column_number)
+            cell.fill = _DISABLED_CELL_FILL
+            cell.font = _DISABLED_FONT
 
 
 def _apply_match_band_style(cell, match_band: str | None) -> None:
@@ -744,7 +771,9 @@ def _write_group_index(sheet, groups) -> None:
         _add_human_decision_dropdown(sheet, "H", 2, sheet.max_row)
 
 
-def _write_review_groups(sheet, groups, source_columns=_SOURCE_COLUMNS) -> None:
+def _write_review_groups(
+    sheet, groups, source_columns=_SOURCE_COLUMNS, disabled_columns=frozenset(),
+) -> None:
     columns = _review_group_columns(source_columns)
     _write_header(sheet, columns)
     group_level_columns = tuple(range(1, 11))
@@ -803,11 +832,18 @@ def _write_review_groups(sheet, groups, source_columns=_SOURCE_COLUMNS) -> None:
         prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
     )
     sheet.freeze_panes = "F2"
+    _apply_disabled_column_styles(
+        sheet, source_columns, disabled_columns,
+        prefix_length=len(_REVIEW_GROUP_PREFIX_COLUMNS),
+        last_row=sheet.max_row if groups else 1,
+    )
     if groups:
         _add_human_decision_dropdown(sheet, "I", 2, sheet.max_row)
 
 
-def _write_detailed_data(sheet, groups, source_columns=_SOURCE_COLUMNS) -> None:
+def _write_detailed_data(
+    sheet, groups, source_columns=_SOURCE_COLUMNS, disabled_columns=frozenset(),
+) -> None:
     columns = _detailed_data_columns(source_columns)
     _write_header(sheet, columns)
     row_number = 2
@@ -827,6 +863,10 @@ def _write_detailed_data(sheet, groups, source_columns=_SOURCE_COLUMNS) -> None:
     _set_widths(
         sheet,
         prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
+    )
+    _apply_disabled_column_styles(
+        sheet, source_columns, disabled_columns,
+        prefix_length=len(_DETAILED_DATA_PREFIX_COLUMNS), last_row=sheet.max_row,
     )
     if sheet.max_row >= 2:
         table = Table(
@@ -959,6 +999,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         strength_distribution[key] += 1
 
     source_columns = _ordered_source_columns(scan.selected_fields)
+    disabled_columns = _unselected_source_columns(scan.selected_fields)
     workbook = Workbook()
     _write_overview(
         workbook, scan, snapshot, review_states, strength_distribution
@@ -967,9 +1008,9 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     group_index = workbook.create_sheet("Group Index")
     detailed_data = workbook.create_sheet("Detailed Data")
     technical = workbook.create_sheet("Technical Reference")
-    _write_review_groups(review_groups, groups, source_columns)
+    _write_review_groups(review_groups, groups, source_columns, disabled_columns)
     _write_group_index(group_index, groups)
-    _write_detailed_data(detailed_data, groups, source_columns)
+    _write_detailed_data(detailed_data, groups, source_columns, disabled_columns)
     _write_technical_reference(technical, groups, snapshot)
     workbook.active = 0
 
@@ -1200,6 +1241,7 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
         strength_distribution[key] += 1
 
     source_columns = _ordered_source_columns(scan.selected_fields)
+    disabled_columns = _unselected_source_columns(scan.selected_fields)
     workbook = Workbook()
     _write_reviewed_overview(
         workbook, scan, snapshot, groups, strength_distribution,
@@ -1209,9 +1251,9 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
     group_index_sheet = workbook.create_sheet("Group Index")
     detailed_data = workbook.create_sheet("Detailed Data")
     technical = workbook.create_sheet("Technical Reference")
-    _write_review_groups(review_groups, groups, source_columns)
+    _write_review_groups(review_groups, groups, source_columns, disabled_columns)
     _write_group_index(group_index_sheet, groups)
-    _write_detailed_data(detailed_data, groups, source_columns)
+    _write_detailed_data(detailed_data, groups, source_columns, disabled_columns)
     _write_technical_reference(technical, groups, snapshot)
     workbook.active = 0
 
