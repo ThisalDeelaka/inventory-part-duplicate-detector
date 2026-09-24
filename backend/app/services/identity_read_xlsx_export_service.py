@@ -61,6 +61,9 @@ _REVIEW_GROUP_PREFIX_COLUMNS = (
     "Review Consideration", "Why This Group Exists", "Relationship Evidence",
     "Human Decision", "Human Comment", "Member Position",
 )
+_REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS = (
+    "Part Relationships", "Pair Match Scores",
+)
 _DETAILED_DATA_PREFIX_COLUMNS = (
     "Group", "Members", "Group Sites", "Human Decision", "Human Comment",
 )
@@ -217,7 +220,11 @@ def _ordered_source_columns(selected_fields_json) -> tuple[str, ...]:
 
 
 def _review_group_columns(source_columns) -> tuple:
-    return _REVIEW_GROUP_PREFIX_COLUMNS + tuple(source_columns)
+    return (
+        _REVIEW_GROUP_PREFIX_COLUMNS
+        + tuple(source_columns)
+        + _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS
+    )
 
 
 def _detailed_data_columns(source_columns) -> tuple:
@@ -369,6 +376,55 @@ def _relationship_lines(explanation) -> str:
             sections.append(detail.availability_message)
         blocks.append("\n".join(sections))
     return "\n\n".join(blocks)
+
+
+def _member_pair_columns(explanation) -> dict[str, tuple[str, str]]:
+    """Render persisted supporting pairs on each endpoint's member row."""
+    incident: dict[str, list[tuple[str, str, str]]] = {}
+    supporting = {"STRONG_SUPPORT", "REVIEW_SUPPORT"}
+    relationships = sorted(
+        explanation.relationships,
+        key=lambda item: (
+            min(item.left_record_reference, item.right_record_reference),
+            max(item.left_record_reference, item.right_record_reference),
+            item.relationship_id,
+        ),
+    )
+    for relationship in relationships:
+        if relationship.signed_relationship not in supporting:
+            continue
+        score = (
+            "Not available"
+            if relationship.deterministic_score is None
+            else f"{relationship.deterministic_score:.2f}/100"
+        )
+        endpoints = (
+            (
+                relationship.left_record_reference,
+                relationship.right_record_reference,
+                relationship.left_display_identity,
+                relationship.right_display_identity,
+            ),
+            (
+                relationship.right_record_reference,
+                relationship.left_record_reference,
+                relationship.right_display_identity,
+                relationship.left_display_identity,
+            ),
+        )
+        for own_reference, other_reference, own_display, other_display in endpoints:
+            incident.setdefault(own_reference, []).append((
+                other_reference,
+                f"{own_display} ↔ {other_display}",
+                score,
+            ))
+    return {
+        reference: (
+            "\n".join(item[1] for item in sorted(items)),
+            "\n".join(item[2] for item in sorted(items)),
+        )
+        for reference, items in incident.items()
+    }
 
 
 def _source_values(row: dict, source_columns=_SOURCE_COLUMNS) -> tuple:
@@ -793,13 +849,20 @@ def _write_review_groups(
         start_row = current_row
         for member_number, member_row in enumerate(member_rows, start=1):
             source = _source_values(member_row, source_columns)
+            pair_relationships, pair_scores = item["member_pair_columns"].get(
+                member_row.get("stable_record_reference"), ("", "")
+            )
             _write_row(
                 sheet, current_row,
                 (p["label"], p["evidence"], p["match_strength"], p["match_band"],
                  p["sites"], p["review_consideration"],
                  p["deterministic_group_summary"], p["relationship_evidence"],
-                 p["human_decision"], p["human_comment"], member_number, *source),
-                wrap_columns=(2, 4, 5, 6, 7, 8, 9, 10, 13),
+                 p["human_decision"], p["human_comment"], member_number, *source,
+                 pair_relationships, pair_scores),
+                wrap_columns=(
+                    2, 4, 5, 6, 7, 8, 9, 10, 13,
+                    len(columns) - 1, len(columns),
+                ),
             )
             sheet.row_dimensions[current_row].height = max(
                 40, min(160, 24 + 15 * max(1, p["relationship_evidence"].count("\n") + 1))
@@ -829,7 +892,9 @@ def _write_review_groups(
     prefix_widths = (14, 16, 13, 15, 18, 42, 42, 40, 28, 32, 12)
     _set_widths(
         sheet,
-        prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
+        prefix_widths
+        + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns)
+        + (42, 18),
     )
     sheet.freeze_panes = "F2"
     _apply_disabled_column_styles(
@@ -981,6 +1046,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         groups.append({
             "presentation": presentation,
             "member_rows": member_rows,
+            "member_pair_columns": _member_pair_columns(explanation),
         })
 
     strength_distribution = {
@@ -1223,6 +1289,7 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
         groups.append({
             "presentation": presentation,
             "member_rows": member_rows,
+            "member_pair_columns": _member_pair_columns(explanation),
         })
 
     strength_distribution = {
