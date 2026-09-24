@@ -63,6 +63,7 @@ _REVIEW_GROUP_PREFIX_COLUMNS = (
 )
 _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS = (
     "Part Relationships", "Pair Match Scores",
+    "Description Similarity", "Wording Similarity",
 )
 _DETAILED_DATA_PREFIX_COLUMNS = (
     "Group", "Members", "Group Sites", "Human Decision", "Human Comment",
@@ -378,10 +379,23 @@ def _relationship_lines(explanation) -> str:
     return "\n\n".join(blocks)
 
 
-def _member_pair_columns(explanation) -> dict[str, tuple[str, str]]:
-    """Render persisted supporting pairs on each endpoint's member row."""
-    incident: dict[str, list[tuple[str, str, str]]] = {}
+def _pair_component_score(detail, component: str) -> str:
+    if detail is None:
+        return "Not available"
+    source_field = f"component_scores.{component}"
+    for item in detail.supporting_items:
+        if item.source_field == source_field and item.numeric_value is not None:
+            return f"{item.numeric_value:.2f}/100"
+    return "Not available"
+
+
+def _member_pair_columns(explanation) -> dict[str, tuple[tuple[str, ...], ...]]:
+    """Project one persisted supporting pair row onto each stable endpoint."""
+    incident: dict[str, list[tuple[str, ...]]] = {}
     supporting = {"STRONG_SUPPORT", "REVIEW_SUPPORT"}
+    details = {
+        item.relationship_id: item for item in explanation.pair_explanations
+    }
     relationships = sorted(
         explanation.relationships,
         key=lambda item: (
@@ -398,6 +412,11 @@ def _member_pair_columns(explanation) -> dict[str, tuple[str, str]]:
             if relationship.deterministic_score is None
             else f"{relationship.deterministic_score:.2f}/100"
         )
+        detail = details.get(relationship.relationship_id)
+        description_similarity = _pair_component_score(
+            detail, "description_similarity"
+        )
+        wording_similarity = _pair_component_score(detail, "fuzzy_score")
         endpoints = (
             (
                 relationship.left_record_reference,
@@ -415,14 +434,14 @@ def _member_pair_columns(explanation) -> dict[str, tuple[str, str]]:
         for own_reference, other_reference, own_display, other_display in endpoints:
             incident.setdefault(own_reference, []).append((
                 other_reference,
+                relationship.relationship_id,
                 f"{own_display} ↔ {other_display}",
                 score,
+                description_similarity,
+                wording_similarity,
             ))
     return {
-        reference: (
-            "\n".join(item[1] for item in sorted(items)),
-            "\n".join(item[2] for item in sorted(items)),
-        )
+        reference: tuple(item[2:] for item in sorted(items))
         for reference, items in incident.items()
     }
 
@@ -833,6 +852,9 @@ def _write_review_groups(
     columns = _review_group_columns(source_columns)
     _write_header(sheet, columns)
     group_level_columns = tuple(range(1, 11))
+    member_level_columns = tuple(
+        range(11, len(_REVIEW_GROUP_PREFIX_COLUMNS) + len(source_columns) + 1)
+    )
     current_row = 2
     if not groups:
         _merge_and_write(
@@ -847,27 +869,36 @@ def _write_review_groups(
         p = item["presentation"]
         member_rows = item["member_rows"]
         start_row = current_row
+        member_ranges = []
         for member_number, member_row in enumerate(member_rows, start=1):
             source = _source_values(member_row, source_columns)
-            pair_relationships, pair_scores = item["member_pair_columns"].get(
-                member_row.get("stable_record_reference"), ("", "")
+            pair_rows = item["member_pair_columns"].get(
+                member_row.get("stable_record_reference"),
+                (("", "Not available", "Not available", "Not available"),),
             )
-            _write_row(
-                sheet, current_row,
-                (p["label"], p["evidence"], p["match_strength"], p["match_band"],
-                 p["sites"], p["review_consideration"],
-                 p["deterministic_group_summary"], p["relationship_evidence"],
-                 p["human_decision"], p["human_comment"], member_number, *source,
-                 pair_relationships, pair_scores),
-                wrap_columns=(
-                    2, 4, 5, 6, 7, 8, 9, 10, 13,
-                    len(columns) - 1, len(columns),
-                ),
-            )
-            sheet.row_dimensions[current_row].height = max(
-                40, min(160, 24 + 15 * max(1, p["relationship_evidence"].count("\n") + 1))
-            )
-            current_row += 1
+            member_start_row = current_row
+            for pair_row in pair_rows:
+                _write_row(
+                    sheet, current_row,
+                    (
+                        p["label"], p["evidence"], p["match_strength"],
+                        p["match_band"], p["sites"], p["review_consideration"],
+                        p["deterministic_group_summary"],
+                        p["relationship_evidence"], p["human_decision"],
+                        p["human_comment"], member_number, *source, *pair_row,
+                    ),
+                    wrap_columns=(
+                        2, 4, 5, 6, 7, 8, 9, 10, 13,
+                        len(columns) - 3, len(columns) - 2,
+                        len(columns) - 1, len(columns),
+                    ),
+                )
+                relationship_text = pair_row[0]
+                sheet.row_dimensions[current_row].height = min(
+                    60, max(30, 30 + 12 * (len(relationship_text) // 48))
+                )
+                current_row += 1
+            member_ranges.append((member_start_row, current_row - 1))
         end_row = current_row - 1
         fill = _GROUP_FILLS[group_index % len(_GROUP_FILLS)]
         for row_number in range(start_row, end_row + 1):
@@ -888,13 +919,23 @@ def _write_review_groups(
             sheet.cell(start_row, column_number).alignment = Alignment(
                 vertical="center", wrap_text=True
             )
+        for member_start_row, member_end_row in member_ranges:
+            for column_number in member_level_columns:
+                if member_end_row > member_start_row:
+                    sheet.merge_cells(
+                        start_row=member_start_row, start_column=column_number,
+                        end_row=member_end_row, end_column=column_number,
+                    )
+                sheet.cell(member_start_row, column_number).alignment = Alignment(
+                    vertical="center", wrap_text=True
+                )
         _apply_match_band_style(sheet.cell(start_row, 4), p["match_band"])
     prefix_widths = (14, 16, 13, 15, 18, 42, 42, 40, 28, 32, 12)
     _set_widths(
         sheet,
         prefix_widths
         + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns)
-        + (42, 18),
+        + (42, 18, 18, 18),
     )
     sheet.freeze_panes = "F2"
     _apply_disabled_column_styles(

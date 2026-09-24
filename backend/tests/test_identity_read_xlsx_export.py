@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from types import SimpleNamespace
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from sqlalchemy import text
 
@@ -31,6 +31,7 @@ from app.services.identity_read_xlsx_export_service import (
     TECHNICAL_REFERENCE_HEADER_ROW,
     WORKBOOK_NOTICE,
     _member_pair_columns,
+    _write_review_groups,
     authority_selected_system_groups_to_xlsx,
     reason_for_group_status,
 )
@@ -142,8 +143,9 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     flat = workbook["Detailed Data"]
     technical = workbook["Technical Reference"]
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
-    assert REVIEW_GROUP_COLUMNS[-2:] == (
+    assert REVIEW_GROUP_COLUMNS[-4:] == (
         "Part Relationships", "Pair Match Scores",
+        "Description Similarity", "Wording Similarity",
     )
     assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
     assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
@@ -218,8 +220,11 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     )
     member_rows = _dict_rows(review)
     assert all(row["Part Relationships"] for row in member_rows)
-    assert all(row["Pair Match Scores"].endswith("/100") for row in member_rows)
-    for column in range(len(REVIEW_GROUP_COLUMNS) - 1, len(REVIEW_GROUP_COLUMNS) + 1):
+    for field in (
+        "Pair Match Scores", "Description Similarity", "Wording Similarity",
+    ):
+        assert all(row[field].endswith("/100") for row in member_rows)
+    for column in range(len(REVIEW_GROUP_COLUMNS) - 3, len(REVIEW_GROUP_COLUMNS) + 1):
         cell = review.cell(2, column)
         assert cell.alignment.wrap_text is True
         assert cell.alignment.vertical == "top"
@@ -299,14 +304,35 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     sheet = workbook["Review Groups"]
     member_count = snapshot.groups[0].member_count
     assert member_count >= 3
-    assert {str(item) for item in sheet.merged_cells.ranges} == {
-        f"{letter}2:{letter}{member_count + 1}" for letter in "ABCDEFGHIJ"
-    }
+    group_end_row = sheet.max_row
+    assert {
+        f"{letter}2:{letter}{group_end_row}" for letter in "ABCDEFGHIJ"
+    }.issubset({str(item) for item in sheet.merged_cells.ranges})
     rows = _dict_rows(sheet)
-    assert len(rows) == member_count
-    assert [row["Member Position"] for row in rows] == list(range(1, member_count + 1))
-    assert len({row["Part Number"] for row in rows}) == member_count
+    member_rows = [row for row in rows if row["Member Position"] is not None]
+    assert len(member_rows) == member_count
+    assert [row["Member Position"] for row in member_rows] == list(
+        range(1, member_count + 1)
+    )
+    assert len({row["Part Number"] for row in member_rows}) == member_count
+    for row in rows:
+        evidence_values = (
+            row["Pair Match Scores"], row["Description Similarity"],
+            row["Wording Similarity"],
+        )
+        if row["Part Relationships"]:
+            assert all(evidence_values)
+        else:
+            assert evidence_values == (
+                "Not available", "Not available", "Not available",
+            )
+    assert not any(
+        merged.max_col > len(REVIEW_GROUP_COLUMNS) - 4
+        for merged in sheet.merged_cells.ranges
+    )
+    assert sheet.freeze_panes == "F2"
     assert not workbook["Detailed Data"].merged_cells.ranges
+    assert workbook["Detailed Data"].max_row == member_count + 1
 
 
 def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
@@ -320,11 +346,14 @@ def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
             for index in range(member_count)
         )
         relationships = []
-        expected_scores = {reference: [] for reference in references}
+        pair_details = []
+        expected_rows = {reference: [] for reference in references}
         for left in range(member_count):
             for right in range(left + 1, member_count):
                 score = None if (left, right) == (0, 1) else 80 + left + right
                 rendered_score = "Not available" if score is None else f"{score:.2f}/100"
+                description = 0.0 if (left, right) == (0, 2) else 90 + left
+                wording = None if (left, right) == (0, 1) else 95 + right
                 relationships.append(SimpleNamespace(
                     relationship_id=f"pair-{left}-{right}",
                     left_record_reference=references[left],
@@ -334,27 +363,58 @@ def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
                     deterministic_score=score,
                     signed_relationship="REVIEW_SUPPORT",
                 ))
-                expected_scores[references[left]].append(
-                    (references[right], rendered_score)
+                supporting_items = [SimpleNamespace(
+                    source_field="component_scores.description_similarity",
+                    numeric_value=description,
+                )]
+                if wording is not None:
+                    supporting_items.append(SimpleNamespace(
+                        source_field="component_scores.fuzzy_score",
+                        numeric_value=wording,
+                    ))
+                pair_details.append(SimpleNamespace(
+                    relationship_id=f"pair-{left}-{right}",
+                    supporting_items=tuple(supporting_items),
+                ))
+                expected = (
+                    rendered_score,
+                    (
+                        "Not available"
+                        if member_count == 2 else f"{description:.2f}/100"
+                    ),
+                    (
+                        "Not available"
+                        if member_count == 2 or wording is None
+                        else f"{wording:.2f}/100"
+                    ),
                 )
-                expected_scores[references[right]].append(
-                    (references[left], rendered_score)
-                )
+                expected_rows[references[left]].append((references[right], expected))
+                expected_rows[references[right]].append((references[left], expected))
+
+        if member_count == 2:
+            pair_details = []
 
         rendered = _member_pair_columns(SimpleNamespace(
-            relationships=tuple(reversed(relationships))
+            relationships=tuple(reversed(relationships)),
+            pair_explanations=tuple(pair_details),
         ))
         assert set(rendered) == set(references)
         for reference in references:
-            pair_lines, score_lines = rendered[reference]
-            assert len(pair_lines.splitlines()) == member_count - 1
-            assert score_lines.splitlines() == [
-                score for _other, score in sorted(expected_scores[reference])
+            pair_rows = rendered[reference]
+            assert len(pair_rows) == member_count - 1
+            assert [row[1:] for row in pair_rows] == [
+                expected for _other, expected in sorted(expected_rows[reference])
             ]
+        if member_count == 3:
+            zero_rows = [
+                row for rows in rendered.values() for row in rows
+                if row[2] == "0.00/100"
+            ]
+            assert len(zero_rows) == 2
 
 
 def test_member_pair_columns_use_stable_identity_not_duplicate_display_text():
-    shared_display = "DUP-200 — shared pump"
+    shared_display = "DUP-200 — shared pump with a deliberately long persisted display description " * 2
     explanation = SimpleNamespace(relationships=(
         SimpleNamespace(
             relationship_id="site-a-site-b",
@@ -374,12 +434,92 @@ def test_member_pair_columns_use_stable_identity_not_duplicate_display_text():
             deterministic_score=99.0,
             signed_relationship="CANNOT_LINK",
         ),
-    ))
+    ), pair_explanations=(SimpleNamespace(
+        relationship_id="site-a-site-b",
+        supporting_items=(),
+    ),))
 
     rendered = _member_pair_columns(explanation)
     assert set(rendered) == {"SITE-A::row-1", "SITE-B::row-1"}
-    assert rendered["SITE-A::row-1"][1] == "92.50/100"
-    assert rendered["SITE-B::row-1"][1] == "92.50/100"
+    assert len(rendered["SITE-A::row-1"][0][0]) > 100
+    assert rendered["SITE-A::row-1"][0][1:] == (
+        "92.50/100", "Not available", "Not available",
+    )
+    assert rendered["SITE-B::row-1"][0][1:] == (
+        "92.50/100", "Not available", "Not available",
+    )
+
+
+def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence():
+    workbook = Workbook()
+    sheet = workbook.active
+    references = ("SITE-A::1", "SITE-B::1", "SITE-C::1")
+    long_pair = "DUP-1 — pump with a deliberately long relationship label " * 3
+    pair_rows = {
+        references[0]: (
+            (long_pair, "92.50/100", "95.04/100", "100.00/100"),
+            ("DUP-1 ↔ DUP-3", "90.00/100", "0.00/100", "98.50/100"),
+        ),
+        references[1]: (
+            ("DUP-2 ↔ DUP-1", "92.50/100", "95.04/100", "100.00/100"),
+            ("DUP-2 ↔ DUP-3", "91.00/100", "Not available", "99.00/100"),
+        ),
+        references[2]: (
+            ("DUP-3 ↔ DUP-1", "90.00/100", "0.00/100", "98.50/100"),
+            ("DUP-3 ↔ DUP-2", "91.00/100", "Not available", "99.00/100"),
+        ),
+    }
+    relationship_evidence = "persisted group relationship text — unchanged"
+    presentation = {
+        "label": "CG-000001",
+        "evidence": "Review Evidence",
+        "match_strength": 91.0,
+        "match_band": "High Match",
+        "sites": "SITE-A, SITE-B, SITE-C",
+        "review_consideration": "Compare item details.",
+        "deterministic_group_summary": "Three records have supporting pairs.",
+        "relationship_evidence": relationship_evidence,
+        "human_decision": "Not yet reviewed",
+        "human_comment": "",
+    }
+    member_rows = tuple(
+        {
+            "stable_record_reference": reference,
+            "part_no": "DUP-1",
+            "description": f"Pump at site {index + 1}",
+            "site_or_contract": f"SITE-{chr(65 + index)}",
+        }
+        for index, reference in enumerate(references)
+    )
+
+    _write_review_groups(sheet, ({
+        "presentation": presentation,
+        "member_rows": member_rows,
+        "member_pair_columns": pair_rows,
+    },))
+
+    assert sheet.max_row == 7
+    assert sheet["H2"].value == relationship_evidence
+    merges = {str(item) for item in sheet.merged_cells.ranges}
+    assert {f"{letter}2:{letter}7" for letter in "ABCDEFGHIJ"}.issubset(merges)
+    member_column = REVIEW_GROUP_COLUMNS.index("Member Position") + 1
+    assert sum(
+        merged.min_col == member_column and merged.max_row - merged.min_row == 1
+        for merged in sheet.merged_cells.ranges
+    ) == 3
+    pair_start = len(REVIEW_GROUP_COLUMNS) - 3
+    for row_number in range(2, 8):
+        values = tuple(
+            sheet.cell(row_number, column).value
+            for column in range(pair_start, pair_start + 4)
+        )
+        assert all(value not in (None, "") for value in values)
+        assert sheet.cell(row_number, pair_start).alignment.wrap_text is True
+        assert sheet.row_dimensions[row_number].height <= 60
+    assert not any(
+        merged.max_col >= pair_start for merged in sheet.merged_cells.ranges
+    )
+    assert sheet.freeze_panes == "F2"
 
 
 def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, client):
