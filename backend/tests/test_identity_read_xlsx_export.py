@@ -143,10 +143,12 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     flat = workbook["Detailed Data"]
     technical = workbook["Technical Reference"]
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
-    assert REVIEW_GROUP_COLUMNS[-4:] == (
-        "Part Relationships", "Pair Match Scores",
-        "Description Similarity", "Wording Similarity",
+    assert REVIEW_GROUP_COLUMNS[7:13] == (
+        "Relationship Evidence", "Part Relationships", "Pair Match Scores",
+        "Description Similarity", "Wording Similarity", "Member Number",
     )
+    assert REVIEW_GROUP_COLUMNS[-2:] == ("Human Decision", "Human Comment")
+    assert REVIEW_GROUP_COLUMNS.count("Human Decision") == 1
     assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
     assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
     assert "were grouped because" in review.cell(
@@ -211,11 +213,11 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
         assert "Stable Record Reference" not in tuple(cell.value for cell in primary[1])
 
     expected_merges = {
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGHIJ"
+        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGH"
     }
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
-    assert not any(11 <= merged.min_col <= 24 for merged in review.merged_cells.ranges)
-    assert [row["Member Position"] for row in _dict_rows(review)] == list(
+    assert not any(merged.min_col >= 9 for merged in review.merged_cells.ranges)
+    assert [row["Member Number"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
     )
     member_rows = _dict_rows(review)
@@ -224,7 +226,7 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
         "Pair Match Scores", "Description Similarity", "Wording Similarity",
     ):
         assert all(row[field].endswith("/100") for row in member_rows)
-    for column in range(len(REVIEW_GROUP_COLUMNS) - 3, len(REVIEW_GROUP_COLUMNS) + 1):
+    for column in range(9, 13):
         cell = review.cell(2, column)
         assert cell.alignment.wrap_text is True
         assert cell.alignment.vertical == "top"
@@ -306,12 +308,12 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     assert member_count >= 3
     group_end_row = sheet.max_row
     assert {
-        f"{letter}2:{letter}{group_end_row}" for letter in "ABCDEFGHIJ"
+        f"{letter}2:{letter}{group_end_row}" for letter in "ABCDEFGH"
     }.issubset({str(item) for item in sheet.merged_cells.ranges})
     rows = _dict_rows(sheet)
-    member_rows = [row for row in rows if row["Member Position"] is not None]
+    member_rows = [row for row in rows if row["Member Number"] is not None]
     assert len(member_rows) == member_count
-    assert [row["Member Position"] for row in member_rows] == list(
+    assert [row["Member Number"] for row in member_rows] == list(
         range(1, member_count + 1)
     )
     assert len({row["Part Number"] for row in member_rows}) == member_count
@@ -327,7 +329,7 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
                 "Not available", "Not available", "Not available",
             )
     assert not any(
-        merged.max_col > len(REVIEW_GROUP_COLUMNS) - 4
+        merged.min_col <= 12 and merged.max_col >= 9
         for merged in sheet.merged_cells.ranges
     )
     assert sheet.freeze_panes == "F2"
@@ -501,13 +503,29 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
     assert sheet.max_row == 7
     assert sheet["H2"].value == relationship_evidence
     merges = {str(item) for item in sheet.merged_cells.ranges}
-    assert {f"{letter}2:{letter}7" for letter in "ABCDEFGHIJ"}.issubset(merges)
-    member_column = REVIEW_GROUP_COLUMNS.index("Member Position") + 1
+    assert {f"{letter}2:{letter}7" for letter in "ABCDEFGH"}.issubset(merges)
+    member_column = REVIEW_GROUP_COLUMNS.index("Member Number") + 1
     assert sum(
         merged.min_col == member_column and merged.max_row - merged.min_row == 1
         for merged in sheet.merged_cells.ranges
     ) == 3
-    pair_start = len(REVIEW_GROUP_COLUMNS) - 3
+    pair_start = REVIEW_GROUP_COLUMNS.index("Part Relationships") + 1
+    assert pair_start == 9
+    decision_column = REVIEW_GROUP_COLUMNS.index("Human Decision") + 1
+    comment_column = REVIEW_GROUP_COLUMNS.index("Human Comment") + 1
+    assert comment_column == decision_column + 1 == len(REVIEW_GROUP_COLUMNS)
+    # Each member gets its own Human Decision / Human Comment cell.
+    for column in (decision_column, comment_column):
+        assert sum(
+            merged.min_col == column and merged.max_row - merged.min_row == 1
+            for merged in sheet.merged_cells.ranges
+        ) == 3
+    validations = sheet.data_validations.dataValidation
+    assert len(validations) == 1
+    assert validations[0].formula1 == '"Original Part,Duplicate Part,Valid Duplicate"'
+    assert str(validations[0].sqref) == (
+        f"{get_column_letter(decision_column)}2:{get_column_letter(decision_column)}7"
+    )
     for row_number in range(2, 8):
         values = tuple(
             sheet.cell(row_number, column).value
@@ -517,7 +535,8 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
         assert sheet.cell(row_number, pair_start).alignment.wrap_text is True
         assert sheet.row_dimensions[row_number].height <= 60
     assert not any(
-        merged.max_col >= pair_start for merged in sheet.merged_cells.ranges
+        merged.min_col <= pair_start + 3 and merged.max_col >= pair_start
+        for merged in sheet.merged_cells.ranges
     )
     assert sheet.freeze_panes == "F2"
 
@@ -843,7 +862,7 @@ def test_no_unsupported_claims_secrets_formulas_or_writeback(db, client):
                         )
 
 
-def test_unselected_matching_columns_are_greyed_out(db):
+def test_selected_matching_columns_are_green_and_others_default(db):
     scan = review_scan(db)
     scan.selected_fields = json.dumps(["CONTRACT", "UNIT_MEAS"])
     db.commit()
@@ -851,13 +870,58 @@ def test_unselected_matching_columns_are_greyed_out(db):
     for sheet_name in ("Review Groups", "Detailed Data"):
         sheet = workbook[sheet_name]
         headers = {cell.value: cell for cell in sheet[1]}
-        for selected in ("Part Number", "Description", "Site", "Inventory UOM", "Part Type"):
-            assert headers[selected].fill.fgColor.rgb.endswith("1F4E78")
-        for unselected in ("Commodity Group 01", "Safety Code", "HSN/SAC Code"):
-            header = headers[unselected]
-            assert header.fill.fgColor.rgb.endswith("7F8B96")
-            data_cell = sheet.cell(2, header.column)
-            assert data_cell.fill.fgColor.rgb.endswith("ECEEF1")
-            assert data_cell.font.color.rgb.endswith("8A94A0")
-        site = sheet.cell(2, headers["Site"].column)
-        assert not site.fill.fgColor.rgb.endswith("ECEEF1")
+        for selected in ("Part Number", "Description", "Site", "Inventory UOM"):
+            header = headers[selected]
+            assert header.fill.fgColor.rgb.endswith("548235")
+            assert sheet.cell(2, header.column).fill.fgColor.rgb.endswith("C6EFCE")
+        for other in (
+            "Part Type", "Commodity Group 01", "Safety Code", "HSN/SAC Code",
+        ):
+            header = headers[other]
+            assert header.fill.fgColor.rgb.endswith("1F4E78")
+            assert not sheet.cell(2, header.column).fill.fgColor.rgb.endswith("C6EFCE")
+
+
+def test_part_type_is_green_only_when_its_condition_is_selected(db):
+    scan = review_scan(db)
+    scan.selected_fields = json.dumps(["TYPE_CODE"])
+    db.commit()
+    sheet = _workbook(
+        authority_selected_system_groups_to_xlsx(db, scan.id)
+    )["Review Groups"]
+    headers = {cell.value: cell for cell in sheet[1]}
+    assert headers["Part Type"].fill.fgColor.rgb.endswith("548235")
+    assert headers["Site"].fill.fgColor.rgb.endswith("1F4E78")
+
+
+def test_overview_explains_green_and_blue_columns(db):
+    scan = review_scan(db)
+    overview = _workbook(
+        authority_selected_system_groups_to_xlsx(db, scan.id)
+    )["Overview"]
+    assert overview["A61"].value == "COLUMN COLOUR KEY"
+    assert overview["A62"].value == "Green"
+    assert overview["A62"].fill.fgColor.rgb.endswith("548235")
+    assert "Duplicate-checking condition" in overview["C62"].value
+    assert overview["A63"].value == "Blue"
+    assert overview["A63"].fill.fgColor.rgb.endswith("1F4E78")
+    assert "not used as duplicate-checking conditions" in overview["C63"].value
+
+
+def test_part_relationships_show_part_numbers_only():
+    explanation = SimpleNamespace(relationships=(
+        SimpleNamespace(
+            relationship_id="a-b",
+            left_record_reference="S::1",
+            right_record_reference="S::2",
+            left_display_identity="LITHIUM-ION BATTERY — Lithium-Ion Battery",
+            right_display_identity="LITHIUM-ION BATTERY 02-1 — LITHIUM-ION BATTERY 02-1",
+            deterministic_score=91.0,
+            signed_relationship="STRONG_SUPPORT",
+        ),
+    ), pair_explanations=())
+    rendered = _member_pair_columns(explanation, {
+        "S::1": "LITHIUM-ION BATTERY", "S::2": "LITHIUM-ION BATTERY 02-1",
+    })
+    assert rendered["S::1"][0][0] == "LITHIUM-ION BATTERY ↔ LITHIUM-ION BATTERY 02-1"
+    assert rendered["S::2"][0][0] == "LITHIUM-ION BATTERY 02-1 ↔ LITHIUM-ION BATTERY"
