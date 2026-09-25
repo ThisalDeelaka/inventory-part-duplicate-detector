@@ -57,6 +57,7 @@ class CanonicalScanRecord:
     normalized_part_no: str
     normalized_description: str
     normalization_version: str
+    extra_fields: tuple[tuple[str, str], ...] = ()
 
     @property
     def retrieval_order_key(self) -> str:
@@ -168,7 +169,38 @@ def retrieval_order_key_for_source_record(item, source_row_index: int | None = N
     )
 
 
-def _planned_snapshot(scan_id: int, item) -> dict:
+def extra_condition_field_keys(
+    selected_fields, custom_fields_used, strict_custom_fields, available_columns
+) -> tuple[str, ...]:
+    """Selected or custom conditions the canonical Inventory columns cannot carry.
+
+    Purchase/Sales conditions and custom fields are stored beside the canonical record so
+    the group-first evaluator sees the same values the pair path always did.
+    """
+    canonical = set(_CANONICAL_FIELD_MAP.values()) | {"PART_NO", "DESCRIPTION"}
+    requested = [str(field).strip().upper() for field in selected_fields or []]
+    for group in (custom_fields_used, strict_custom_fields):
+        requested.extend(
+            str(item.get("field_key") or "").strip().upper()
+            for item in group or [] if isinstance(item, dict)
+        )
+    available = {str(column) for column in available_columns}
+    return tuple(sorted({
+        key for key in requested
+        if key and key not in canonical and key in available
+    }))
+
+
+def _extra_field_values(item, extra_field_keys) -> dict[str, str]:
+    values = {}
+    for key in sorted(set(extra_field_keys)):
+        value = _optional_text(_value(item, key))
+        if value is not None:
+            values[key] = value
+    return values
+
+
+def _planned_snapshot(scan_id: int, item, extra_field_keys=()) -> dict:
     source_row_index = _value(item, SOURCE_ROW_INDEX_FIELD)
     if source_row_index is None:
         raise ValueError("canonical record is missing its source row index")
@@ -179,12 +211,17 @@ def _planned_snapshot(scan_id: int, item) -> dict:
     if source_row_index < 0:
         raise ValueError("canonical record source row index must be non-negative")
     values = _canonical_values(item)
+    extras = _extra_field_values(item, extra_field_keys)
     return {
         "scan_id": scan_id,
         "source_row_index": source_row_index,
         "record_ref_key": canonical_record_ref_key(scan_id, source_row_index),
         "source_record_fingerprint": _source_record_fingerprint(values),
         **values,
+        "extra_fields_json": (
+            json.dumps(extras, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+            if extras else None
+        ),
         "normalized_part_no": normalize_part_no_with_dictionary(values["part_no"]),
         "normalized_description": normalize_description(values["description"]),
         "normalization_version": MODEL_VERSION,
@@ -197,6 +234,18 @@ def _assert_same_snapshot(row: ScanRecordSnapshot, planned: dict) -> None:
             raise ValueError(
                 "existing immutable canonical scan record differs from source evidence"
             )
+
+
+def _decode_extra_fields(raw) -> tuple[tuple[str, str], ...]:
+    if not raw:
+        return ()
+    try:
+        decoded = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return ()
+    if not isinstance(decoded, dict):
+        return ()
+    return tuple(sorted((str(key), str(value)) for key, value in decoded.items()))
 
 
 def _contract(row: ScanRecordSnapshot) -> CanonicalScanRecord:
@@ -222,18 +271,20 @@ def _contract(row: ScanRecordSnapshot) -> CanonicalScanRecord:
         normalized_part_no=row.normalized_part_no,
         normalized_description=row.normalized_description,
         normalization_version=row.normalization_version,
+        extra_fields=_decode_extra_fields(row.extra_fields_json),
     )
 
 
 def create_or_get_scan_record_catalog(
-    db, *, scan_id: int, records: Iterable
+    db, *, scan_id: int, records: Iterable, extra_field_keys: Iterable[str] = ()
 ) -> CanonicalRecordCatalogResult:
     """Persist one immutable row per valid source row using one bounded batch."""
     if scan_id <= 0:
         raise ValueError("scan_id must be positive")
+    extra_field_keys = tuple(extra_field_keys)
     planned_by_index = {}
     for item in records:
-        planned = _planned_snapshot(scan_id, item)
+        planned = _planned_snapshot(scan_id, item, extra_field_keys)
         source_row_index = planned["source_row_index"]
         if source_row_index in planned_by_index:
             raise ValueError("canonical catalog contains a duplicate source row index")
@@ -296,6 +347,7 @@ def load_scan_record_catalog(db, scan_id: int) -> tuple[CanonicalScanRecord, ...
 def catalog_record_to_engine_input(record: CanonicalScanRecord) -> dict:
     """Adapt the catalog to the current pair/G1 input shape without re-normalizing."""
     return {
+        **dict(record.extra_fields),
         SOURCE_ROW_INDEX_FIELD: record.source_row_index,
         "CONTRACT": record.contract,
         "PART_NO": record.part_no,

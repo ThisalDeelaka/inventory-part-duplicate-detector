@@ -21,6 +21,7 @@ from app.engine.identity_evidence_evaluator import (
     deterministic_context_payload,
     evaluate_canonical_identity_relationship,
     sha256_payload,
+    strict_custom_fields_from_payload,
 )
 from app.evidence.contracts import (
     EvidenceRunStatus,
@@ -156,6 +157,7 @@ def _load_and_validate(db, evidence_run_id: int):
     context = DeterministicIdentityContext(
         scan_mode=context_payload["scan_mode"],
         selected_fields=tuple(context_payload["selected_fields"]),
+        strict_custom_fields=strict_custom_fields_from_payload(context_payload),
     )
     current_fingerprint, _configuration_json = _configuration(
         discovery, proposals, context
@@ -210,6 +212,7 @@ def acquire_identity_evidence(db, *, evidence_run_id: int) -> EvidenceAcquisitio
     context = DeterministicIdentityContext(
         scan_mode=context_payload["scan_mode"],
         selected_fields=tuple(context_payload["selected_fields"]),
+        strict_custom_fields=strict_custom_fields_from_payload(context_payload),
     )
     records = load_scan_record_catalog(db, run.scan_id)
     records_by_id = {record.record_id: record for record in records}

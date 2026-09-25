@@ -13,7 +13,7 @@ FIELD_DEFINITIONS = [
     {"field": "CONTRACT", "display": "Site", "required": False, "part_types": ["INVENTORY", "PURCHASE"]},
     {"field": "PART_NO", "display": "Part No", "required": True, "part_types": ALL_PART_TYPES},
     {"field": "DESCRIPTION", "display": "Item Description", "required": True, "part_types": ALL_PART_TYPES},
-    {"field": "TYPE_CODE", "display": "Purchase Type", "required": False, "part_types": ["INVENTORY"]},
+    {"field": "TYPE_CODE", "display": "Part Type", "required": False, "part_types": ["INVENTORY"]},
     {"field": "UNIT_MEAS", "display": "Inventory UOM", "required": False, "part_types": ["INVENTORY"]},
     {"field": "PRIME_COMMODITY", "display": "Com Group 01", "required": False, "part_types": ["INVENTORY"]},
     {"field": "SECOND_COMMODITY", "display": "Com Group 02", "required": False, "part_types": ["INVENTORY"]},
@@ -27,7 +27,7 @@ FIELD_DEFINITIONS = [
     {"field": "BUYER_ID", "display": "Buyer Id", "required": False, "part_types": ["PURCHASE"]},
     {"field": "TECH_COORDINATOR", "display": "Tech Coordinator", "required": False, "part_types": ["PURCHASE"]},
     {"field": "PURCHASE_GROUP", "display": "Purchase Group", "required": False, "part_types": ["PURCHASE"]},
-    {"field": "ORDER_PROC_TYPE", "display": "Order Proc Type", "required": False, "part_types": ["PURCHASE"]},
+    {"field": "ORDER_PROC_TYPE", "display": "Order Processing Type", "required": False, "part_types": ["PURCHASE"]},
     {"field": "SALES_PART_DESCRIPTION", "display": "Sales Part Description", "required": False, "part_types": ["SALES"]},
     {"field": "SALES_UOM", "display": "Sales UOM", "required": False, "part_types": ["SALES"]},
     {"field": "PRICE_UOM", "display": "Price UOM", "required": False, "part_types": ["SALES"]},
@@ -40,20 +40,27 @@ FIELD_DEFINITIONS = [
 ]
 
 # Rows that are also inventory parts, per part type: (canonical column, marker values).
-# Excluding inventory parts drops rows whose value equals a marker (case-insensitive, trimmed).
+# Excluding inventory parts drops rows whose value equals a marker. Values are compared
+# case-insensitively with everything but letters and digits removed, so IFS Cloud's
+# "InventoryPart" and IFS Apps' "Inventory Part" are the same marker.
 INVENTORY_PART_FILTERS = {
     "PURCHASE": {"field": "INVENTORY_PART_FLAG", "display": "Inventory Part", "values": {"yes"}},
-    "SALES": {"field": "SALES_PART_TYPE", "display": "Type of Sales Part", "values": {"inventory part"}},
+    "SALES": {"field": "SALES_PART_TYPE", "display": "Type of Sales Part", "values": {"inventorypart"}},
 }
 
 # In a Sales Part export the base key is "Sales Part No" and the inventory "Part No" is a
 # separate duplicate-checking condition. Applied only when a Sales Part No column exists.
 SALES_PART_KEY_COLUMNS = {"SALES_PART_NO", "SALES_PART_NUMBER"}
+# The IFS Sales Part export also carries a bare "Description" column, which holds the
+# replacement part's description and is almost always empty. When the real description
+# ("Part Description in Use") is present, that column must not claim DESCRIPTION.
+SALES_REPLACEMENT_DESCRIPTION_TARGET = "REPLACEMENT_PART_DESCRIPTION"
 SALES_FIELD_ALIASES = {
     "SALES_PART_NO": "PART_NO",
     "SALES_PART_NUMBER": "PART_NO",
     "PART_NO": "INVENTORY_PART_NO",
     "PART_NUMBER": "INVENTORY_PART_NO",
+    "PART": "INVENTORY_PART_NO",
 }
 
 REQUIRED_FIELDS = ["PART_NO", "DESCRIPTION"]
@@ -72,6 +79,7 @@ BUILT_IN_STRICT_FIELDS = [
 ]
 
 FIELD_ALIASES = {
+    "PART": "PART_NO",
     "STOCK_REF": "PART_NO",
     "PART_NUMBER": "PART_NO",
     "ITEM_NO": "PART_NO",
@@ -102,10 +110,12 @@ FIELD_ALIASES = {
     "SAC_CODE": "HSN_SAC_CODE",
     "DEFAULT_UNIT_OF_MEASURE": "DEFAULT_UOM",
     "PURCHASE_UOM": "DEFAULT_UOM",
+    "DEFAULT_PURCH_UOM": "DEFAULT_UOM",
     "BUYER": "BUYER_ID",
     "BUYER_CODE": "BUYER_ID",
     "TECHNICAL_COORDINATOR": "TECH_COORDINATOR",
     "ORDER_PROCUREMENT_TYPE": "ORDER_PROC_TYPE",
+    "ORDER_PROCESSING_TYPE": "ORDER_PROC_TYPE",
     "PROC_TYPE": "ORDER_PROC_TYPE",
     "SALES_DESCRIPTION": "SALES_PART_DESCRIPTION",
     "SALES_PART_DESC": "SALES_PART_DESCRIPTION",

@@ -253,7 +253,12 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
     result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples", "inventory_filter")})
     inventory_filter = metadata["inventory_filter"]
     if inventory_filter["requested"]:
-        if inventory_filter["column_found"]:
+        if inventory_filter["column_found"] and not inventory_filter["excluded_count"]:
+            result["warnings"].append({
+                "warning_type": "INVENTORY_FILTER_NO_MATCH",
+                "message": f"No rows were recognised as inventory parts in {inventory_filter['column_label']}, so nothing was excluded. Values found: {', '.join(inventory_filter['sample_values']) or 'none'}.",
+            })
+        elif inventory_filter["column_found"]:
             result["warnings"].append({
                 "warning_type": "INVENTORY_PARTS_EXCLUDED",
                 "message": f"{inventory_filter['excluded_count']} row(s) flagged as inventory parts in {inventory_filter['column_label']} are excluded from this scan.",

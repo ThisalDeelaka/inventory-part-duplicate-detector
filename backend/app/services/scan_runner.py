@@ -24,6 +24,7 @@ from app.services.validation_service import validate_dataframe
 from app.services.canonical_record_service import (
     catalog_record_to_engine_input,
     create_or_get_scan_record_catalog,
+    extra_condition_field_keys,
     load_scan_record_catalog,
 )
 from app.services.hybrid_retrieval import (
@@ -200,6 +201,10 @@ class ScanRunner:
                 self.db,
                 scan_id=scan.id,
                 records=usable.to_dict(orient="records"),
+                extra_field_keys=extra_condition_field_keys(
+                    selected_fields, custom_fields_used, strict_custom_fields,
+                    usable.columns,
+                ),
             )
             # The catalog is a completed prerequisite stage. Candidate discovery
             # never begins against a partial or merely in-memory record set.
@@ -426,6 +431,10 @@ class ScanRunner:
                 context=DeterministicIdentityContext(
                     scan_mode=identity_discovery_scan_mode,
                     selected_fields=tuple(selected_fields),
+                    strict_custom_fields=tuple(sorted(
+                        (item["field_key"], item.get("display_label") or item["field_key"])
+                        for item in strict_custom_fields or []
+                    )),
                 ),
             )
             evidence_run_id = evidence_run.evidence_run_id

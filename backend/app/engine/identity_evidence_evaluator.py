@@ -49,6 +49,31 @@ def sha256_payload(value) -> str:
 class DeterministicIdentityContext:
     scan_mode: str
     selected_fields: tuple[str, ...]
+    # (field_key, display_label) of custom fields whose mismatch is a hard reject.
+    strict_custom_fields: tuple[tuple[str, str], ...] = ()
+
+
+def strict_custom_fields_from_used(custom_fields_used) -> tuple[tuple[str, str], ...]:
+    """Strict custom fields, as persisted on the scan's custom_fields_used JSON/list."""
+    if isinstance(custom_fields_used, str):
+        try:
+            custom_fields_used = json.loads(custom_fields_used or "[]")
+        except json.JSONDecodeError:
+            custom_fields_used = []
+    strict = {}
+    for item in custom_fields_used or []:
+        if isinstance(item, dict) and str(item.get("mode", "")).upper() == "STRICT":
+            key = str(item.get("field_key") or "").strip().upper()
+            if key:
+                strict[key] = str(item.get("display_label") or key)
+    return tuple(sorted(strict.items()))
+
+
+def strict_custom_fields_from_payload(payload: dict) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (str(item["field_key"]), str(item.get("display_label") or item["field_key"]))
+        for item in payload.get("strict_custom_fields") or []
+    )
 
 
 @dataclass(frozen=True)
@@ -71,7 +96,7 @@ class EvaluatedIdentityRelationship:
 
 
 def deterministic_context_payload(context: DeterministicIdentityContext) -> dict:
-    return {
+    payload = {
         "evaluator_version": IDENTITY_EVIDENCE_EVALUATOR_VERSION,
         "edge_classifier_version": IDENTITY_EDGE_CLASSIFIER_VERSION,
         "identity_discriminator_version": IDENTITY_DISCRIMINATOR_VERSION,
@@ -79,6 +104,13 @@ def deterministic_context_payload(context: DeterministicIdentityContext) -> dict
         "selected_fields": sorted(set(context.selected_fields)),
         "uom_is_mapping_context": True,
     }
+    if context.strict_custom_fields:
+        # Only present when used, so scans without strict custom fields keep their fingerprints.
+        payload["strict_custom_fields"] = [
+            {"field_key": key, "display_label": label}
+            for key, label in sorted(set(context.strict_custom_fields))
+        ]
+    return payload
 
 
 def deterministic_context_fingerprint(context: DeterministicIdentityContext) -> str:
@@ -104,6 +136,10 @@ def evaluate_canonical_identity_relationship(
         sorted(set(context.selected_fields)),
         context.scan_mode,
         allow_uom_mapping_review=True,
+        strict_custom_fields=[
+            {"field_key": key, "display_label": label}
+            for key, label in context.strict_custom_fields
+        ],
     )
     discriminator = evaluate_identity_discriminators(
         left.part_no, left.description, left.uom,

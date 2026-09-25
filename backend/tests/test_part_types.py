@@ -301,3 +301,70 @@ def test_config_fields_expose_new_sales_and_filter_fields(client):
     assert by_field["INVENTORY_PART_NO"]["part_types"] == ["SALES"]
     assert by_field["INVENTORY_PART_FLAG"]["selectable"] is False
     assert by_field["SALES_PART_TYPE"]["selectable"] is False
+
+
+PURCHASE_IFS_CLOUD_CSV = (
+    b"Part,Part Description In Use,Purchase Part Description,Site,Default Purch UoM,"
+    b"Inventory Part,Order Processing Type\n"
+    b"P1,Gasket,Gasket,10,pcs,No,1\n"
+    b"P2,Gasket Kit,Gasket Kit,10,pcs,Yes,1\n"
+)
+
+
+def test_ifs_cloud_purchase_export_headers_resolve(client):
+    body = _validate(client, PURCHASE_IFS_CLOUD_CSV, "PURCHASE", include_inventory_parts="false").json()
+    mapping = body["resolved_column_mapping"]
+    assert mapping["PART_NO"] == "Part"
+    assert mapping["DEFAULT_UOM"] == "Default Purch UoM"
+    assert mapping["ORDER_PROC_TYPE"] == "Order Processing Type"
+    assert body["valid"] is True
+    assert body["record_count"] == 1
+
+
+def test_bare_part_header_stays_inventory_part_no_beside_sales_part_no(client):
+    csv = b"Sales Part No,Part,Description,Type of Sales Part\nS1,P1,Gasket,Non Inventory Part\n"
+    body = _validate(client, csv, "SALES").json()
+    mapping = body["resolved_column_mapping"]
+    assert mapping["PART_NO"] == "Sales Part No"
+    assert mapping["INVENTORY_PART_NO"] == "Part"
+    assert body["column_mapping_conflicts"] == {}
+    assert body["valid"] is True
+
+
+SALES_IFS_CLOUD_CSV = (
+    b"Sales Part No,Part Description in Use,Sales Part Description,Site,Type Of Sales Part,"
+    b"Part No,Inventory UoM,Sales UoM,Price UoM,Replacement Part No,Description\n"
+    b"S1,Gasket,Gasket,10,InventoryPart,P1,pcs,pcs,pcs,,\n"
+    b"S2,Gasket Kit,Gasket Kit,10,NonInventoryPart,,,pcs,pcs,,\n"
+    b"S3,Gasket Pack,Gasket Pack,10,PackagePart,,,pcs,pcs,S1,Old gasket\n"
+)
+
+
+def test_ifs_cloud_sales_description_comes_from_part_description_in_use(client):
+    body = _validate(client, SALES_IFS_CLOUD_CSV, "SALES").json()
+    mapping = body["resolved_column_mapping"]
+    assert mapping["DESCRIPTION"] == "Part Description in Use"
+    assert mapping["PART_NO"] == "Sales Part No"
+    assert mapping["INVENTORY_PART_NO"] == "Part No"
+    assert not any(w["warning_type"] == "EMPTY_DESCRIPTION" for w in body["warnings"])
+
+
+def test_bare_description_still_maps_without_part_description_in_use(client):
+    csv = b"Sales Part No,Description,Type Of Sales Part\nS1,Gasket,NonInventoryPart\n"
+    assert _validate(client, csv, "SALES").json()["resolved_column_mapping"]["DESCRIPTION"] == "Description"
+
+
+def test_ifs_cloud_sales_type_values_without_spaces_are_excluded(client):
+    body = _validate(client, SALES_IFS_CLOUD_CSV, "SALES", include_inventory_parts="false").json()
+    assert body["valid"] is True
+    assert body["record_count"] == 2
+    assert body["inventory_filter"]["excluded_count"] == 1
+    assert any(w["warning_type"] == "INVENTORY_PARTS_EXCLUDED" for w in body["warnings"])
+
+
+def test_exclusion_that_matches_nothing_warns_instead_of_passing_silently(client):
+    csv = b"Part No,Part Description,Inventory Part\nA,Bearing,Maybe\nB,Bolt,Unknown\n"
+    body = _validate(client, csv, "PURCHASE", include_inventory_parts="false").json()
+    assert body["record_count"] == 2
+    warning = next(w for w in body["warnings"] if w["warning_type"] == "INVENTORY_FILTER_NO_MATCH")
+    assert "Maybe" in warning["message"] and "Unknown" in warning["message"]

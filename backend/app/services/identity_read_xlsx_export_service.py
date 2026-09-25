@@ -14,6 +14,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from app.core.constants import FIELD_DEFINITIONS
 from app.db.models import DuplicateScan
+from app.services.canonical_record_service import load_scan_record_catalog
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
 from app.identity_read.deterministic_explanations import (
     business_match_facts,
@@ -218,7 +219,89 @@ def _decode_selected_field_codes(selected_fields_json) -> set[str]:
     return {str(value).strip().upper() for value in decoded if str(value).strip()}
 
 
-def _ordered_source_columns(selected_fields_json) -> tuple[str, ...]:
+_EXTRA_ROW_PREFIX = "extra:"
+_EXTRA_COLUMN_WIDTH = 20
+_EXTRA_LABEL_OVERRIDES = {"INVENTORY_PART_NO": "Inventory Part No"}
+
+
+def _custom_fields_used(custom_fields_used_json) -> list[dict]:
+    if isinstance(custom_fields_used_json, list):
+        decoded = custom_fields_used_json
+    else:
+        try:
+            decoded = json.loads(custom_fields_used_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            decoded = []
+    if not isinstance(decoded, list):
+        return []
+    return [
+        item for item in decoded
+        if isinstance(item, dict) and str(item.get("field_key") or "").strip()
+    ]
+
+
+def _extra_condition_specs(scan) -> list[tuple[str, str, bool]]:
+    """(column label, field key, always_show) for conditions beyond the Inventory columns.
+
+    Selected Purchase/Sales conditions come first in their UI order, then the custom
+    fields resolved on the upload. Custom fields are always shown; built-in ones only
+    when at least one record carries a value.
+    """
+    canonical = set(_SOURCE_COLUMN_FIELD_CODE.values()) | {"PART_NO", "DESCRIPTION"}
+    selected = _decode_selected_field_codes(scan.selected_fields)
+    specs: list[tuple[str, str, bool]] = []
+    seen = set(canonical)
+    for item in FIELD_DEFINITIONS:
+        key = item["field"]
+        if item["required"] or key in seen or key not in selected:
+            continue
+        seen.add(key)
+        specs.append((_EXTRA_LABEL_OVERRIDES.get(key, item["display"]), key, False))
+    for item in _custom_fields_used(scan.custom_fields_used):
+        key = str(item["field_key"]).strip().upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        specs.append((str(item.get("display_label") or key), key, True))
+    taken = set(_SOURCE_COLUMNS)
+    unique = []
+    for label, key, always in specs:
+        candidate, suffix = label, 2
+        while candidate in taken:
+            candidate = f"{label} ({suffix})"
+            suffix += 1
+        taken.add(candidate)
+        unique.append((candidate, key, always))
+    return unique
+
+
+def _with_extra_condition_columns(db, scan, export_rows):
+    """Add each member's selected Purchase/Sales/custom values as extra export columns."""
+    specs = _extra_condition_specs(scan)
+    if not specs:
+        return (), export_rows
+    extras_by_reference = {
+        record.record_ref_key: dict(record.extra_fields)
+        for record in load_scan_record_catalog(db, scan.id)
+    }
+    present = {key for extras in extras_by_reference.values() for key in extras}
+    specs = [(label, key) for label, key, always in specs if always or key in present]
+    enriched = tuple(
+        {
+            **row,
+            **{
+                f"{_EXTRA_ROW_PREFIX}{label}": extras_by_reference.get(
+                    row.get("stable_record_reference"), {}
+                ).get(key)
+                for label, key in specs
+            },
+        }
+        for row in export_rows
+    )
+    return tuple(label for label, _key in specs), enriched
+
+
+def _ordered_source_columns(selected_fields_json, extra_columns=()) -> tuple[str, ...]:
     """Selected duplicate-checking condition columns first, then the rest."""
     selected = _decode_selected_field_codes(selected_fields_json)
     reorderable = [
@@ -230,7 +313,9 @@ def _ordered_source_columns(selected_fields_json) -> tuple[str, ...]:
         if _SOURCE_COLUMN_FIELD_CODE.get(column) in selected
     ]
     remaining = [column for column in reorderable if column not in chosen]
-    return _SOURCE_COLUMN_FIXED_PREFIX + tuple(chosen) + tuple(remaining)
+    return (
+        _SOURCE_COLUMN_FIXED_PREFIX + tuple(chosen) + tuple(extra_columns) + tuple(remaining)
+    )
 
 
 def _review_group_columns(source_columns) -> tuple:
@@ -493,7 +578,10 @@ def _part_numbers_by_reference(member_rows) -> dict[str, str]:
 
 
 def _source_values(row: dict, source_columns=_SOURCE_COLUMNS) -> tuple:
-    return tuple(row.get(_MEMBER_FIELD_BY_COLUMN[column]) for column in source_columns)
+    return tuple(
+        row.get(_MEMBER_FIELD_BY_COLUMN.get(column) or f"{_EXTRA_ROW_PREFIX}{column}")
+        for column in source_columns
+    )
 
 
 def _write_row(sheet, row_number: int, values, *, wrap_columns=()) -> None:
@@ -526,14 +614,14 @@ def _set_widths(sheet, widths) -> None:
         sheet.column_dimensions[get_column_letter(index)].width = width
 
 
-def _selected_source_columns(selected_fields_json) -> frozenset[str]:
+def _selected_source_columns(selected_fields_json, extra_columns=()) -> frozenset[str]:
     """Condition columns the scan used for matching (highlighted green).
 
     Part Number and Description are mandatory conditions, so they are always
     included alongside the user-selected ones.
     """
     selected = _decode_selected_field_codes(selected_fields_json)
-    return frozenset(_SOURCE_COLUMN_FIXED_PREFIX) | frozenset(
+    return frozenset(_SOURCE_COLUMN_FIXED_PREFIX) | frozenset(extra_columns) | frozenset(
         column for column, code in _SOURCE_COLUMN_FIELD_CODE.items()
         if code in selected
     )
@@ -626,9 +714,20 @@ def _write_kpi(sheet, columns: str, label: str, value, *, start_row: int) -> Non
     )
 
 
-def selected_condition_label_list(selected_fields_json: str) -> list[str]:
-    """Return persisted selected fields in stable UI order with safe fallbacks."""
+def selected_condition_label_list(
+    selected_fields_json: str, custom_fields_used=None,
+) -> list[str]:
+    """Return persisted selected fields in stable UI order with safe fallbacks.
+
+    Custom fields resolved on the upload are named by their display label and are
+    listed even when only applied automatically (Strict, or Supporting not ticked).
+    """
     selected = _decode_selected_field_codes(selected_fields_json)
+    custom_labels = {
+        str(item["field_key"]).strip().upper(): str(item.get("display_label") or item["field_key"])
+        for item in _custom_fields_used(custom_fields_used)
+    }
+    selected |= set(custom_labels)
     labels_by_field = {
         item["field"]: item["display"]
         for item in FIELD_DEFINITIONS
@@ -640,7 +739,7 @@ def selected_condition_label_list(selected_fields_json: str) -> list[str]:
         if field in selected
     ]
     ordered.extend(
-        field.replace("_", " ").title()
+        custom_labels.get(field, field.replace("_", " ").title())
         for field in sorted(selected - labels_by_field.keys())
     )
     return ordered
@@ -746,9 +845,11 @@ def _write_progress_row(sheet, row_number: int, label: str, value) -> None:
     )
 
 
-def _write_conditions_card(sheet, columns: str, selected_fields_json, *, start_row: int) -> None:
+def _write_conditions_card(
+    sheet, columns: str, selected_fields_json, *, start_row: int, custom_fields_used=None,
+) -> None:
     """Duplicate-checking conditions info card: one condition per line, sized to fit."""
-    labels = selected_condition_label_list(selected_fields_json)
+    labels = selected_condition_label_list(selected_fields_json, custom_fields_used)
     text = "\n".join(labels) or "None selected"
     _write_info_card(
         sheet, columns, "Duplicate-checking Conditions", text, start_row=start_row,
@@ -794,7 +895,10 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
     _write_info_card(
         sheet, "E:H", "Records Analysed", record_count, start_row=6,
     )
-    _write_conditions_card(sheet, "A:D", scan.selected_fields, start_row=10)
+    _write_conditions_card(
+        sheet, "A:D", scan.selected_fields, start_row=10,
+        custom_fields_used=scan.custom_fields_used,
+    )
     _write_info_card(
         sheet, "E:H", "Carried Out By", REPORT_CARRIED_OUT_BY, start_row=10,
     )
@@ -1065,7 +1169,9 @@ def _write_review_groups(
         "Description Similarity": 18, "Wording Similarity": 18,
     }
     widths.update(_SOURCE_COLUMN_WIDTHS)
-    _set_widths(sheet, tuple(widths[column] for column in columns))
+    _set_widths(
+        sheet, tuple(widths.get(column, _EXTRA_COLUMN_WIDTH) for column in columns)
+    )
     sheet.freeze_panes = "E2"
     _apply_selected_column_styles(
         sheet, review_source_columns, selected_columns,
@@ -1099,7 +1205,9 @@ def _write_detailed_data(
     prefix_widths = (14, 10, 18, 28, 32)
     _set_widths(
         sheet,
-        prefix_widths + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns),
+        prefix_widths + tuple(
+            _SOURCE_COLUMN_WIDTHS.get(column, _EXTRA_COLUMN_WIDTH) for column in source_columns
+        ),
     )
     _apply_selected_column_styles(
         sheet, source_columns, selected_columns,
@@ -1189,6 +1297,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
     """Create a client workbook from the unchanged System Group projection."""
     snapshot, export_rows = authority_selected_system_group_rows(db, scan_id)
     scan = db.get(DuplicateScan, scan_id)
+    extra_columns, export_rows = _with_extra_condition_columns(db, scan, export_rows)
     review_states = VersionedIdentityGroupReviewService(db).current_states_for_snapshot(
         snapshot
     )
@@ -1238,8 +1347,8 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
         )
         strength_distribution[key] += 1
 
-    source_columns = _ordered_source_columns(scan.selected_fields)
-    selected_columns = _selected_source_columns(scan.selected_fields)
+    source_columns = _ordered_source_columns(scan.selected_fields, extra_columns)
+    selected_columns = _selected_source_columns(scan.selected_fields, extra_columns)
     workbook = Workbook()
     _write_overview(
         workbook, scan, snapshot, review_states, strength_distribution
@@ -1302,7 +1411,10 @@ def _write_reviewed_overview(
     _write_info_card(
         sheet, "E:H", "Records Analysed", record_count, start_row=6,
     )
-    _write_conditions_card(sheet, "A:D", scan.selected_fields, start_row=10)
+    _write_conditions_card(
+        sheet, "A:D", scan.selected_fields, start_row=10,
+        custom_fields_used=scan.custom_fields_used,
+    )
     _write_info_card(
         sheet, "E:H", "Carried Out By", REPORT_CARRIED_OUT_BY, start_row=10,
     )
@@ -1416,6 +1528,7 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
     scoped to only human-confirmed same-identity groups."""
     snapshot, export_rows = authority_selected_system_group_rows(db, scan_id)
     scan = db.get(DuplicateScan, scan_id)
+    extra_columns, export_rows = _with_extra_condition_columns(db, scan, export_rows)
     review_states = VersionedIdentityGroupReviewService(db).current_states_for_snapshot(
         snapshot
     )
@@ -1483,8 +1596,8 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
         )
         strength_distribution[key] += 1
 
-    source_columns = _ordered_source_columns(scan.selected_fields)
-    selected_columns = _selected_source_columns(scan.selected_fields)
+    source_columns = _ordered_source_columns(scan.selected_fields, extra_columns)
+    selected_columns = _selected_source_columns(scan.selected_fields, extra_columns)
     workbook = Workbook()
     _write_reviewed_overview(
         workbook, scan, snapshot, groups, strength_distribution,

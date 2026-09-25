@@ -127,6 +127,7 @@ def ensure_identity_group_snapshot_tables(engine):
             ("part_product_code", "VARCHAR(128)"),
             ("part_product_family", "VARCHAR(128)"),
             ("hazard_code", "VARCHAR(128)"),
+            ("extra_fields_json", "TEXT"),
             ("normalization_version", "VARCHAR(80)"),
         ]
         existing = {

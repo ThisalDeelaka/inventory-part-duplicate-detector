@@ -1279,6 +1279,9 @@ class ScanRecordSnapshot(Base):
     product_category_id = Column(String(128))
     hsn_sac_code = Column(String(128))
     hazard_code = Column(String(128))
+    # Selected non-Inventory conditions (Purchase/Sales fields, custom fields) as sorted JSON.
+    # Deliberately outside source_record_fingerprint so existing scan identities are unchanged.
+    extra_fields_json = Column(Text)
     normalization_version = Column(String(80))
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 

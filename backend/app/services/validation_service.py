@@ -13,6 +13,7 @@ from app.core.constants import (
     INVENTORY_PART_FILTERS,
     REQUIRED_FIELDS,
     SALES_FIELD_ALIASES,
+    SALES_REPLACEMENT_DESCRIPTION_TARGET,
     SALES_PART_KEY_COLUMNS,
 )
 from app.core.config import settings
@@ -71,6 +72,8 @@ def field_aliases_for(part_type: str | None, columns) -> dict[str, str]:
         normalized = {normalize_column_name(column) for column in columns}
         if normalized & SALES_PART_KEY_COLUMNS:
             aliases.update(SALES_FIELD_ALIASES)
+        if normalized & set(FALLBACK_FIELD_ALIASES):
+            aliases["DESCRIPTION"] = SALES_REPLACEMENT_DESCRIPTION_TARGET
     return aliases
 
 
@@ -220,9 +223,11 @@ def apply_inventory_part_filter(
     info["column_found"] = rule["field"] in df.columns
     if not info["column_found"]:
         return df, info
-    markers = df[rule["field"]].fillna("").astype(str).str.strip().str.casefold()
+    raw = df[rule["field"]].fillna("").astype(str).str.strip()
+    markers = raw.str.casefold().str.replace(r"[^a-z0-9]+", "", regex=True)
     is_inventory = markers.isin(rule["values"])
     info["excluded_count"] = int(is_inventory.sum())
+    info["sample_values"] = sorted({value for value in raw if value})[:5]
     return df[~is_inventory].reset_index(drop=True), info
 
 

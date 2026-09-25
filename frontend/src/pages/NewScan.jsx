@@ -29,7 +29,7 @@ import { duplicateConditionHelp } from '../utils/duplicateConditionSemantics'
 
 const FALLBACK_FIELDS = [
   { field: 'CONTRACT', display: 'Site' },
-  { field: 'TYPE_CODE', display: 'Purchase Type' },
+  { field: 'TYPE_CODE', display: 'Part Type' },
   { field: 'UNIT_MEAS', display: 'Inventory UOM' },
   { field: 'PRIME_COMMODITY', display: 'Com Group 01' },
   { field: 'SECOND_COMMODITY', display: 'Com Group 02' },

@@ -25,7 +25,10 @@ from app.db.models import (
     IdentityResolutionUnassignedRecord,
 )
 from app.engine.identity_edge import IdentityEdgeClass
-from app.engine.identity_evidence_evaluator import DeterministicIdentityContext
+from app.engine.identity_evidence_evaluator import (
+    DeterministicIdentityContext,
+    strict_custom_fields_from_used,
+)
 from app.repositories.resolution_repository import ResolutionRepository
 from app.resolution.contracts import (
     DEFAULT_RESOLVER_ALGORITHM_VERSION,
@@ -440,6 +443,7 @@ def resolve_and_persist_identity_groups(
             DeterministicIdentityContext(
                 scan_mode=scan.scan_mode,
                 selected_fields=tuple(json.loads(scan.selected_fields)),
+                strict_custom_fields=strict_custom_fields_from_used(scan.custom_fields_used),
             ),
         )
         result = resolve_identity_groups(value, provider)
