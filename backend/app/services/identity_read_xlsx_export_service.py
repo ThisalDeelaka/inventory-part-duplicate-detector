@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
@@ -656,6 +657,21 @@ def _set_widths(sheet, widths) -> None:
         sheet.column_dimensions[get_column_letter(index)].width = width
 
 
+_LINE_HEIGHT_POINTS = 16
+_CELL_PADDING_POINTS = 14
+_MAX_ROW_HEIGHT_POINTS = 409
+
+
+def _wrapped_text_height(text, column_width) -> float:
+    """Approximate points needed to show wrapped text in a column."""
+    characters_per_line = max(1, int(column_width) - 2)
+    lines = sum(
+        max(1, math.ceil(len(line) / characters_per_line))
+        for line in str(text or "").split("\n")
+    )
+    return lines * _LINE_HEIGHT_POINTS + _CELL_PADDING_POINTS
+
+
 def _selected_source_columns(selected_fields_json, extra_columns=()) -> frozenset[str]:
     """Condition columns the scan used for matching (highlighted green).
 
@@ -1126,6 +1142,15 @@ def _write_review_groups(
     description_column = column_numbers["Description"]
     decision_column = column_numbers["Human Decision"]
     comment_column = column_numbers["Human Comment"]
+    widths = {
+        "Group": 14, "Match Strength": 13, "Match Band": 15,
+        "Group Sites": 18, "Human Decision": 28, "Human Comment": 32,
+        "Member Number": 12, "Review Consideration": 42,
+        "Why This Group Exists": 42, "Relationship Evidence": 60,
+        "Part Relationships": 42, "Pair Match Scores": 18,
+        "Description Similarity": 18, "Wording Similarity": 18,
+    }
+    widths.update(_SOURCE_COLUMN_WIDTHS)
     current_row = 2
     if not groups:
         _merge_and_write(
@@ -1172,6 +1197,30 @@ def _write_review_groups(
                 current_row += 1
             member_ranges.append((member_start_row, current_row - 1))
         end_row = current_row - 1
+        # Group-level explanation cells are merged across the group's rows, so
+        # grow those rows until the merged cell can show its full wrapped text.
+        group_rows = range(start_row, end_row + 1)
+        needed_height = max(
+            _wrapped_text_height(text, widths[column])
+            for column, text in zip(
+                _REVIEW_GROUP_EXPLANATION_COLUMNS,
+                (
+                    p["review_consideration"],
+                    p["deterministic_group_summary"],
+                    p["relationship_evidence"],
+                ),
+            )
+        )
+        current_height = sum(
+            sheet.row_dimensions[row_number].height for row_number in group_rows
+        )
+        if group_rows and needed_height > current_height:
+            extra_per_row = (needed_height - current_height) / len(group_rows)
+            for row_number in group_rows:
+                sheet.row_dimensions[row_number].height = min(
+                    _MAX_ROW_HEIGHT_POINTS,
+                    round(sheet.row_dimensions[row_number].height + extra_per_row, 1),
+                )
         fill = _GROUP_FILLS[group_index % len(_GROUP_FILLS)]
         for row_number in range(start_row, end_row + 1):
             for column_number in range(1, len(columns) + 1):
@@ -1208,15 +1257,6 @@ def _write_review_groups(
             sheet.cell(
                 start_row, column_numbers["Match Strength"]
             ).number_format = _SCORE_NUMBER_FORMAT
-    widths = {
-        "Group": 14, "Match Strength": 13, "Match Band": 15,
-        "Group Sites": 18, "Human Decision": 28, "Human Comment": 32,
-        "Member Number": 12, "Review Consideration": 42,
-        "Why This Group Exists": 42, "Relationship Evidence": 40,
-        "Part Relationships": 42, "Pair Match Scores": 18,
-        "Description Similarity": 18, "Wording Similarity": 18,
-    }
-    widths.update(_SOURCE_COLUMN_WIDTHS)
     _set_widths(
         sheet, tuple(widths.get(column, _EXTRA_COLUMN_WIDTH) for column in columns)
     )
