@@ -31,6 +31,7 @@ from app.services.identity_read_xlsx_export_service import (
     TECHNICAL_REFERENCE_HEADER_ROW,
     WORKBOOK_NOTICE,
     _member_pair_columns,
+    _score_percentage,
     _write_review_groups,
     authority_selected_system_groups_to_xlsx,
     reason_for_group_status,
@@ -145,16 +146,21 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
     assert REVIEW_GROUP_COLUMNS == (
         "Group", "Match Strength", "Match Band", "Group Sites",
-        "Human Decision", "Human Comment", "Member Number", "Part Number",
-        "Description", "Inventory UOM", "Part Type", "Commodity Group 01",
+        "Member Number", "Part Number", "Description", "Inventory UOM",
+        "Part Type", "Commodity Group 01",
         "Commodity Group 02", "Safety Code", "Accounting Group",
         "Product Code", "Product Family", "Product Category", "HSN/SAC Code",
         "Site", "Review Consideration", "Why This Group Exists",
         "Relationship Evidence", "Part Relationships", "Pair Match Scores",
-        "Description Similarity", "Wording Similarity",
+        "Description Similarity", "Wording Similarity", "Human Decision",
+        "Human Comment",
     )
     assert "Evidence Tier" not in REVIEW_GROUP_COLUMNS
-    assert REVIEW_GROUP_COLUMNS[4:6] == ("Human Decision", "Human Comment")
+    assert REVIEW_GROUP_COLUMNS[:6] == (
+        "Group", "Match Strength", "Match Band", "Group Sites",
+        "Member Number", "Part Number",
+    )
+    assert REVIEW_GROUP_COLUMNS[-2:] == ("Human Decision", "Human Comment")
     assert REVIEW_GROUP_COLUMNS.count("Human Decision") == 1
     assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
     assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
@@ -168,7 +174,8 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     relationship_text = review.cell(
         2, REVIEW_GROUP_COLUMNS.index("Relationship Evidence") + 1
     ).value
-    assert "/100" in relationship_text
+    assert "%" in relationship_text
+    assert "/100" not in relationship_text
     assert "Pair match:" in relationship_text
     assert "What matched:" in relationship_text
     assert "What to check:" not in relationship_text
@@ -182,10 +189,14 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert tuple(
         cell.value for cell in technical[TECHNICAL_REFERENCE_HEADER_ROW]
     ) == TECHNICAL_REFERENCE_COLUMNS
-    assert review.freeze_panes == "E2"
+    assert review.freeze_panes == "G2"
     assert index.freeze_panes == "E2"
     assert flat.freeze_panes == "A2"
     assert technical.freeze_panes == f"A{TECHNICAL_REFERENCE_HEADER_ROW + 1}"
+    assert review.cell(
+        2, REVIEW_GROUP_COLUMNS.index("Match Strength") + 1
+    ).number_format == '0.0"%"'
+    assert index["C2"].number_format == '0.0"%"'
     assert not flat.merged_cells.ranges
     assert flat.auto_filter.ref is None
     assert flat.tables["SystemGroupData"].ref == (
@@ -238,7 +249,24 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     for field in (
         "Pair Match Scores", "Description Similarity", "Wording Similarity",
     ):
-        assert all(row[field].endswith("/100") for row in member_rows)
+        assert all(row[field].endswith("%") for row in member_rows)
+    why_text = review.cell(
+        2, REVIEW_GROUP_COLUMNS.index("Why This Group Exists") + 1
+    ).value
+    assert "%" in why_text
+    assert "/100" not in why_text
+    assert not any(
+        "/100" in cell.value
+        for workbook_sheet in workbook.worksheets
+        for row in workbook_sheet.iter_rows()
+        for cell in row
+        if isinstance(cell.value, str)
+    )
+    freeze_column = review["G2"].column
+    assert not any(
+        merged.min_col < freeze_column <= merged.max_col
+        for merged in review.merged_cells.ranges
+    )
     pair_start = REVIEW_GROUP_COLUMNS.index("Part Relationships") + 1
     for column in range(pair_start, pair_start + 4):
         cell = review.cell(2, column)
@@ -354,12 +382,16 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
         merged.min_col <= pair_start + 3 and merged.max_col >= pair_start
         for merged in sheet.merged_cells.ranges
     )
-    assert sheet.freeze_panes == "E2"
+    assert sheet.freeze_panes == "G2"
     assert not workbook["Detailed Data"].merged_cells.ranges
     assert workbook["Detailed Data"].max_row == member_count + 1
 
 
 def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
+    assert _score_percentage(70.09) == "70.1%"
+    assert _score_percentage(92.50) == "92.5%"
+    assert _score_percentage(100.00) == "100.0%"
+    assert _score_percentage(None) == "Not available"
     for member_count in (2, 3, 5):
         references = tuple(
             f"SITE-{index + 1}::record-{index + 1}"
@@ -375,7 +407,9 @@ def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
         for left in range(member_count):
             for right in range(left + 1, member_count):
                 score = None if (left, right) == (0, 1) else 80 + left + right
-                rendered_score = "Not available" if score is None else f"{score:.2f}/100"
+                rendered_score = (
+                    "Not available" if score is None else f"{score:.1f}%"
+                )
                 description = 0.0 if (left, right) == (0, 2) else 90 + left
                 wording = None if (left, right) == (0, 1) else 95 + right
                 relationships.append(SimpleNamespace(
@@ -404,12 +438,12 @@ def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
                     rendered_score,
                     (
                         "Not available"
-                        if member_count == 2 else f"{description:.2f}/100"
+                        if member_count == 2 else f"{description:.1f}%"
                     ),
                     (
                         "Not available"
                         if member_count == 2 or wording is None
-                        else f"{wording:.2f}/100"
+                        else f"{wording:.1f}%"
                     ),
                 )
                 expected_rows[references[left]].append((references[right], expected))
@@ -432,7 +466,7 @@ def test_member_pair_columns_are_incident_deterministic_and_score_aligned():
         if member_count == 3:
             zero_rows = [
                 row for rows in rendered.values() for row in rows
-                if row[2] == "0.00/100"
+                if row[2] == "0.0%"
             ]
             assert len(zero_rows) == 2
 
@@ -467,10 +501,10 @@ def test_member_pair_columns_use_stable_identity_not_duplicate_display_text():
     assert set(rendered) == {"SITE-A::row-1", "SITE-B::row-1"}
     assert len(rendered["SITE-A::row-1"][0][0]) > 100
     assert rendered["SITE-A::row-1"][0][1:] == (
-        "92.50/100", "Not available", "Not available",
+        "92.5%", "Not available", "Not available",
     )
     assert rendered["SITE-B::row-1"][0][1:] == (
-        "92.50/100", "Not available", "Not available",
+        "92.5%", "Not available", "Not available",
     )
 
 
@@ -481,16 +515,16 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
     long_pair = "DUP-1 — pump with a deliberately long relationship label " * 3
     pair_rows = {
         references[0]: (
-            (long_pair, "92.50/100", "95.04/100", "100.00/100"),
-            ("DUP-1 ↔ DUP-3", "90.00/100", "0.00/100", "98.50/100"),
+            (long_pair, "92.5%", "95.0%", "100.0%"),
+            ("DUP-1 ↔ DUP-3", "90.0%", "0.0%", "98.5%"),
         ),
         references[1]: (
-            ("DUP-2 ↔ DUP-1", "92.50/100", "95.04/100", "100.00/100"),
-            ("DUP-2 ↔ DUP-3", "91.00/100", "Not available", "99.00/100"),
+            ("DUP-2 ↔ DUP-1", "92.5%", "95.0%", "100.0%"),
+            ("DUP-2 ↔ DUP-3", "91.0%", "Not available", "99.0%"),
         ),
         references[2]: (
-            ("DUP-3 ↔ DUP-1", "90.00/100", "0.00/100", "98.50/100"),
-            ("DUP-3 ↔ DUP-2", "91.00/100", "Not available", "99.00/100"),
+            ("DUP-3 ↔ DUP-1", "90.0%", "0.0%", "98.5%"),
+            ("DUP-3 ↔ DUP-2", "91.0%", "Not available", "99.0%"),
         ),
     }
     relationship_evidence = "persisted group relationship text — unchanged"
@@ -543,8 +577,8 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
     pair_start = REVIEW_GROUP_COLUMNS.index("Part Relationships") + 1
     decision_column = REVIEW_GROUP_COLUMNS.index("Human Decision") + 1
     comment_column = REVIEW_GROUP_COLUMNS.index("Human Comment") + 1
-    assert comment_column == decision_column + 1
-    assert comment_column < member_column
+    assert decision_column == len(REVIEW_GROUP_COLUMNS) - 1
+    assert comment_column == len(REVIEW_GROUP_COLUMNS)
     # Each member gets its own Human Decision / Human Comment cell.
     for column in (decision_column, comment_column):
         assert sum(
@@ -569,7 +603,7 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
         merged.min_col <= pair_start + 3 and merged.max_col >= pair_start
         for merged in sheet.merged_cells.ranges
     )
-    assert sheet.freeze_panes == "E2"
+    assert sheet.freeze_panes == "G2"
 
 
 def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, client):

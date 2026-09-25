@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -16,7 +17,6 @@ from app.core.constants import FIELD_DEFINITIONS
 from app.db.models import DuplicateScan
 from app.identity_read.key_codec import serialize_versioned_identity_group_key
 from app.identity_read.deterministic_explanations import (
-    business_match_facts,
     project_group_explanation,
     review_consideration_for_group,
     sources_for_group,
@@ -60,7 +60,6 @@ GROUP_INDEX_COLUMNS = (
 # then group explanation and pair evidence at the far right.
 _REVIEW_GROUP_CONTEXT_COLUMNS = (
     "Group", "Match Strength", "Match Band", "Group Sites",
-    "Human Decision", "Human Comment",
 )
 _REVIEW_GROUP_EXPLANATION_COLUMNS = (
     "Review Consideration", "Why This Group Exists", "Relationship Evidence",
@@ -70,6 +69,7 @@ _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS = (
     "Description Similarity", "Wording Similarity",
 )
 _REVIEW_GROUP_MEMBER_NUMBER_COLUMN = "Member Number"
+_REVIEW_GROUP_REVIEW_COLUMNS = ("Human Decision", "Human Comment")
 _REVIEW_GROUP_MEMBER_DETAIL_ORDER = (
     "Part Number", "Description", "Inventory UOM", "Part Type",
     "Commodity Group 01", "Commodity Group 02", "Safety Code",
@@ -241,6 +241,7 @@ def _review_group_columns(source_columns) -> tuple:
         + member_columns
         + _REVIEW_GROUP_EXPLANATION_COLUMNS
         + _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS
+        + _REVIEW_GROUP_REVIEW_COLUMNS
     )
 
 
@@ -283,6 +284,7 @@ _PALE_GRAY = "F3F5F7"
 _PALE_GOLD = "FFF2CC"
 _WHITE = "FFFFFF"
 _TEXT = "243746"
+_SCORE_NUMBER_FORMAT = '0.0"%"'
 _HEADER_FILL = PatternFill("solid", fgColor=_NAVY)
 _HEADER_FONT = Font(color=_WHITE, bold=True)
 _GROUP_FILLS = (
@@ -373,6 +375,46 @@ def _group_presentation(label: str, group, state: dict | None, member_rows) -> d
     }
 
 
+def _score_percentage(value, *, missing: str = "Not available") -> str:
+    """Render an existing 0-100 score as a display-only percentage."""
+    if value is None:
+        return missing
+    rounded = Decimal(str(value)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return f"{rounded:.1f}%"
+
+
+def _xlsx_business_match_facts(detail) -> tuple[str, ...]:
+    labels = {
+        "description_similarity": "description similarity",
+        "part_no_similarity": "part-number similarity",
+        "technical_token_score": "technical-term similarity",
+        "tfidf_score": "wording similarity",
+        "fuzzy_score": "wording similarity",
+    }
+    phrases = []
+    for item in detail.supporting_items:
+        component = item.source_field.removeprefix("component_scores.")
+        label = labels.get(component)
+        if label is not None and item.numeric_value is not None:
+            phrases.append(f"{label} is {_score_percentage(item.numeric_value)}")
+        if len(phrases) == 2:
+            break
+    return tuple(dict.fromkeys(phrases))
+
+
+def _xlsx_group_summary(explanation) -> str:
+    """Render score-bearing group prose from structured facts for XLSX only."""
+    if explanation.member_count == 2 and explanation.pair_explanations:
+        facts = _xlsx_business_match_facts(explanation.pair_explanations[0])
+        if facts:
+            return (
+                "These two records were grouped because their "
+                + " and ".join(facts)
+                + "."
+            )
+    return explanation.group_summary
+
+
 def _relationship_lines(explanation) -> str:
     blocks = []
     details = {item.relationship_id: item for item in explanation.pair_explanations}
@@ -380,7 +422,7 @@ def _relationship_lines(explanation) -> str:
         detail = details[relationship.relationship_id]
         score = (
             "score not recorded" if relationship.deterministic_score is None
-            else f"{relationship.deterministic_score:.2f}/100"
+            else _score_percentage(relationship.deterministic_score)
         )
         support_label = {
             "STRONG_SUPPORT": "Strong Support",
@@ -389,7 +431,7 @@ def _relationship_lines(explanation) -> str:
             relationship.signed_relationship,
             relationship.signed_relationship.replace("_", " ").title(),
         )
-        facts = business_match_facts(detail)
+        facts = _xlsx_business_match_facts(detail)
         sections = [
             f"{relationship.left_display_identity} ↔ {relationship.right_display_identity}",
             f"Pair match: {score} · {support_label}",
@@ -410,7 +452,7 @@ def _pair_component_score(detail, component: str) -> str:
     source_field = f"component_scores.{component}"
     for item in detail.supporting_items:
         if item.source_field == source_field and item.numeric_value is not None:
-            return f"{item.numeric_value:.2f}/100"
+            return _score_percentage(item.numeric_value)
     return "Not available"
 
 
@@ -442,7 +484,7 @@ def _member_pair_columns(
         score = (
             "Not available"
             if relationship.deterministic_score is None
-            else f"{relationship.deterministic_score:.2f}/100"
+            else _score_percentage(relationship.deterministic_score)
         )
         detail = details.get(relationship.relationship_id)
         description_similarity = _pair_component_score(
@@ -937,6 +979,8 @@ def _write_group_index(sheet, groups) -> None:
              p["human_decision"], p["human_comment"]),
             wrap_columns=(2, 4, 6, 7, 8, 9),
         )
+        if p["match_strength"] is not None:
+            sheet.cell(row_number, 3).number_format = _SCORE_NUMBER_FORMAT
         _apply_match_band_style(sheet.cell(row_number, 4), p["match_band"])
         sheet.row_dimensions[row_number].height = 26
     _set_widths(sheet, (14, 16, 13, 15, 10, 18, 40, 26, 32))
@@ -967,8 +1011,8 @@ def _write_review_groups(
     member_level_columns = tuple(
         column_numbers[column]
         for column in (
-            "Human Decision", "Human Comment", "Member Number",
-            *review_source_columns,
+            "Member Number", *review_source_columns,
+            *_REVIEW_GROUP_REVIEW_COLUMNS,
         )
     )
     pair_columns = tuple(
@@ -982,7 +1026,7 @@ def _write_review_groups(
     if not groups:
         _merge_and_write(
             sheet,
-            f"A2:{get_column_letter(len(columns))}3",
+            "A2:F3",
             "No candidate groups were generated for this scan.",
             fill=PatternFill("solid", fgColor=_PALE_GRAY),
             font=Font(color=_TEXT, italic=True),
@@ -1007,10 +1051,10 @@ def _write_review_groups(
                     sheet, current_row,
                     (
                         p["label"], p["match_strength"], p["match_band"],
-                        p["sites"], "", "", member_number, *source,
+                        p["sites"], member_number, *source,
                         p["review_consideration"],
                         p["deterministic_group_summary"],
-                        p["relationship_evidence"], *pair_row,
+                        p["relationship_evidence"], *pair_row, "", "",
                     ),
                     wrap_columns=(
                         2, 4, 5, 6, 7, 8, *pair_columns, description_column,
@@ -1056,6 +1100,10 @@ def _write_review_groups(
         _apply_match_band_style(
             sheet.cell(start_row, column_numbers["Match Band"]), p["match_band"]
         )
+        if p["match_strength"] is not None:
+            sheet.cell(
+                start_row, column_numbers["Match Strength"]
+            ).number_format = _SCORE_NUMBER_FORMAT
     widths = {
         "Group": 14, "Match Strength": 13, "Match Band": 15,
         "Group Sites": 18, "Human Decision": 28, "Human Comment": 32,
@@ -1066,7 +1114,7 @@ def _write_review_groups(
     }
     widths.update(_SOURCE_COLUMN_WIDTHS)
     _set_widths(sheet, tuple(widths[column] for column in columns))
-    sheet.freeze_panes = "E2"
+    sheet.freeze_panes = "G2"
     _apply_selected_column_styles(
         sheet, review_source_columns, selected_columns,
         prefix_length=_REVIEW_GROUP_SOURCE_PREFIX_LENGTH,
@@ -1172,6 +1220,11 @@ def _write_technical_reference(sheet, groups, snapshot) -> None:
                  p["safety_status_crossover"], p["safety_status_message"]),
                 wrap_columns=(2, 6, 9, 20),
             )
+            for column_number in range(14, 19):
+                if sheet.cell(row_number, column_number).value is not None:
+                    sheet.cell(
+                        row_number, column_number
+                    ).number_format = _SCORE_NUMBER_FORMAT
             row_number += 1
     _set_widths(
         sheet,
@@ -1210,7 +1263,7 @@ def authority_selected_system_groups_to_xlsx(db, scan_id: int) -> bytes:
                 f"CG-{group_index:06d}", group,
                 review_states.get(canonical_id), member_rows,
         )
-        presentation["deterministic_group_summary"] = explanation.group_summary
+        presentation["deterministic_group_summary"] = _xlsx_group_summary(explanation)
         presentation["review_consideration"] = review_consideration_for_group(
             explanation
         )
@@ -1455,7 +1508,7 @@ def authority_selected_reviewed_identities_to_xlsx(db, scan_id: int) -> bytes:
                 f"RS-{group_index:06d}", group,
                 review_states.get(canonical_id), member_rows,
         )
-        presentation["deterministic_group_summary"] = explanation.group_summary
+        presentation["deterministic_group_summary"] = _xlsx_group_summary(explanation)
         presentation["review_consideration"] = review_consideration_for_group(
             explanation
         )
