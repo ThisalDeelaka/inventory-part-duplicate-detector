@@ -36,7 +36,8 @@ export function formatScanTime(value) {
   }).format(date)
 }
 
-export function validationContextKey(fileGeneration, selected, mapping) {
+export function validationContextKey(fileGeneration, selected, mapping, scope) {
+  const { partType = '', includeInventoryParts = true } = scope && typeof scope === 'object' ? scope : {}
   const orderedMapping = Object.fromEntries(
     Object.entries(mapping || {}).sort(([left], [right]) => left.localeCompare(right)),
   )
@@ -44,6 +45,8 @@ export function validationContextKey(fileGeneration, selected, mapping) {
     file_generation: Number(fileGeneration) || 0,
     selected_fields: [...(selected || [])].sort(),
     column_mapping: orderedMapping,
+    part_type: partType,
+    include_inventory_parts: includeInventoryParts,
   })
 }
 

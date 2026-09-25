@@ -3,7 +3,15 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import LlmStatus from '../components/LlmStatus'
 import { customFieldCreatePayload, customFieldModeLabel, mergeCustomFields } from '../utils/customFieldUi'
-import { DEFAULT_PART_TYPE, PART_TYPE_OPTIONS, filterFieldsForPartType } from '../utils/partTypeUi'
+import {
+  DEFAULT_PART_TYPE,
+  INVENTORY_PART_FILTER_HELP,
+  PART_TYPE_OPTIONS,
+  fieldDisplayForPartType,
+  filterFieldsForPartType,
+  shouldShowFieldCode,
+  supportsInventoryPartExclusion,
+} from '../utils/partTypeUi'
 import {
   cleanColumnSamples,
   columnSuggestionStateKey,
@@ -45,6 +53,7 @@ export default function NewScan() {
   const [customFieldDrafts, setCustomFieldDrafts] = useState({})
   const [customFieldState, setCustomFieldState] = useState({})
   const [partType, setPartType] = useState(DEFAULT_PART_TYPE)
+  const [includeInventoryParts, setIncludeInventoryParts] = useState(true)
   const [selected, setSelected] = useState(['CONTRACT', 'UNIT_MEAS'])
   const [columnMapping, setColumnMapping] = useState({})
   const [file, setFile] = useState(null)
@@ -78,8 +87,18 @@ export default function NewScan() {
     filterFieldsForPartType(builtInFields, partType), customFields,
   )
 
+  const askInventoryPartQuestion = supportsInventoryPartExclusion(partType)
+  const effectiveIncludeInventoryParts = askInventoryPartQuestion ? includeInventoryParts : true
+  const validationScope = { partType, includeInventoryParts: effectiveIncludeInventoryParts }
+
   const changePartType = nextPartType => {
     setPartType(nextPartType)
+    setIncludeInventoryParts(true)
+    // Header aliases depend on the part type, so mappings resolved earlier no longer apply.
+    setColumnMapping({})
+    setColumnAssistance({})
+    setValidation(null)
+    setValidatedContext('')
     const stillRelevant = new Set(filterFieldsForPartType(builtInFields, nextPartType).map(f => f.field))
     setSelected(current => current.filter(field => stillRelevant.has(field) || customFields.some(c => c.field_key === field)))
   }
@@ -102,6 +121,7 @@ export default function NewScan() {
     f.append('column_mapping', JSON.stringify(columnMapping))
     f.append('scan_mode', SCAN_MODE)
     f.append('part_type', partType)
+    f.append('include_inventory_parts', String(effectiveIncludeInventoryParts))
     f.append('product_authority', 'current_product')
     return f
   }
@@ -118,6 +138,7 @@ export default function NewScan() {
     )
     const submittedSelected = [...selected]
     const submittedMapping = { ...columnMapping }
+    const submittedScope = { ...validationScope }
     setBusy('validate'); setError(null); setValidatedContext('')
     try {
       const result = await api.postForm('/api/scans/validate-only', form(submittedFile))
@@ -126,7 +147,7 @@ export default function NewScan() {
       setValidation(result)
       setColumnMapping(resolvedMapping)
       setValidatedContext(validationContextKey(
-        token.fileGeneration, submittedSelected, resolvedMapping,
+        token.fileGeneration, submittedSelected, resolvedMapping, submittedScope,
       ))
       setColumnAssistance({})
     }
@@ -142,7 +163,7 @@ export default function NewScan() {
     if (scanRequestActive.current) return
     if (!file) return setError({ title: 'Choose a CSV or XLSX file', message: 'Select and validate a supported CSV or XLSX file before running a scan.' })
     if (!validation?.valid || validatedContext !== validationContextKey(
-      fileGeneration.current, selected, columnMapping,
+      fileGeneration.current, selected, columnMapping, validationScope,
     )) return setError({ title: 'Current validation required', message: 'Validate the current file and mapping successfully before running the scan.' })
     scanRequestActive.current = true
     completionRouted.current = false
@@ -238,7 +259,7 @@ export default function NewScan() {
   }
 
   const currentValidationContext = validationContextKey(
-    fileGeneration.current, selected, columnMapping,
+    fileGeneration.current, selected, columnMapping, validationScope,
   )
   const validationIsCurrent = Boolean(validation && validatedContext === currentValidationContext)
   const canRun = Boolean(file && validation?.valid && validationIsCurrent && !busy)
@@ -256,9 +277,17 @@ export default function NewScan() {
             </select>
             <small>Site is enforced only when selected below. When unselected, cross-site identity suggestions remain eligible for review.</small>
           </label>
+          {askInventoryPartQuestion && (
+            <fieldset className="inventory-part-choice" disabled={!!busy}>
+              <legend>Include inventory parts in this scan?</legend>
+              <label><input type="radio" name="include-inventory-parts" checked={includeInventoryParts} onChange={() => setIncludeInventoryParts(true)} /> Include inventory parts</label>
+              <label><input type="radio" name="include-inventory-parts" checked={!includeInventoryParts} onChange={() => setIncludeInventoryParts(false)} /> Exclude inventory parts</label>
+              <small>Some {partType === 'PURCHASE' ? 'purchase' : 'sales'} parts are also inventory parts and get scanned in the Inventory Parts scan. {INVENTORY_PART_FILTER_HELP[partType]}</small>
+            </fieldset>
+          )}
           <label>Parts export (CSV or XLSX)<input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={!!busy} onChange={event => selectFile(event.target.files[0] || null)} /></label>
         </section>
-        <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{checklistFields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} disabled={!!busy} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{f.display}<small>{duplicateConditionHelp(f.field)}</small><small>{f.field}</small></span></label>)}</div></section>
+        <section className="panel"><h2>Duplicate-checking conditions</h2><div className="checks">{checklistFields.map(f => <label key={f.field}><input type="checkbox" checked={selected.includes(f.field)} disabled={!!busy} onChange={() => setSelected(s => s.includes(f.field) ? s.filter(x => x !== f.field) : [...s, f.field])} /><span>{fieldDisplayForPartType(f, partType)}<small>{duplicateConditionHelp(f.field)}</small>{shouldShowFieldCode(f) && <small>{f.field}</small>}</span></label>)}</div></section>
       </div>
       <div className="actions"><button type="button" className="secondary" onClick={validate} disabled={!!busy || !file}>{busy === 'validate' ? 'Validating…' : validationIsCurrent ? 'Validate again' : 'Validate CSV'}</button><button type="button" onClick={run} disabled={!canRun}>{busy === 'scan' ? 'Processing inventory…' : 'Run scan'}</button></div>
       {!validation && <p className="validation-guidance">Run Scan becomes available after the current CSV and mapping pass validation.</p>}
@@ -276,7 +305,7 @@ export default function NewScan() {
           <div className="checks">
             {mappingFields.map(field => (
               <label key={field.field}>
-                <span>{field.display}{field.required ? ' *' : ''}<small>{field.field}</small></span>
+                <span>{fieldDisplayForPartType(field, partType)}{field.required ? ' *' : ''}{shouldShowFieldCode(field) && <small>{field.field}</small>}</span>
                 <select value={columnMapping[field.field] || ''} disabled={!!busy} onChange={event => updateMapping(field.field, event.target.value)}>
                   <option value="">Automatic / not available</option>
                   {validation.available_columns.map(column => <option value={column} key={column}>{column}</option>)}

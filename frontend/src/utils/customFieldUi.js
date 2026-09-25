@@ -23,7 +23,7 @@ export function mergeCustomFields(builtInFields, customFields) {
   })
   const mappingFields = [...builtIn, ...custom.map(asMappingField)]
   const checklistFields = [
-    ...builtIn.filter(field => !field.required),
+    ...builtIn.filter(field => !field.required && field.selectable !== false),
     ...custom.filter(field => field.mode === 'SUPPORTING').map(asMappingField),
   ]
   return { mappingFields, checklistFields }
