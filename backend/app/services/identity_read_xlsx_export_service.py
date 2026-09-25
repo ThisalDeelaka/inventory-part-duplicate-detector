@@ -56,11 +56,13 @@ GROUP_INDEX_COLUMNS = (
     "Group", "Evidence Tier", "Match Strength", "Match Band", "Members", "Sites",
     "Review Consideration", "Human Decision", "Human Comment",
 )
-# Review Groups layout: group-level columns (merged per group), then pair-level
-# columns (one row per supporting pair), then member-level columns (merged per
-# member): Member Number, the source fields, and the per-member review columns.
-_REVIEW_GROUP_GROUP_COLUMNS = (
-    "Group", "Evidence Tier", "Match Strength", "Match Band", "Group Sites",
+# Review Groups layout: compact group context, per-member review and detail,
+# then group explanation and pair evidence at the far right.
+_REVIEW_GROUP_CONTEXT_COLUMNS = (
+    "Group", "Match Strength", "Match Band", "Group Sites",
+    "Human Decision", "Human Comment",
+)
+_REVIEW_GROUP_EXPLANATION_COLUMNS = (
     "Review Consideration", "Why This Group Exists", "Relationship Evidence",
 )
 _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS = (
@@ -68,13 +70,13 @@ _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS = (
     "Description Similarity", "Wording Similarity",
 )
 _REVIEW_GROUP_MEMBER_NUMBER_COLUMN = "Member Number"
-_REVIEW_GROUP_MEMBER_REVIEW_COLUMNS = ("Human Decision", "Human Comment")
-# Columns before the first source column (group + pair columns + Member Number).
-_REVIEW_GROUP_PREFIX_LENGTH = (
-    len(_REVIEW_GROUP_GROUP_COLUMNS)
-    + len(_REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS)
-    + 1
+_REVIEW_GROUP_MEMBER_DETAIL_ORDER = (
+    "Part Number", "Description", "Inventory UOM", "Part Type",
+    "Commodity Group 01", "Commodity Group 02", "Safety Code",
+    "Accounting Group", "Product Code", "Product Family", "Product Category",
+    "HSN/SAC Code", "Site",
 )
+_REVIEW_GROUP_SOURCE_PREFIX_LENGTH = len(_REVIEW_GROUP_CONTEXT_COLUMNS) + 1
 _DETAILED_DATA_PREFIX_COLUMNS = (
     "Group", "Members", "Group Sites", "Human Decision", "Human Comment",
 )
@@ -232,13 +234,23 @@ def _ordered_source_columns(selected_fields_json) -> tuple[str, ...]:
 
 
 def _review_group_columns(source_columns) -> tuple:
+    member_columns = _review_group_source_columns(source_columns)
     return (
-        _REVIEW_GROUP_GROUP_COLUMNS
-        + _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS
+        _REVIEW_GROUP_CONTEXT_COLUMNS
         + (_REVIEW_GROUP_MEMBER_NUMBER_COLUMN,)
-        + tuple(source_columns)
-        + _REVIEW_GROUP_MEMBER_REVIEW_COLUMNS
+        + member_columns
+        + _REVIEW_GROUP_EXPLANATION_COLUMNS
+        + _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS
     )
+
+
+def _review_group_source_columns(source_columns) -> tuple[str, ...]:
+    requested = tuple(source_columns)
+    ordered = tuple(
+        column for column in _REVIEW_GROUP_MEMBER_DETAIL_ORDER
+        if column in requested
+    )
+    return ordered + tuple(column for column in requested if column not in ordered)
 
 
 def _detailed_data_columns(source_columns) -> tuple:
@@ -786,9 +798,10 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
     _write_info_card(
         sheet, "E:H", "Carried Out By", REPORT_CARRIED_OUT_BY, start_row=10,
     )
+    _write_column_colour_key(sheet, 14)
 
     _merge_and_write(
-        sheet, "A14:H14", "FINDINGS AT A GLANCE",
+        sheet, "A18:H18", "FINDINGS AT A GLANCE",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -799,24 +812,24 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         ("C:E", "Stronger Evidence", snapshot.likely_group_count),
         ("F:H", "Review Evidence", snapshot.review_group_count),
     ):
-        _write_kpi(sheet, columns, label, value, start_row=15)
+        _write_kpi(sheet, columns, label, value, start_row=19)
     for columns, label, value in (
         ("A:D", "Records in Candidate Groups", records_in_groups),
         ("E:H", "Unassigned Records", snapshot.unassigned_count),
     ):
-        _write_kpi(sheet, columns, label, value, start_row=19)
+        _write_kpi(sheet, columns, label, value, start_row=23)
 
     _merge_and_write(
-        sheet, "A23:H23", "ADDITIONAL FINDINGS REQUIRING ATTENTION",
+        sheet, "A27:H27", "ADDITIONAL FINDINGS REQUIRING ATTENTION",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
     _write_kpi(
-        sheet, "A:D", "Conflicting Families", snapshot.conflict_count, start_row=24,
+        sheet, "A:D", "Conflicting Families", snapshot.conflict_count, start_row=28,
     )
     _write_kpi(
-        sheet, "E:H", "Deferred Families", snapshot.deferred_count, start_row=24,
+        sheet, "E:H", "Deferred Families", snapshot.deferred_count, start_row=28,
     )
 
     reviewed = sum(bool(state.get("reviewed")) for state in review_states.values())
@@ -835,7 +848,7 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
     )
     awaiting_review = snapshot.group_count - reviewed
     _merge_and_write(
-        sheet, "A28:H28", "HUMAN REVIEW PROGRESS",
+        sheet, "A32:H32", "HUMAN REVIEW PROGRESS",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -846,24 +859,24 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         ("Confirmed", confirmed),
         ("Rejected", rejected),
         ("Deferred by Reviewer", reviewer_deferred),
-    ), start=29):
+    ), start=33):
         _write_progress_row(sheet, row_number, label, value)
 
     _merge_and_write(
-        sheet, "A35:H36",
+        sheet, "A39:H40",
         WORKBOOK_NOTICE,
         fill=PatternFill("solid", fgColor=_PALE_GOLD),
         font=Font(color=_TEXT, bold=True),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
     _merge_and_write(
-        sheet, "A38:H38", "HOW TO USE THIS WORKBOOK",
+        sheet, "A42:H42", "HOW TO USE THIS WORKBOOK",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
     _merge_and_write(
-        sheet, "A39:H42",
+        sheet, "A43:H46",
         "1. Open Review Groups and inspect each suggested group.\n"
         "2. Record Confirm, Reject, or Defer decisions in the application using "
         "the source records and evidence.\n"
@@ -881,14 +894,14 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         ("Source Projection Run", snapshot.source_projection_run_id),
     )
     _merge_and_write(
-        sheet, "A44:H44", "REPORT DETAILS / TECHNICAL FOOTER",
+        sheet, "A48:H48", "REPORT DETAILS / TECHNICAL FOOTER",
         fill=PatternFill("solid", fgColor="5B7894"),
         font=Font(color=_WHITE, bold=True, size=10),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
-    _write_footer_metadata(sheet, metadata, start_row=45)
+    _write_footer_metadata(sheet, metadata, start_row=49)
     _merge_and_write(
-        sheet, "A51:H51", "DETERMINISTIC MATCH STRENGTH",
+        sheet, "A55:H55", "DETERMINISTIC MATCH STRENGTH",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -897,21 +910,19 @@ def _write_overview(workbook, scan, snapshot, review_states, strength_distributi
         ("High Match (90–100)", strength_distribution["HIGH_MATCH"]),
         ("Moderate Match (60–<90)", strength_distribution["MODERATE_MATCH"]),
         ("Borderline Match (0–<60)", strength_distribution["BORDERLINE_MATCH"]),
-        ("Unscored", strength_distribution["UNSCORED"]),
-    ), start=52):
+    ), start=56):
         _write_progress_row(sheet, row_number, label, value)
     _merge_and_write(
-        sheet, "A57:H59", MATCH_STRENGTH_OVERVIEW_NOTE,
+        sheet, "A60:H62", MATCH_STRENGTH_OVERVIEW_NOTE,
         fill=PatternFill("solid", fgColor=_PALE_GRAY),
         font=Font(color="5B7894", italic=True, size=9),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
-    _write_column_colour_key(sheet, 61)
     sheet.freeze_panes = "A6"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    for row_number in (1, 2, 3, 7, 8, 16, 17, 20, 21, 25, 26, 35, 36):
+    for row_number in (1, 2, 3, 7, 8, 15, 16, 20, 21, 24, 25, 29, 30, 39, 40):
         sheet.row_dimensions[row_number].height = 24
 
 
@@ -940,20 +951,33 @@ def _write_group_index(sheet, groups) -> None:
 def _write_review_groups(
     sheet, groups, source_columns=_SOURCE_COLUMNS, selected_columns=frozenset(),
 ) -> None:
-    columns = _review_group_columns(source_columns)
+    review_source_columns = _review_group_source_columns(source_columns)
+    columns = _review_group_columns(review_source_columns)
     _write_header(sheet, columns)
-    group_level_columns = tuple(range(1, len(_REVIEW_GROUP_GROUP_COLUMNS) + 1))
-    member_level_columns = tuple(
-        range(_REVIEW_GROUP_PREFIX_LENGTH, len(columns) + 1)
+    column_numbers = {
+        column: index for index, column in enumerate(columns, start=1)
+    }
+    group_level_columns = tuple(
+        column_numbers[column]
+        for column in (
+            "Group", "Match Strength", "Match Band", "Group Sites",
+            *_REVIEW_GROUP_EXPLANATION_COLUMNS,
+        )
     )
-    pair_start_column = len(_REVIEW_GROUP_GROUP_COLUMNS) + 1
-    pair_columns = tuple(range(
-        pair_start_column,
-        pair_start_column + len(_REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS),
-    ))
-    description_column = _REVIEW_GROUP_PREFIX_LENGTH + 2
-    decision_column = len(columns) - 1
-    comment_column = len(columns)
+    member_level_columns = tuple(
+        column_numbers[column]
+        for column in (
+            "Human Decision", "Human Comment", "Member Number",
+            *review_source_columns,
+        )
+    )
+    pair_columns = tuple(
+        column_numbers[column]
+        for column in _REVIEW_GROUP_MEMBER_RELATIONSHIP_COLUMNS
+    )
+    description_column = column_numbers["Description"]
+    decision_column = column_numbers["Human Decision"]
+    comment_column = column_numbers["Human Comment"]
     current_row = 2
     if not groups:
         _merge_and_write(
@@ -970,7 +994,7 @@ def _write_review_groups(
         start_row = current_row
         member_ranges = []
         for member_number, member_row in enumerate(member_rows, start=1):
-            source = _source_values(member_row, source_columns)
+            source = _source_values(member_row, review_source_columns)
             pair_rows = item["member_pair_columns"].get(
                 member_row.get("stable_record_reference"),
                 (("", "Not available", "Not available", "Not available"),),
@@ -982,11 +1006,11 @@ def _write_review_groups(
                 _write_row(
                     sheet, current_row,
                     (
-                        p["label"], p["evidence"], p["match_strength"],
-                        p["match_band"], p["sites"], p["review_consideration"],
+                        p["label"], p["match_strength"], p["match_band"],
+                        p["sites"], "", "", member_number, *source,
+                        p["review_consideration"],
                         p["deterministic_group_summary"],
-                        p["relationship_evidence"],
-                        *pair_row, member_number, *source, "", "",
+                        p["relationship_evidence"], *pair_row,
                     ),
                     wrap_columns=(
                         2, 4, 5, 6, 7, 8, *pair_columns, description_column,
@@ -1029,21 +1053,23 @@ def _write_review_groups(
                 sheet.cell(member_start_row, column_number).alignment = Alignment(
                     vertical="center", wrap_text=True
                 )
-        _apply_match_band_style(sheet.cell(start_row, 4), p["match_band"])
-    group_widths = (14, 16, 13, 15, 18, 42, 42, 40)
-    pair_widths = (42, 18, 18, 18)
-    _set_widths(
-        sheet,
-        group_widths
-        + pair_widths
-        + (12,)
-        + tuple(_SOURCE_COLUMN_WIDTHS[column] for column in source_columns)
-        + (28, 32),
-    )
-    sheet.freeze_panes = "F2"
+        _apply_match_band_style(
+            sheet.cell(start_row, column_numbers["Match Band"]), p["match_band"]
+        )
+    widths = {
+        "Group": 14, "Match Strength": 13, "Match Band": 15,
+        "Group Sites": 18, "Human Decision": 28, "Human Comment": 32,
+        "Member Number": 12, "Review Consideration": 42,
+        "Why This Group Exists": 42, "Relationship Evidence": 40,
+        "Part Relationships": 42, "Pair Match Scores": 18,
+        "Description Similarity": 18, "Wording Similarity": 18,
+    }
+    widths.update(_SOURCE_COLUMN_WIDTHS)
+    _set_widths(sheet, tuple(widths[column] for column in columns))
+    sheet.freeze_panes = "E2"
     _apply_selected_column_styles(
-        sheet, source_columns, selected_columns,
-        prefix_length=_REVIEW_GROUP_PREFIX_LENGTH,
+        sheet, review_source_columns, selected_columns,
+        prefix_length=_REVIEW_GROUP_SOURCE_PREFIX_LENGTH,
         last_row=sheet.max_row if groups else 1,
     )
     if groups:
@@ -1280,9 +1306,10 @@ def _write_reviewed_overview(
     _write_info_card(
         sheet, "E:H", "Carried Out By", REPORT_CARRIED_OUT_BY, start_row=10,
     )
+    _write_column_colour_key(sheet, 14)
 
     _merge_and_write(
-        sheet, "A14:H14", "FINDINGS AT A GLANCE",
+        sheet, "A18:H18", "FINDINGS AT A GLANCE",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -1300,41 +1327,41 @@ def _write_reviewed_overview(
         ("C:E", "Stronger Evidence", stronger_evidence),
         ("F:H", "Review Evidence", review_evidence),
     ):
-        _write_kpi(sheet, columns, label, value, start_row=15)
+        _write_kpi(sheet, columns, label, value, start_row=19)
     for columns, label, value in (
         ("A:D", "Records in Reviewed Groups", members_in_groups),
         ("E:H", "Records Outside This Export", outside_export),
     ):
-        _write_kpi(sheet, columns, label, value, start_row=19)
+        _write_kpi(sheet, columns, label, value, start_row=23)
 
     _merge_and_write(
-        sheet, "A23:H23", "REVIEW DECISION BREAKDOWN",
+        sheet, "A27:H27", "REVIEW DECISION BREAKDOWN",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
     _write_kpi(
-        sheet, "A:D", "Confirmed as Same Identity", confirmed_same_count, start_row=24,
+        sheet, "A:D", "Confirmed as Same Identity", confirmed_same_count, start_row=28,
     )
     _write_kpi(
-        sheet, "E:H", "Split into Identity Sets", split_count, start_row=24,
+        sheet, "E:H", "Split into Identity Sets", split_count, start_row=28,
     )
 
     _merge_and_write(
-        sheet, "A28:H29",
+        sheet, "A32:H33",
         REVIEWED_WORKBOOK_NOTICE,
         fill=PatternFill("solid", fgColor=_PALE_GOLD),
         font=Font(color=_TEXT, bold=True),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
     _merge_and_write(
-        sheet, "A31:H31", "HOW TO USE THIS WORKBOOK",
+        sheet, "A35:H35", "HOW TO USE THIS WORKBOOK",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
     _merge_and_write(
-        sheet, "A32:H34",
+        sheet, "A36:H38",
         "1. Open Review Groups and inspect each human-confirmed group.\n"
         "2. The Human Decision column shows the recorded reviewer decision for "
         "each group.\n"
@@ -1352,14 +1379,14 @@ def _write_reviewed_overview(
         ("Source Projection Run", snapshot.source_projection_run_id),
     )
     _merge_and_write(
-        sheet, "A36:H36", "REPORT DETAILS / TECHNICAL FOOTER",
+        sheet, "A40:H40", "REPORT DETAILS / TECHNICAL FOOTER",
         fill=PatternFill("solid", fgColor="5B7894"),
         font=Font(color=_WHITE, bold=True, size=10),
         alignment=Alignment(horizontal="left", vertical="center"),
     )
-    _write_footer_metadata(sheet, metadata, start_row=37)
+    _write_footer_metadata(sheet, metadata, start_row=41)
     _merge_and_write(
-        sheet, "A43:H43", "DETERMINISTIC MATCH STRENGTH",
+        sheet, "A47:H47", "DETERMINISTIC MATCH STRENGTH",
         fill=PatternFill("solid", fgColor=_NAVY),
         font=Font(color=_WHITE, bold=True),
         alignment=Alignment(horizontal="left", vertical="center"),
@@ -1368,21 +1395,19 @@ def _write_reviewed_overview(
         ("High Match (90–100)", strength_distribution["HIGH_MATCH"]),
         ("Moderate Match (60–<90)", strength_distribution["MODERATE_MATCH"]),
         ("Borderline Match (0–<60)", strength_distribution["BORDERLINE_MATCH"]),
-        ("Unscored", strength_distribution["UNSCORED"]),
-    ), start=44):
+    ), start=48):
         _write_progress_row(sheet, row_number, label, value)
     _merge_and_write(
-        sheet, "A49:H51", MATCH_STRENGTH_OVERVIEW_NOTE,
+        sheet, "A52:H54", MATCH_STRENGTH_OVERVIEW_NOTE,
         fill=PatternFill("solid", fgColor=_PALE_GRAY),
         font=Font(color="5B7894", italic=True, size=9),
         alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
     )
-    _write_column_colour_key(sheet, 53)
     sheet.freeze_panes = "A6"
     sheet.page_setup.orientation = "landscape"
     sheet.page_setup.fitToWidth = 1
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
-    for row_number in (1, 2, 3, 7, 8, 16, 17, 20, 21, 25, 26, 28, 29):
+    for row_number in (1, 2, 3, 7, 8, 15, 16, 20, 21, 24, 25, 29, 30, 32, 33):
         sheet.row_dimensions[row_number].height = 24
 
 

@@ -121,15 +121,15 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert WORKBOOK_NOTICE in overview_text
     assert overview["E6"].value == "Records Analysed"
     assert overview["E7"].value == snapshot.canonical_record_count
-    assert overview["A15"].value == "Total Candidate Groups"
-    assert overview["A16"].value == snapshot.group_count
-    assert overview["A29"].value == "Reviewed"
-    assert overview["G29"].value == "1 of 1"
-    assert overview["A33"].value == "Deferred by Reviewer"
-    assert overview["G33"].value == 1
+    assert overview["A19"].value == "Total Candidate Groups"
+    assert overview["A20"].value == snapshot.group_count
+    assert overview["A33"].value == "Reviewed"
+    assert overview["G33"].value == "1 of 1"
+    assert overview["A37"].value == "Deferred by Reviewer"
+    assert overview["G37"].value == 1
     assert "Deferred / Unreviewed" not in overview_text
-    assert overview["A45"].value == "Scan ID"
-    assert overview["C45"].value == scan.id
+    assert overview["A49"].value == "Scan ID"
+    assert overview["C49"].value == scan.id
     occupied = set()
     for merged in overview.merged_cells.ranges:
         for row_number in range(merged.min_row, merged.max_row + 1):
@@ -143,11 +143,18 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     flat = workbook["Detailed Data"]
     technical = workbook["Technical Reference"]
     assert tuple(cell.value for cell in review[1]) == REVIEW_GROUP_COLUMNS
-    assert REVIEW_GROUP_COLUMNS[7:13] == (
+    assert REVIEW_GROUP_COLUMNS == (
+        "Group", "Match Strength", "Match Band", "Group Sites",
+        "Human Decision", "Human Comment", "Member Number", "Part Number",
+        "Description", "Inventory UOM", "Part Type", "Commodity Group 01",
+        "Commodity Group 02", "Safety Code", "Accounting Group",
+        "Product Code", "Product Family", "Product Category", "HSN/SAC Code",
+        "Site", "Review Consideration", "Why This Group Exists",
         "Relationship Evidence", "Part Relationships", "Pair Match Scores",
-        "Description Similarity", "Wording Similarity", "Member Number",
+        "Description Similarity", "Wording Similarity",
     )
-    assert REVIEW_GROUP_COLUMNS[-2:] == ("Human Decision", "Human Comment")
+    assert "Evidence Tier" not in REVIEW_GROUP_COLUMNS
+    assert REVIEW_GROUP_COLUMNS[4:6] == ("Human Decision", "Human Comment")
     assert REVIEW_GROUP_COLUMNS.count("Human Decision") == 1
     assert "Why This Group Exists" in REVIEW_GROUP_COLUMNS
     assert "Relationship Evidence" in REVIEW_GROUP_COLUMNS
@@ -175,7 +182,7 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
     assert tuple(
         cell.value for cell in technical[TECHNICAL_REFERENCE_HEADER_ROW]
     ) == TECHNICAL_REFERENCE_COLUMNS
-    assert review.freeze_panes == "F2"
+    assert review.freeze_panes == "E2"
     assert index.freeze_panes == "E2"
     assert flat.freeze_panes == "A2"
     assert technical.freeze_panes == f"A{TECHNICAL_REFERENCE_HEADER_ROW + 1}"
@@ -213,10 +220,16 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
         assert "Stable Record Reference" not in tuple(cell.value for cell in primary[1])
 
     expected_merges = {
-        f"{letter}2:{letter}{group.member_count + 1}" for letter in "ABCDEFGH"
+        f"{get_column_letter(REVIEW_GROUP_COLUMNS.index(column) + 1)}2:"
+        f"{get_column_letter(REVIEW_GROUP_COLUMNS.index(column) + 1)}"
+        f"{group.member_count + 1}"
+        for column in (
+            "Group", "Match Strength", "Match Band", "Group Sites",
+            "Review Consideration", "Why This Group Exists",
+            "Relationship Evidence",
+        )
     }
     assert {str(item) for item in review.merged_cells.ranges} == expected_merges
-    assert not any(merged.min_col >= 9 for merged in review.merged_cells.ranges)
     assert [row["Member Number"] for row in _dict_rows(review)] == list(
         range(1, group.member_count + 1)
     )
@@ -226,7 +239,8 @@ def test_client_workbook_contract_semantics_merges_and_review(db, client):
         "Pair Match Scores", "Description Similarity", "Wording Similarity",
     ):
         assert all(row[field].endswith("/100") for row in member_rows)
-    for column in range(9, 13):
+    pair_start = REVIEW_GROUP_COLUMNS.index("Part Relationships") + 1
+    for column in range(pair_start, pair_start + 4):
         cell = review.cell(2, column)
         assert cell.alignment.wrap_text is True
         assert cell.alignment.vertical == "top"
@@ -246,6 +260,7 @@ def test_match_strength_xlsx_presentation_is_group_scoped_and_auditable(db):
     assert "Borderline Match (0–<60)" in overview_text
     assert "not a probability of duplication" in overview_text
     assert "does not replace human review" in overview_text
+    assert "Unscored" not in overview_text
 
     detailed_headers = tuple(cell.value for cell in workbook["Detailed Data"][1])
     assert "Evidence" not in detailed_headers
@@ -307,8 +322,14 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
     member_count = snapshot.groups[0].member_count
     assert member_count >= 3
     group_end_row = sheet.max_row
+    group_columns = (
+        "Group", "Match Strength", "Match Band", "Group Sites",
+        "Review Consideration", "Why This Group Exists", "Relationship Evidence",
+    )
     assert {
-        f"{letter}2:{letter}{group_end_row}" for letter in "ABCDEFGH"
+        f"{get_column_letter(REVIEW_GROUP_COLUMNS.index(column) + 1)}2:"
+        f"{get_column_letter(REVIEW_GROUP_COLUMNS.index(column) + 1)}{group_end_row}"
+        for column in group_columns
     }.issubset({str(item) for item in sheet.merged_cells.ranges})
     rows = _dict_rows(sheet)
     member_rows = [row for row in rows if row["Member Number"] is not None]
@@ -328,11 +349,12 @@ def test_three_member_group_is_one_visual_block_with_distinct_members(db, monkey
             assert evidence_values == (
                 "Not available", "Not available", "Not available",
             )
+    pair_start = REVIEW_GROUP_COLUMNS.index("Part Relationships") + 1
     assert not any(
-        merged.min_col <= 12 and merged.max_col >= 9
+        merged.min_col <= pair_start + 3 and merged.max_col >= pair_start
         for merged in sheet.merged_cells.ranges
     )
-    assert sheet.freeze_panes == "F2"
+    assert sheet.freeze_panes == "E2"
     assert not workbook["Detailed Data"].merged_cells.ranges
     assert workbook["Detailed Data"].max_row == member_count + 1
 
@@ -501,19 +523,28 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
     },))
 
     assert sheet.max_row == 7
-    assert sheet["H2"].value == relationship_evidence
+    relationship_column = REVIEW_GROUP_COLUMNS.index("Relationship Evidence") + 1
+    assert sheet.cell(2, relationship_column).value == relationship_evidence
     merges = {str(item) for item in sheet.merged_cells.ranges}
-    assert {f"{letter}2:{letter}7" for letter in "ABCDEFGH"}.issubset(merges)
+    group_columns = (
+        "Group", "Match Strength", "Match Band", "Group Sites",
+        "Review Consideration", "Why This Group Exists", "Relationship Evidence",
+    )
+    assert {
+        f"{get_column_letter(REVIEW_GROUP_COLUMNS.index(column) + 1)}2:"
+        f"{get_column_letter(REVIEW_GROUP_COLUMNS.index(column) + 1)}7"
+        for column in group_columns
+    }.issubset(merges)
     member_column = REVIEW_GROUP_COLUMNS.index("Member Number") + 1
     assert sum(
         merged.min_col == member_column and merged.max_row - merged.min_row == 1
         for merged in sheet.merged_cells.ranges
     ) == 3
     pair_start = REVIEW_GROUP_COLUMNS.index("Part Relationships") + 1
-    assert pair_start == 9
     decision_column = REVIEW_GROUP_COLUMNS.index("Human Decision") + 1
     comment_column = REVIEW_GROUP_COLUMNS.index("Human Comment") + 1
-    assert comment_column == decision_column + 1 == len(REVIEW_GROUP_COLUMNS)
+    assert comment_column == decision_column + 1
+    assert comment_column < member_column
     # Each member gets its own Human Decision / Human Comment cell.
     for column in (decision_column, comment_column):
         assert sum(
@@ -538,7 +569,7 @@ def test_three_member_pair_rows_align_and_merge_without_changing_group_evidence(
         merged.min_col <= pair_start + 3 and merged.max_col >= pair_start
         for merged in sheet.merged_cells.ranges
     )
-    assert sheet.freeze_panes == "F2"
+    assert sheet.freeze_panes == "E2"
 
 
 def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, client):
@@ -560,13 +591,13 @@ def test_unreviewed_candidate_requires_human_review_and_reason_is_concise(db, cl
         for row in rows
     )
     overview = workbook["Overview"]
-    assert overview["A29"].value == "Reviewed"
-    assert overview["G29"].value == "0 of 1"
-    assert overview["A30"].value == "Awaiting Review"
-    assert overview["G30"].value == 1
-    assert overview["A33"].value == "Deferred by Reviewer"
-    assert overview["G33"].value == 0
-    assert overview["E24"].value == "Deferred Families"
+    assert overview["A33"].value == "Reviewed"
+    assert overview["G33"].value == "0 of 1"
+    assert overview["A34"].value == "Awaiting Review"
+    assert overview["G34"].value == 1
+    assert overview["A37"].value == "Deferred by Reviewer"
+    assert overview["G37"].value == 0
+    assert overview["E28"].value == "Deferred Families"
 
 
 def test_repeated_generation_is_semantically_and_visually_deterministic(db):
@@ -634,13 +665,13 @@ def test_overview_findings_match_authoritative_projection_counts(db):
         authority_selected_system_groups_to_xlsx(db, scan.id)
     )["Overview"]
     findings = {
-        overview["A15"].value: overview["A16"].value,
-        overview["C15"].value: overview["C16"].value,
-        overview["F15"].value: overview["F16"].value,
         overview["A19"].value: overview["A20"].value,
-        overview["E19"].value: overview["E20"].value,
-        overview["A24"].value: overview["A25"].value,
-        overview["E24"].value: overview["E25"].value,
+        overview["C19"].value: overview["C20"].value,
+        overview["F19"].value: overview["F20"].value,
+        overview["A23"].value: overview["A24"].value,
+        overview["E23"].value: overview["E24"].value,
+        overview["A28"].value: overview["A29"].value,
+        overview["E28"].value: overview["E29"].value,
     }
     assert findings == {
         "Total Candidate Groups": snapshot.group_count,
@@ -727,7 +758,7 @@ def test_empty_state_is_friendly_and_structurally_valid(db, monkeypatch):
     )
     workbook = _workbook(authority_selected_system_groups_to_xlsx(db, 21))
     assert tuple(workbook.sheetnames) == SHEET_ORDER
-    assert workbook["Overview"]["A16"].value == 0
+    assert workbook["Overview"]["A20"].value == 0
     assert workbook["Review Groups"]["A2"].value == (
         "No candidate groups were generated for this scan."
     )
@@ -899,13 +930,15 @@ def test_overview_explains_green_and_blue_columns(db):
     overview = _workbook(
         authority_selected_system_groups_to_xlsx(db, scan.id)
     )["Overview"]
-    assert overview["A61"].value == "COLUMN COLOUR KEY"
-    assert overview["A62"].value == "Green"
-    assert overview["A62"].fill.fgColor.rgb.endswith("548235")
-    assert "Duplicate-checking condition" in overview["C62"].value
-    assert overview["A63"].value == "Blue"
-    assert overview["A63"].fill.fgColor.rgb.endswith("1F4E78")
-    assert "not used as duplicate-checking conditions" in overview["C63"].value
+    assert overview["A10"].value == "Duplicate-checking Conditions"
+    assert overview["A14"].value == "COLUMN COLOUR KEY"
+    assert overview["A15"].value == "Green"
+    assert overview["A15"].fill.fgColor.rgb.endswith("548235")
+    assert "Duplicate-checking condition" in overview["C15"].value
+    assert overview["A16"].value == "Blue"
+    assert overview["A16"].fill.fgColor.rgb.endswith("1F4E78")
+    assert "not used as duplicate-checking conditions" in overview["C16"].value
+    assert overview["A18"].value == "FINDINGS AT A GLANCE"
 
 
 def test_part_relationships_show_part_numbers_only():
