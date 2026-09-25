@@ -1217,7 +1217,9 @@ def _write_review_groups(
         "Description Similarity": 18, "Wording Similarity": 18,
     }
     widths.update(_SOURCE_COLUMN_WIDTHS)
-    _set_widths(sheet, tuple(widths[column] for column in columns))
+    _set_widths(
+        sheet, tuple(widths.get(column, _EXTRA_COLUMN_WIDTH) for column in columns)
+    )
     sheet.freeze_panes = "G2"
     _apply_selected_column_styles(
         sheet, review_source_columns, selected_columns,

@@ -113,6 +113,7 @@ test('F15 product export controls use only canonical authority-selected endpoint
     systemGroups: { path: '/api/scans/21/identity-read/system-groups/export.csv', filename: 'scan-21-system-group-suggestions.csv' },
     systemGroupsExcel: { path: '/api/scans/21/identity-read/system-groups/export.xlsx', filename: 'scan-21-system-group-suggestions.xlsx' },
     reviewedIdentities: { path: '/api/scans/21/identity-read/reviewed-identities/export.csv', filename: 'scan-21-reviewed-identity-sets.csv' },
+    reviewedIdentitiesExcel: { path: '/api/scans/21/identity-read/reviewed-identities/export.xlsx', filename: 'scan-21-reviewed-identity-sets.xlsx' },
     conflicts: { path: '/api/scans/21/identity-read/conflicts/export.csv', filename: 'scan-21-identity-conflicts.csv' },
     deferred: { path: '/api/scans/21/identity-read/deferred/export.csv', filename: 'scan-21-deferred-identity-work.csv' },
   })

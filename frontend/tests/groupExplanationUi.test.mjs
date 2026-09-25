@@ -8,12 +8,12 @@ const page = readFileSync(new URL('../src/pages/ScanResults.jsx', import.meta.ur
 const component = readFileSync(new URL('../src/components/SystemExplanation.jsx', import.meta.url), 'utf8')
 
 test('group list renders an additive scannable system explanation preview', () => {
-  assert.match(page, /explanation=\{group\.system_explanation\} compact/)
-  assert.match(component, /Why the system suggested this group:/)
+  assert.match(page, /<DeterministicExplanation explanation=\{group\.deterministic_explanation\} compact \/>/)
+  assert.match(page, /Why this group exists/)
 })
 
 test('group detail places complete explanation before advanced evidence', () => {
-  const explanation = page.indexOf('<SystemExplanation explanation={detail.system_explanation}')
+  const explanation = page.indexOf('<DeterministicExplanation explanation={detail.deterministic_explanation}')
   const evidence = page.indexOf('<EvidenceSummary detail={detail}')
   assert.ok(explanation > 0)
   assert.ok(explanation < evidence)
@@ -27,8 +27,8 @@ test('plain explanation has an accessible hierarchy and bounded sections', () =>
 })
 
 test('raw technical evidence remains available only under advanced disclosure', () => {
-  assert.match(page, /<details><summary>Advanced relationship evidence/)
-  assert.match(page, /JSON\.stringify\(evidence, null, 2\)/)
+  assert.match(page, /<details><summary>Technical \/ provenance details<\/summary>/)
+  assert.match(page, /Evidence origin: \{detail\.evidence_origin\}/)
 })
 
 test('system explanation and human decision are separate product regions', () => {

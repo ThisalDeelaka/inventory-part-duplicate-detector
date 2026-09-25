@@ -150,7 +150,7 @@ def test_end_to_end_supporting_custom_field_participates_in_matching(client):
     upload = client.post(
         "/api/scans/upload",
         files={"file": ("supporting.csv", csv, "text/csv")},
-        data={"threshold": "50"},
+        data={"threshold": "50", "product_authority": "legacy_compatibility"},
     )
     assert upload.status_code == 200
     body = upload.json()
@@ -175,7 +175,7 @@ def test_end_to_end_strict_custom_field_hard_rejects(client):
     upload = client.post(
         "/api/scans/upload",
         files={"file": ("strict.csv", csv, "text/csv")},
-        data={"threshold": "50"},
+        data={"threshold": "50", "product_authority": "legacy_compatibility"},
     )
     assert upload.status_code == 200
     body = upload.json()

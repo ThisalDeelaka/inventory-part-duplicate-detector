@@ -99,7 +99,7 @@ def test_purchase_uom_mismatch_hard_rejects_end_to_end(client):
     upload = client.post(
         "/api/scans/upload",
         files={"file": ("purchase-uom.csv", csv, "text/csv")},
-        data={"threshold": "50", "part_type": "PURCHASE"},
+        data={"threshold": "50", "part_type": "PURCHASE", "product_authority": "legacy_compatibility"},
     )
     assert upload.status_code == 200
     body = upload.json()

@@ -236,10 +236,17 @@ def test_r6_19_merged_ranges_are_valid_and_non_overlapping(db, client):
         f"/api/scans/{scan_id}/identity-read/system-groups/export.xlsx"
     ).content
     workbook = load_workbook(io.BytesIO(payload), data_only=False)
-    ranges = [CellRange(str(item)) for item in workbook["Review Groups"].merged_cells]
+    sheet = workbook["Review Groups"]
+    headers = {cell.column: cell.value for cell in sheet[1]}
+    per_relationship_columns = {
+        "Part Relationships", "Pair Match Scores",
+        "Description Similarity", "Wording Similarity",
+    }
+    ranges = [CellRange(str(item)) for item in sheet.merged_cells]
     for index, left in enumerate(ranges):
         assert left.min_row >= 2
-        assert left.min_col in set(range(1, 11))
+        assert left.min_col == left.max_col
+        assert headers[left.min_col] not in per_relationship_columns
         for right in ranges[index + 1:]:
             assert not (
                 left.min_row <= right.max_row and right.min_row <= left.max_row

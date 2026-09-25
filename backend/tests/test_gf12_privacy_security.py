@@ -287,7 +287,7 @@ def test_ps19_malformed_and_missing_column_inputs_fail_safely(client):
         files={"file": ("bad.csv", b"", "text/csv")},
     )
     assert malformed.status_code == 400
-    assert malformed.json()["detail"] == "CSV file is empty"
+    assert malformed.json()["detail"] == "Uploaded file is empty"
     missing = client.post(
         "/api/scans/validate-only",
         files={"file": ("missing.csv", b"EXTRA\nvalue\n", "text/csv")},
