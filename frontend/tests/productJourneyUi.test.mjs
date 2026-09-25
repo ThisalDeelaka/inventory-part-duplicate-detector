@@ -69,6 +69,12 @@ test('N8 edits after validation invalidate freshness', () => {
   assert.match(newScan, /Validation is out of date/)
 })
 
+test('N8b changing part type or the inventory-part choice invalidates validation', () => {
+  const base = validationContextKey(2, [], {}, { partType: 'SALES', includeInventoryParts: true })
+  assert.notEqual(base, validationContextKey(2, [], {}, { partType: 'SALES', includeInventoryParts: false }))
+  assert.notEqual(base, validationContextKey(2, [], {}, { partType: 'PURCHASE', includeInventoryParts: true }))
+})
+
 test('N9 active synchronous processing is announced without staged progress', () => {
   assert.match(newScan, /Request active/)
   assert.match(newScan, /Processing inventory/)

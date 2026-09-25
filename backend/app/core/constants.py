@@ -33,11 +33,35 @@ FIELD_DEFINITIONS = [
     {"field": "PRICE_UOM", "display": "Price UOM", "required": False, "part_types": ["SALES"]},
     {"field": "SALES_PRICE_GROUP", "display": "Sales Price Group", "required": False, "part_types": ["SALES"]},
     {"field": "SALES_GROUP", "display": "Sales Group", "required": False, "part_types": ["SALES"]},
+    {"field": "INVENTORY_PART_NO", "display": "Part No", "required": False, "part_types": ["SALES"]},
+    # Scan-scope filter columns: mappable, but never offered as duplicate-checking conditions.
+    {"field": "INVENTORY_PART_FLAG", "display": "Inventory Part", "required": False, "part_types": ["PURCHASE"], "selectable": False},
+    {"field": "SALES_PART_TYPE", "display": "Type of Sales Part", "required": False, "part_types": ["SALES"], "selectable": False},
 ]
+
+# Rows that are also inventory parts, per part type: (canonical column, marker values).
+# Excluding inventory parts drops rows whose value equals a marker (case-insensitive, trimmed).
+INVENTORY_PART_FILTERS = {
+    "PURCHASE": {"field": "INVENTORY_PART_FLAG", "display": "Inventory Part", "values": {"yes"}},
+    "SALES": {"field": "SALES_PART_TYPE", "display": "Type of Sales Part", "values": {"inventory part"}},
+}
+
+# In a Sales Part export the base key is "Sales Part No" and the inventory "Part No" is a
+# separate duplicate-checking condition. Applied only when a Sales Part No column exists.
+SALES_PART_KEY_COLUMNS = {"SALES_PART_NO", "SALES_PART_NUMBER"}
+SALES_FIELD_ALIASES = {
+    "SALES_PART_NO": "PART_NO",
+    "SALES_PART_NUMBER": "PART_NO",
+    "PART_NO": "INVENTORY_PART_NO",
+    "PART_NUMBER": "INVENTORY_PART_NO",
+}
 
 REQUIRED_FIELDS = ["PART_NO", "DESCRIPTION"]
 OPTIONAL_FIELDS = [item["field"] for item in FIELD_DEFINITIONS if not item["required"]]
-SELECTABLE_FIELDS = [f for f in OPTIONAL_FIELDS]
+SELECTABLE_FIELDS = [
+    item["field"] for item in FIELD_DEFINITIONS
+    if not item["required"] and item.get("selectable", True)
+]
 
 # UOM-style fields for the non-Inventory part types: a mismatch hard-rejects the pair,
 # the same severity as the existing UNIT_MEAS (Inventory UOM) rule below.
@@ -85,6 +109,10 @@ FIELD_ALIASES = {
     "PROC_TYPE": "ORDER_PROC_TYPE",
     "SALES_DESCRIPTION": "SALES_PART_DESCRIPTION",
     "SALES_PART_DESC": "SALES_PART_DESCRIPTION",
+    "INVENTORY_PART": "INVENTORY_PART_FLAG",
+    "TYPE_OF_SALES_PART": "SALES_PART_TYPE",
+    "TYPES_OF_SALES_PART": "SALES_PART_TYPE",
+    "CATALOG_TYPE": "SALES_PART_TYPE",
 }
 
 # These historical IFS labels are valid only as fallbacks.  Some exports include

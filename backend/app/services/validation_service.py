@@ -10,7 +10,10 @@ from app.core.constants import (
     FALLBACK_FIELD_ALIASES,
     FIELD_ALIASES,
     FIELD_DEFINITIONS,
+    INVENTORY_PART_FILTERS,
     REQUIRED_FIELDS,
+    SALES_FIELD_ALIASES,
+    SALES_PART_KEY_COLUMNS,
 )
 from app.core.config import settings
 from app.repositories.custom_field_repository import CustomFieldRepository
@@ -61,16 +64,28 @@ def parse_column_mapping(value: str | None, custom_field_keys: set[str] | None =
     return result
 
 
+def field_aliases_for(part_type: str | None, columns) -> dict[str, str]:
+    """Built-in header aliases; Sales Part exports with a Sales Part No column re-key on it."""
+    aliases = dict(FIELD_ALIASES)
+    if str(part_type or "").upper() == "SALES":
+        normalized = {normalize_column_name(column) for column in columns}
+        if normalized & SALES_PART_KEY_COLUMNS:
+            aliases.update(SALES_FIELD_ALIASES)
+    return aliases
+
+
 def apply_column_mapping(
     df: pd.DataFrame,
     explicit_mapping: dict[str, str] | None = None,
     custom_field_aliases: dict[str, str] | None = None,
     custom_field_keys: set[str] | None = None,
+    part_type: str | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Resolve uploaded headers to canonical fields, with explicit mappings winning."""
     explicit_mapping = explicit_mapping or {}
     custom_field_aliases = custom_field_aliases or {}
     original_columns = [str(column) for column in df.columns]
+    field_aliases = field_aliases_for(part_type, original_columns)
     normalized_lookup: dict[str, list[str]] = {}
     for column in original_columns:
         normalized_lookup.setdefault(normalize_column_name(column), []).append(column)
@@ -79,7 +94,7 @@ def apply_column_mapping(
     # and a compatibility fallback.  Decide whether the fallback is needed
     # before iterating so source-column order cannot create a false collision.
     primary_targets = {
-        FIELD_ALIASES.get(normalized, normalized)
+        field_aliases.get(normalized, normalized)
         for normalized in normalized_lookup
         if normalized not in FALLBACK_FIELD_ALIASES
     }
@@ -110,7 +125,7 @@ def apply_column_mapping(
                     normalized if fallback_target in primary_targets else fallback_target
                 )
             else:
-                automatic = FIELD_ALIASES.get(normalized, custom_field_aliases.get(normalized, normalized))
+                automatic = field_aliases.get(normalized, custom_field_aliases.get(normalized, normalized))
             target = f"UNMAPPED_{normalized}_{position}" if automatic in reserved_targets else automatic
         renamed[source] = target
         target_sources.setdefault(target, []).append(source)
@@ -189,11 +204,35 @@ def _parse_upload_dataframe(filename: str | None, content: bytes) -> pd.DataFram
         raise HTTPException(400, f"Unable to parse {kind} file: {exc}") from exc
 
 
+def apply_inventory_part_filter(
+    df: pd.DataFrame, part_type: str | None, include_inventory_parts: bool = True,
+) -> tuple[pd.DataFrame, dict]:
+    """Drop rows that are also inventory parts when the request excludes them."""
+    rule = INVENTORY_PART_FILTERS.get(str(part_type or "").upper())
+    info = {
+        "requested": bool(rule) and not include_inventory_parts,
+        "column_found": None,
+        "column_label": rule["display"] if rule else None,
+        "excluded_count": 0,
+    }
+    if not info["requested"]:
+        return df, info
+    info["column_found"] = rule["field"] in df.columns
+    if not info["column_found"]:
+        return df, info
+    markers = df[rule["field"]].fillna("").astype(str).str.strip().str.casefold()
+    is_inventory = markers.isin(rule["values"])
+    info["excluded_count"] = int(is_inventory.sum())
+    return df[~is_inventory].reset_index(drop=True), info
+
+
 async def read_csv_upload_with_metadata(
     file: UploadFile,
     column_mapping: dict[str, str] | None = None,
     custom_fields: list | None = None,
     db=None,
+    part_type: str | None = None,
+    include_inventory_parts: bool = True,
 ) -> tuple[pd.DataFrame, dict]:
     content = await file.read()
     if not content:
@@ -208,7 +247,9 @@ async def read_csv_upload_with_metadata(
     for field in custom_fields:
         for alias in json.loads(field.aliases or "[]"):
             custom_field_aliases[alias] = field.field_key
-    df, column_metadata = apply_column_mapping(source_df, column_mapping, custom_field_aliases, custom_field_keys)
+    df, column_metadata = apply_column_mapping(
+        source_df, column_mapping, custom_field_aliases, custom_field_keys, part_type,
+    )
     if db is not None and column_mapping:
         field_by_key = {field.field_key: field for field in custom_fields}
         repo = CustomFieldRepository(db)
@@ -222,6 +263,9 @@ async def read_csv_upload_with_metadata(
                 repo.record_alias(field, normalized_source)
     if df.empty:
         raise HTTPException(400, "CSV contains no data rows")
+    df, inventory_filter = apply_inventory_part_filter(df, part_type, include_inventory_parts)
+    if df.empty:
+        raise HTTPException(400, "No rows remain after excluding inventory parts")
     if len(df) > settings.max_csv_records:
         raise HTTPException(413, f"CSV contains {len(df)} records, above the configured synchronous scan limit of {settings.max_csv_records}")
     resolved_sources = set(column_metadata["resolved_column_mapping"].values())
@@ -235,6 +279,7 @@ async def read_csv_upload_with_metadata(
         "file_sha256": file_sha256(content),
         "file_size_bytes": len(content),
         "column_samples": column_samples,
+        "inventory_filter": inventory_filter,
         **column_metadata,
     }
 

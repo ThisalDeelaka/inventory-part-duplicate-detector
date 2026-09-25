@@ -181,3 +181,123 @@ def test_bad_xlsx_content_fails_safely(client):
     )
     assert response.status_code == 400
     assert "XLSX" in response.json()["detail"]
+
+
+def _validate(client, csv, part_type, **data):
+    return client.post(
+        "/api/scans/validate-only",
+        files={"file": ("parts.csv", csv, "text/csv")},
+        data={"part_type": part_type, **data},
+    )
+
+
+PURCHASE_FLAG_CSV = (
+    b"Part No,Part Description,Inventory Part\n"
+    b"A,Ball Bearing,Yes\n"
+    b"B,Ball Bearing Assembly,No\n"
+    b"C,Ball Bearing Kit, yes \n"
+    b"D,Ball Bearing Set,No\n"
+)
+
+SALES_TYPE_CSV = (
+    b"Sales Part No,Part No,Description,Type of Sales Part\n"
+    b"S1,P1,Gasket,Inventory Part\n"
+    b"S2,P2,Gasket Kit,Non Inventory Part\n"
+    b"S3,P3,Gasket Set,Package Part\n"
+    b"S4,P4,Gasket Ring,inventory part\n"
+)
+
+
+def test_purchase_exclude_inventory_parts_skips_yes_rows(client):
+    body = _validate(client, PURCHASE_FLAG_CSV, "PURCHASE", include_inventory_parts="false").json()
+    assert body["valid"] is True
+    assert body["record_count"] == 2
+    assert body["inventory_filter"]["excluded_count"] == 2
+    assert body["resolved_column_mapping"]["INVENTORY_PART_FLAG"] == "Inventory Part"
+
+
+def test_purchase_include_inventory_parts_keeps_every_row(client):
+    body = _validate(client, PURCHASE_FLAG_CSV, "PURCHASE", include_inventory_parts="true").json()
+    assert body["record_count"] == 4
+    assert body["inventory_filter"]["requested"] is False
+
+
+def test_sales_exclude_inventory_parts_keeps_other_types(client):
+    body = _validate(client, SALES_TYPE_CSV, "SALES", include_inventory_parts="false").json()
+    assert body["record_count"] == 2
+    assert body["inventory_filter"]["excluded_count"] == 2
+
+
+def test_inventory_part_type_ignores_the_exclusion_flag(client):
+    body = _validate(client, PURCHASE_FLAG_CSV, "INVENTORY", include_inventory_parts="false").json()
+    assert body["record_count"] == 4
+    assert body["inventory_filter"]["requested"] is False
+
+
+def test_exclusion_without_the_filter_column_is_invalid(client):
+    csv = b"Part No,Part Description\nA,Widget\nB,Widget v2\n"
+    body = _validate(client, csv, "PURCHASE", include_inventory_parts="false").json()
+    assert body["valid"] is False
+    assert any(w["warning_type"] == "INVENTORY_FILTER_COLUMN_MISSING" for w in body["warnings"])
+
+    upload = client.post(
+        "/api/scans/upload",
+        files={"file": ("parts.csv", csv, "text/csv")},
+        data={"part_type": "PURCHASE", "include_inventory_parts": "false", "threshold": "50"},
+    )
+    assert upload.status_code == 422
+
+
+def test_excluding_every_row_fails_safely(client):
+    csv = b"Part No,Part Description,Inventory Part\nA,Widget,Yes\nB,Widget v2,Yes\n"
+    response = _validate(client, csv, "PURCHASE", include_inventory_parts="false")
+    assert response.status_code == 400
+    assert "inventory parts" in response.json()["detail"]
+
+
+def test_sales_scan_keys_on_sales_part_no_and_maps_part_no_as_condition(client):
+    body = _validate(client, SALES_TYPE_CSV, "SALES").json()
+    mapping = body["resolved_column_mapping"]
+    assert mapping["PART_NO"] == "Sales Part No"
+    assert mapping["INVENTORY_PART_NO"] == "Part No"
+    assert body["valid"] is True
+
+
+def test_sales_export_without_sales_part_no_keeps_default_part_no(client):
+    csv = b"Part No,Description\nP1,Gasket\nP2,Gasket Kit\n"
+    mapping = _validate(client, csv, "SALES").json()["resolved_column_mapping"]
+    assert mapping["PART_NO"] == "Part No"
+    assert "INVENTORY_PART_NO" not in mapping
+
+
+def test_sales_part_no_is_not_special_for_other_part_types(client):
+    mapping = _validate(client, SALES_TYPE_CSV, "PURCHASE").json()["resolved_column_mapping"]
+    assert mapping["PART_NO"] == "Part No"
+
+
+def test_sales_scan_runs_with_part_no_condition_and_exclusion(client):
+    csv = (
+        b"Sales Part No,Part No,Description,Type of Sales Part\n"
+        b"S1,P1,Hydraulic Pump 10 bar,Non Inventory Part\n"
+        b"S2,P1,Hydraulic Pump 10bar,Non Inventory Part\n"
+        b"S3,P9,Hydraulic Pump 10 bar,Inventory Part\n"
+    )
+    upload = client.post(
+        "/api/scans/upload",
+        files={"file": ("sales.csv", csv, "text/csv")},
+        data={
+            "part_type": "SALES", "include_inventory_parts": "false", "threshold": "50",
+            "selected_fields": '["INVENTORY_PART_NO"]',
+        },
+    )
+    assert upload.status_code == 200
+    body = upload.json()
+    assert body["part_type"] == "SALES"
+    assert body["total_records"] == 2
+
+
+def test_config_fields_expose_new_sales_and_filter_fields(client):
+    by_field = {item["field"]: item for item in client.get("/api/config/fields").json()}
+    assert by_field["INVENTORY_PART_NO"]["part_types"] == ["SALES"]
+    assert by_field["INVENTORY_PART_FLAG"]["selectable"] is False
+    assert by_field["SALES_PART_TYPE"]["selectable"] is False

@@ -241,14 +241,29 @@ def rejections(scan_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/validate-only")
-async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True), db: Session = Depends(get_db)):
+async def validate_only(file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), sensitive_mode: bool = Form(True), part_type: str = Form(DEFAULT_PART_TYPE), include_inventory_parts: bool = Form(True), db: Session = Depends(get_db)):
+    if part_type not in PART_TYPES: part_type = DEFAULT_PART_TYPE
     custom_fields = _load_custom_fields(db)
     custom_field_keys = {field.field_key for field in custom_fields}
     df, metadata = await read_csv_upload_with_metadata(
         file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+        part_type=part_type, include_inventory_parts=include_inventory_parts,
     )
     result = validate_dataframe(df, parse_selected_fields(selected_fields), sensitive_mode=sensitive_mode)
-    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples")})
+    result.update({key: metadata[key] for key in ("available_columns", "resolved_column_mapping", "normalized_columns", "column_mapping_conflicts", "column_samples", "inventory_filter")})
+    inventory_filter = metadata["inventory_filter"]
+    if inventory_filter["requested"]:
+        if inventory_filter["column_found"]:
+            result["warnings"].append({
+                "warning_type": "INVENTORY_PARTS_EXCLUDED",
+                "message": f"{inventory_filter['excluded_count']} row(s) flagged as inventory parts in {inventory_filter['column_label']} are excluded from this scan.",
+            })
+        else:
+            result["valid"] = False
+            result["warnings"].append({
+                "warning_type": "INVENTORY_FILTER_COLUMN_MISSING",
+                "message": f"Inventory parts cannot be excluded because no {inventory_filter['column_label']} column was found. Map that column, or include inventory parts, and validate again.",
+            })
     _supporting, _strict, custom_fields_used = _custom_field_selection(custom_fields, metadata["resolved_column_mapping"])
     result["custom_fields_used"] = custom_fields_used
     for target, sources in metadata["column_mapping_conflicts"].items():
@@ -262,14 +277,18 @@ async def validate_only(file: UploadFile = File(...), selected_fields: str = For
 
 
 @router.post("/upload")
-async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(DEFAULT_REVIEW_STRICTNESS), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form(DEFAULT_PART_TYPE), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), selected_fields: str = Form("[]"), column_mapping: str = Form("{}"), threshold: float = Form(DEFAULT_REVIEW_STRICTNESS), scan_name: str = Form("Inventory duplicate scan"), sensitive_mode: bool = Form(True), scan_mode: str = Form("SAME_SITE_DUPLICATE"), part_type: str = Form(DEFAULT_PART_TYPE), include_inventory_parts: bool = Form(True), product_authority: ProductScanAuthority = Form(ProductScanAuthority.CURRENT_PRODUCT), db: Session = Depends(get_db), configuration: Settings = Depends(get_llm_settings), triage_scheduler: LlmTriageScheduler = Depends(get_llm_triage_scheduler)):
     if threshold < 0 or threshold > 100: raise HTTPException(400, "threshold must be between 0 and 100")
     if part_type not in PART_TYPES: part_type = DEFAULT_PART_TYPE
     custom_fields = _load_custom_fields(db)
     custom_field_keys = {field.field_key for field in custom_fields}
     df, metadata = await read_csv_upload_with_metadata(
         file, parse_column_mapping(column_mapping, custom_field_keys), custom_fields, db,
+        part_type=part_type, include_inventory_parts=include_inventory_parts,
     )
+    inventory_filter = metadata["inventory_filter"]
+    if inventory_filter["requested"] and not inventory_filter["column_found"]:
+        raise HTTPException(422, {"message": f"Cannot exclude inventory parts: no {inventory_filter['column_label']} column was found", "columns": [inventory_filter["column_label"]]})
     resolved_selected_fields = parse_selected_fields(selected_fields)
     validation = validate_dataframe(df, resolved_selected_fields, sensitive_mode=sensitive_mode)
     if validation["missing_required_columns"]: raise HTTPException(422, {"message": "Missing required columns", "columns": validation["missing_required_columns"]})
